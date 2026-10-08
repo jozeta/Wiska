@@ -69,10 +69,13 @@ final class Box<Value> {
 final class FakeTranscriber: Transcriber {
     let session = FakeSession()
     var isReady = true
+    /// Choices that are ready even when `isReady` (everything) is false.
+    var readyChoices: [LanguageChoice] = []
     var makeDelay: Duration = .zero
     private(set) var languages: [LanguageChoice] = []
 
     func prepare() async throws {}
+    func isReady(for choice: LanguageChoice) -> Bool { isReady || readyChoices.contains(choice) }
 
     func makeSession(language: LanguageChoice) async throws -> any TranscriptionSession {
         languages.append(language)

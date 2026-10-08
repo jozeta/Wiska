@@ -1,24 +1,37 @@
 import Core
+import Observation
 import Speech
 
-/// Apple's on-device SpeechAnalyzer: English (SpeechTranscriber), Swedish (DictationTranscriber),
-/// or both in parallel for automatic detection.
-@MainActor
+/// Apple's on-device SpeechAnalyzer for the ticked languages (SpeechTranscriber, or
+/// DictationTranscriber for Svenska, Dansk and Nederlands), in parallel for automatic detection.
+/// Observable so Settings can show a language whose assets failed (e.g. Apple's 5-locale limit).
+@MainActor @Observable
 public final class AppleTranscriber: Transcriber {
     private static let log = Log.logger("SpeechToText")
 
     private var installed: Set<Language> = []
-    private var installing: [Language: Task<Void, Error>] = [:]
-    private let installer: @MainActor (Language) async throws -> Void
-    let fallbackLanguage: @MainActor () -> Language
+    /// Why a ticked language's assets couldn't be installed, until a later attempt succeeds.
+    public private(set) var installErrors: [Language: String] = [:]
+    @ObservationIgnored private var installing: [Language: Task<Void, Error>] = [:]
+    @ObservationIgnored private let installer: @MainActor (Language) async throws -> Void
+    @ObservationIgnored let fallbackLanguage: @MainActor () -> Language
     /// The ticked languages: only these get assets (Apple reserves at most 5 per app).
-    private let languages: @MainActor () -> [Language]
-    private let vocabulary: @MainActor () -> [String]
+    @ObservationIgnored private let languages: @MainActor () -> [Language]
+    @ObservationIgnored private let vocabulary: @MainActor () -> [String]
 
     /// True once assets for every ticked language are installed (drives the "Downloading…" HUD state).
     public var isReady: Bool { Set(languages()).isSubset(of: installed) }
 
     public func isReady(for language: Language) -> Bool { installed.contains(language) }
+
+    /// Ready for this dictation: its language is installed, or (automatic) at least one ticked
+    /// language is — a language still downloading doesn't hold the others up.
+    public func isReady(for choice: LanguageChoice) -> Bool {
+        switch choice {
+        case .fixed(let language): installed.contains(language)
+        case .automatic: !installed.isDisjoint(with: languages())
+        }
+    }
 
     public init(languages: @escaping @MainActor () -> [Language] = { [.english, .swedish] },
                 fallbackLanguage: @escaping @MainActor () -> Language = { .english },
@@ -54,8 +67,10 @@ public final class AppleTranscriber: Transcriber {
         do {
             try await task.value
             installed.insert(language)
+            installErrors[language] = nil
         } catch {
             Self.log.error("speech assets for \(language.rawValue, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            installErrors[language] = error.localizedDescription
             throw error
         }
     }
@@ -63,11 +78,14 @@ public final class AppleTranscriber: Transcriber {
     /// Gives back Apple's reservations for languages that are no longer ticked, so the
     /// 5-locale limit leaves room for the ones that are.
     public func releaseUnticked() async {
+        let reserved = await AssetInventory.reservedLocales
+        // Read the ticked set after the await: it may have changed meanwhile.
         let ticked = Set(languages().map { $0.locale.identifier(.bcp47) })
-        for locale in await AssetInventory.reservedLocales where !ticked.contains(locale.identifier(.bcp47)) {
+        for locale in reserved where !ticked.contains(locale.identifier(.bcp47)) {
             _ = await AssetInventory.release(reservedLocale: locale)
         }
         installed.formIntersection(languages())
+        installErrors = installErrors.filter { languages().contains($0.key) }
     }
 
     /// Releases specific languages' reservations (tests use it to stay under Apple's limit).
@@ -84,9 +102,16 @@ public final class AppleTranscriber: Transcriber {
         case .automatic:
             // A language that can't start is left out rather than failing the dictation:
             // with one language left, that language is used as-is.
+            // Languages still downloading join once installed; until then auto-detect uses the
+            // installed ones instead of waiting (unless none is installed yet).
+            let ticked = languages()
+            let ready = ticked.filter(installed.contains)
+            for missing in ticked where !ready.isEmpty && !installed.contains(missing) {
+                Task { try? await self.prepare(missing) }
+            }
             var sessions: [any TranscriptionSession] = []
             var firstError: Error?
-            for language in languages() {
+            for language in ready.isEmpty ? ticked : ready {
                 do {
                     try await prepare(language)
                     sessions.append(try await AppleTranscriptionSession.start(language: language, vocabulary: words))

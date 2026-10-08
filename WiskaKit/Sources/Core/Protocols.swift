@@ -38,6 +38,8 @@ public protocol Transcriber: AnyObject {
     var engine: SpeechEngine { get }
     /// True once a session for this one language can start without downloading.
     func isReady(for language: Language) -> Bool
+    /// True when a dictation with this choice can start without waiting for a download.
+    func isReady(for choice: LanguageChoice) -> Bool
     /// Idempotent warm-up: installs assets if needed.
     func prepare() async throws
     func makeSession(language: LanguageChoice) async throws -> any TranscriptionSession
@@ -46,6 +48,7 @@ public protocol Transcriber: AnyObject {
 public extension Transcriber {
     var engine: SpeechEngine { .apple }
     func isReady(for language: Language) -> Bool { isReady }
+    func isReady(for choice: LanguageChoice) -> Bool { isReady }
 }
 
 @MainActor

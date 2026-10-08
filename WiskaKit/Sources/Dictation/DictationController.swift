@@ -74,7 +74,11 @@ public final class DictationController {
             guard state == .listening else { return }
             // Leave .listening synchronously so a stray cancel/start arriving while
             // the pipeline runs can't cancel or restart it.
-            state = (activeTranscriber?.isReady ?? true) ? .transcribing : .preparingModel
+            // Judged for this dictation's language: another ticked language downloading doesn't count.
+            let ready = activeTranscriber.map { transcriber in
+                currentChoice.map { transcriber.isReady(for: $0) } ?? transcriber.isReady
+            } ?? true
+            state = ready ? .transcribing : .preparingModel
             currentTask = Task { await finishDictation() }
         case .cancel:
             guard state == .listening else { return }

@@ -144,4 +144,30 @@ struct AppleTranscriberTests {
         #expect(!(session is AutoDetectSession))
         session.cancel()
     }
+
+    @Test func installedLanguagesStayReadyWhileAnotherFails() async throws {
+        let transcriber = AppleTranscriber(languages: { [.english, .german] }, installer: { language in
+            if language == .german { throw TranscriptionError.unsupportedLocale("de_DE") }
+        })
+        try? await transcriber.prepare()
+        #expect(!transcriber.isReady)
+        #expect(transcriber.isReady(for: .fixed(.english)))
+        #expect(!transcriber.isReady(for: .fixed(.german)))
+        #expect(transcriber.isReady(for: .automatic))
+        #expect(transcriber.installErrors[.german] != nil)
+        #expect(transcriber.installErrors[.english] == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func autoDetectDoesNotWaitForADownloadingLanguage() async throws {
+        let transcriber = AppleTranscriber(languages: { [.english, .german] }, installer: { language in
+            if language == .german { try await Task.sleep(for: .seconds(20)) }
+        })
+        try await transcriber.makeSession(language: .fixed(.english)).cancel()   // English installed
+        let start = ContinuousClock.now
+        let session = try await transcriber.makeSession(language: .automatic)
+        #expect(ContinuousClock.now - start < .seconds(5))
+        #expect(!(session is AutoDetectSession))   // English only, until German arrives
+        session.cancel()
+    }
 }

@@ -31,6 +31,7 @@ final class AppModel {
     @ObservationIgnored private let rewriter: FoundationModelsRewriter
     @ObservationIgnored private var controller: DictationController!
     @ObservationIgnored private var hotkeyTask: Task<Void, Never>?
+    @ObservationIgnored private var appleSyncTask: Task<Void, Never>?
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var flashTask: Task<Void, Never>?
     @ObservationIgnored private var hotkeyFailureLogged = false
@@ -42,7 +43,7 @@ final class AppModel {
         // property is initialized is a compile error.
         let settings = SettingsStore()
         let store = ParakeetModelStore()
-        let lexicon = SpellCheckerLexicon()
+        let lexicon = SpellCheckerLexicon(languages: { settings.enabledLanguages })
         let dictionaryStore = DictionaryStore()
         self.dictionaryStore = dictionaryStore
         do {
@@ -97,7 +98,7 @@ final class AppModel {
 
     func start() {
         refreshPermissions()
-        Task { [apple] in try? await apple.prepare() }
+        syncAppleLanguages()   // also frees slots leaked by an earlier run
         warmUpParakeetIfSelected()
         // TCC has no change notification, so keep polling (cheap) to notice grants and revocations.
         pollTask = Task { [weak self] in
@@ -183,10 +184,23 @@ final class AppModel {
     /// assets for newly ticked ones in the background.
     func tickedLanguagesChanged() {
         warmUpParakeetIfSelected()
-        Task { [apple] in
+        syncAppleLanguages()
+    }
+
+    /// Releases unticked languages' Apple slots, then installs the ticked ones. Runs one at a
+    /// time: overlapping runs could release a language another run just reserved.
+    private func syncAppleLanguages() {
+        let previous = appleSyncTask
+        appleSyncTask = Task { [apple] in
+            await previous?.value
             await apple.releaseUnticked()
-            try? await apple.prepare()
+            try? await apple.prepare()   // failures are shown per language in Settings
         }
+    }
+
+    /// Why a ticked language can't use Apple's engine yet, if it can't.
+    func appleInstallError(for language: Language) -> String? {
+        apple.installErrors[language]
     }
 
     /// A fresh download replaces whatever failed to load before.

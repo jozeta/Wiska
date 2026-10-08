@@ -20,6 +20,10 @@ struct LanguagesTab: View {
                         }))
                     .disabled(ticked ? settings.enabledLanguages.count == 1
                                      : settings.enabledLanguages.count >= SettingsStore.maxLanguages)
+                    if ticked, let error = model.appleInstallError(for: language) {
+                        Text("Apple's speech model isn't available: \(error)")
+                            .font(.caption).foregroundStyle(.orange)
+                    }
                 }
                 Text("Up to \(SettingsStore.maxLanguages) languages (Apple's limit). Auto-detect, Toggle and the fn / fn+⇧ languages use only these.")
                     .font(.caption).foregroundStyle(.secondary)

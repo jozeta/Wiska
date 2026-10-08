@@ -182,6 +182,18 @@ struct DictationControllerTests {
         #expect(cleaner.contexts.first?.language == .danish)
     }
 
+    @Test func readinessIsJudgedForThisDictationsLanguage() async {
+        transcriber.isReady = false                  // another ticked language is still downloading
+        transcriber.readyChoices = [.fixed(.english)]
+        let controller = makeController()
+        let recorder = StateRecorder()
+        controller.onChange = { state, _ in recorder.record(state) }
+        controller.handle(en)
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        #expect(!recorder.states.contains(.preparingModel))
+    }
+
     @Test func emptyTranscriptFailsWithNoSpeech() async {
         transcriber.session.result = .success("")
         let controller = makeController()
