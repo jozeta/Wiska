@@ -2,10 +2,18 @@ import Foundation
 import Testing
 @testable import Preferences
 
-struct LegacyMigrationTests {
+final class LegacyMigrationTests {
     let support = FileManager.default.temporaryDirectory.appendingPathComponent("mig-\(UUID().uuidString)")
-    let defaults = UserDefaults(suiteName: "WiskaMigTests-\(UUID().uuidString)")!
-    let legacy = UserDefaults(suiteName: "WiskaMigLegacy-\(UUID().uuidString)")!
+    let suites = (new: "WiskaMigTests-\(UUID().uuidString)", old: "WiskaMigLegacy-\(UUID().uuidString)")
+    lazy var defaults = UserDefaults(suiteName: suites.new)!
+    lazy var legacy = UserDefaults(suiteName: suites.old)!
+
+    // Throwaway stores live in ~/Library/Preferences; remove them (and temp folders) after every test.
+    deinit {
+        discardTestDefaults(suites.new)
+        discardTestDefaults(suites.old)
+        try? FileManager.default.removeItem(at: support)
+    }
     var old: URL { support.appendingPathComponent("SecureWispr") }
     var new: URL { support.appendingPathComponent("Wiska") }
 

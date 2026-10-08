@@ -4,8 +4,12 @@ import Testing
 @testable import Preferences
 
 @MainActor
-struct SettingsStoreTests {
-    let defaults = UserDefaults(suiteName: "SecureWisprTests-\(UUID().uuidString)")!
+final class SettingsStoreTests {
+    let suite = "WiskaTests-\(UUID().uuidString)"
+    lazy var defaults = UserDefaults(suiteName: suite)!
+
+    // Throwaway stores live in ~/Library/Preferences; remove them after every test.
+    deinit { discardTestDefaults(suite) }
 
     @Test func defaultsMatchTheSpec() {
         let store = SettingsStore(defaults: defaults)
