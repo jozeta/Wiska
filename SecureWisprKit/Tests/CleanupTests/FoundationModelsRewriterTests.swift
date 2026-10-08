@@ -1,0 +1,53 @@
+import Core
+import FoundationModels
+import Testing
+@testable import Cleanup
+
+@MainActor
+struct FoundationModelsRewriterTests {
+    nonisolated static var modelAvailable: Bool {
+        if case .available = SystemLanguageModel.default.availability { return true }
+        return false
+    }
+
+    func polished(_ text: String) async throws -> String {
+        let pipeline = CleanupPipeline(level: { .polished }, rewriter: FoundationModelsRewriter(),
+                                       timeout: .seconds(10))
+        return try await pipeline.clean(text, context: DictationContext())
+    }
+
+    static let fillerWords: Set<String> = ["um", "uh", "öh", "eh", "ehm", "alltså", "typ", "liksom"]
+
+    @Test(.enabled(if: modelAvailable), .timeLimit(.minutes(2)),
+          arguments: [
+            "um so I was thinking we could uh maybe meet on on Tuesday no wait Wednesday at three you know",
+            "öh kan du skicka eh rapporten till mig innan lunch alltså imorgon typ",
+            "ehm jag tror liksom att vi borde öh vänta med beslutet tills nästa vecka",
+            "hey Anna thanks for the update I'll uh I'll look at it tonight",
+          ])
+    func polishedRemovesFillers(input: String) async throws {
+        let output = try await polished(input)
+        let words = Set(CleanupGuard.words(output))
+        #expect(words.isDisjoint(with: Self.fillerWords), "\(output)")
+        #expect(!output.isEmpty)
+    }
+
+    @Test(.enabled(if: modelAvailable), .timeLimit(.minutes(1)))
+    func questionsAreNotAnswered() async throws {
+        let output = try await polished("what time is it in Tokyo right now")
+        #expect(output.lowercased().contains("what time is it in tokyo"))
+    }
+
+    @Test(.enabled(if: modelAvailable), .timeLimit(.minutes(1)))
+    func lightKeepsMaybe() async throws {
+        let pipeline = CleanupPipeline(level: { .light }, rewriter: FoundationModelsRewriter(),
+                                       timeout: .seconds(10))
+        let output = try await pipeline.clean("um I think we could uh maybe meet on Wednesday at three",
+                                              context: DictationContext())
+        #expect(output.lowercased().contains("maybe"))
+    }
+
+    @Test func reportsAvailability() {
+        #expect(FoundationModelsRewriter().isAvailable == Self.modelAvailable)
+    }
+}
