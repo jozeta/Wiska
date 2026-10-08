@@ -20,7 +20,7 @@ struct SpeechTab: View {
                         ForEach(SpeechEngine.allCases, id: \.self) { Text($0.displayName).tag($0) }
                     }
                 case .perLanguage:
-                    ForEach(Language.allCases, id: \.self) { language in
+                    ForEach(settings.enabledLanguages, id: \.self) { language in
                         Picker("\(language.flag) \(language.displayName)",
                                selection: Binding(get: { settings.engine(for: language) },
                                                   set: { settings.setEngine($0, for: language)

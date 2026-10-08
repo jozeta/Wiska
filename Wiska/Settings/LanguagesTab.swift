@@ -8,6 +8,22 @@ struct LanguagesTab: View {
     var body: some View {
         @Bindable var settings = model.settings
         Form {
+            Section("My languages") {
+                ForEach(Language.allCases, id: \.self) { language in
+                    let ticked = settings.enabledLanguages.contains(language)
+                    Toggle("\(language.flag) \(language.displayName)", isOn: Binding(
+                        get: { ticked },
+                        set: { on in
+                            settings.enabledLanguages = on ? settings.enabledLanguages + [language]
+                                                           : settings.enabledLanguages.filter { $0 != language }
+                            model.tickedLanguagesChanged()
+                        }))
+                    .disabled(ticked ? settings.enabledLanguages.count == 1
+                                     : settings.enabledLanguages.count >= SettingsStore.maxLanguages)
+                }
+                Text("Up to \(SettingsStore.maxLanguages) languages (Apple's limit). Auto-detect, Toggle and the fn / fn+⇧ languages use only these.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("Language") {
                 Picker("Mode", selection: $settings.languageMode) {
                     ForEach(LanguageMode.allCases, id: \.self) { Text($0.displayName).tag($0) }

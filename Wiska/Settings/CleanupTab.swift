@@ -14,7 +14,8 @@ struct CleanupTab: View {
                 }
                 .pickerStyle(.segmented)
                 Text(settings.cleanupLevel.summary).font(.caption).foregroundStyle(.secondary)
-                Text("Say “new line”, “new paragraph” or “scratch that” (“ny rad”, “nytt stycke”, “stryk det”).")
+                Text("Say “new line”, “new paragraph” or “scratch that” in your language: "
+                     + settings.enabledLanguages.map { "\($0.flag) “\($0.rules.newLine[0])”" }.joined(separator: ", ") + ".")
                     .font(.caption).foregroundStyle(.secondary)
                 if model.cleanupUnavailable {
                     Text("Apple Intelligence is unavailable — basic cleanup is used.")
