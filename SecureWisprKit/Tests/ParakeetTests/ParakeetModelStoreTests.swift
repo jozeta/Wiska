@@ -46,9 +46,11 @@ struct ParakeetModelStoreTests {
     }
 
     @Test func defaultDirectoryIsWhereFluidAudioActuallyStoresTheModel() {
-        // Review C1: FluidAudio writes to <parent>/<repo folder>, not to the directory passed in,
-        // unless that directory already *is* the repo folder.
-        #expect(ParakeetModelStore.defaultDirectory.lastPathComponent == "parakeet-tdt-0.6b-v3-coreml")
+        // FluidAudio writes to <parent>/<Repo.folderName> (repo slug minus "-coreml"), not to the
+        // directory passed in. Pin to FluidAudio's own name so the folder we mark/delete is the
+        // folder it writes — a hardcoded guess broke this once.
+        #expect(ParakeetModelStore.defaultDirectory.lastPathComponent == Repo.parakeetV3.folderName)
+        #expect(Repo.parakeetV3.folderName == "parakeet-tdt-0.6b-v3")
     }
 
     @Test func storeLocksFluidAudioOffline() {
