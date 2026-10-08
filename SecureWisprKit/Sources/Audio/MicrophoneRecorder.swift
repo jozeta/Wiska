@@ -10,6 +10,8 @@ public final class MicrophoneRecorder: AudioSource {
     private var chunkContinuation: AsyncStream<AudioChunk>.Continuation?
     private var levelContinuation: AsyncStream<Float>.Continuation?
     private var configObserver: NSObjectProtocol?
+    private var restartsThisRecording = 0
+    private static let maxRestartsPerRecording = 2
 
     public init() {
         observeConfigurationChanges()
@@ -17,18 +19,40 @@ public final class MicrophoneRecorder: AudioSource {
 
     public func start() throws -> AudioCapture {
         stop()
+        let (chunks, chunkContinuation) = AsyncStream.makeStream(of: AudioChunk.self)
+        let (levels, levelContinuation) = AsyncStream.makeStream(
+            of: Float.self, bufferingPolicy: .bufferingNewest(8)
+        )
+        try startEngine(chunks: chunkContinuation, levels: levelContinuation)
+        restartsThisRecording = 0
+        self.chunkContinuation = chunkContinuation
+        self.levelContinuation = levelContinuation
+        return AudioCapture(chunks: chunks, levels: levels)
+    }
+
+    public func stop() {
+        guard chunkContinuation != nil else { return }
+        stopEngine()
+        chunkContinuation?.finish()
+        levelContinuation?.finish()
+        chunkContinuation = nil
+        levelContinuation = nil
+    }
+
+    /// A fresh engine per recording: an idle engine doesn't reliably learn about device
+    /// changes (AirPods connecting while idle), and a stale input format makes installTap throw.
+    private func startEngine(
+        chunks: AsyncStream<AudioChunk>.Continuation, levels: AsyncStream<Float>.Continuation
+    ) throws {
+        engine = AVAudioEngine()
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else { throw AudioError.noInputDevice }
 
         let converter = try PCMConverter(from: format, to: .speech16kMono)
-        let (chunks, chunkContinuation) = AsyncStream.makeStream(of: AudioChunk.self)
-        let (levels, levelContinuation) = AsyncStream.makeStream(
-            of: Float.self, bufferingPolicy: .bufferingNewest(8)
-        )
         input.installTap(
             onBus: 0, bufferSize: 1_024, format: format,
-            block: Self.makeTapBlock(converter: converter, chunks: chunkContinuation, levels: levelContinuation)
+            block: Self.makeTapBlock(converter: converter, chunks: chunks, levels: levels)
         )
         engine.prepare()
         do {
@@ -37,19 +61,11 @@ public final class MicrophoneRecorder: AudioSource {
             input.removeTap(onBus: 0)
             throw AudioError.engineFailed(error.localizedDescription)
         }
-        self.chunkContinuation = chunkContinuation
-        self.levelContinuation = levelContinuation
-        return AudioCapture(chunks: chunks, levels: levels)
     }
 
-    public func stop() {
-        guard chunkContinuation != nil else { return }
+    private func stopEngine() {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
-        chunkContinuation?.finish()
-        levelContinuation?.finish()
-        chunkContinuation = nil
-        levelContinuation = nil
     }
 
     /// Built in a nonisolated context on purpose: the tap block runs on a realtime audio
@@ -69,17 +85,32 @@ public final class MicrophoneRecorder: AudioSource {
         }
     }
 
-    /// Device changes (AirPods connect, mic unplugged) invalidate the engine's format.
-    /// End the current capture with what we have and rebuild the engine for next time.
+    /// Device changes (AirPods connect, Bluetooth switching to its mic profile, mic unplugged)
+    /// stop the engine. If we're recording, continue on the new device into the same streams;
+    /// if that fails, end the capture so the controller transcribes what it has.
     private func observeConfigurationChanges() {
         configObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: nil, queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] note in
+            let source = note.object.map { ObjectIdentifier($0 as AnyObject) }
             MainActor.assumeIsolated {
-                guard let self else { return }
-                Self.log.notice("audio configuration changed; rebuilding engine")
-                self.stop()
-                self.engine = AVAudioEngine()
+                guard let self, source == ObjectIdentifier(self.engine),
+                      let chunks = self.chunkContinuation,
+                      let levels = self.levelContinuation else { return }
+                guard self.restartsThisRecording < Self.maxRestartsPerRecording else {
+                    Self.log.error("audio device kept changing; ending this recording")
+                    self.stop()
+                    return
+                }
+                self.restartsThisRecording += 1
+                Self.log.notice("audio configuration changed mid-recording; restarting on new device")
+                self.stopEngine()
+                do {
+                    try self.startEngine(chunks: chunks, levels: levels)
+                } catch {
+                    Self.log.error("could not restart audio: \(String(describing: error), privacy: .public)")
+                    self.stop()
+                }
             }
         }
     }
