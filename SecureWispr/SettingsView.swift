@@ -41,9 +41,21 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
+            Section("Cleanup") {
+                Picker("Level", selection: $settings.cleanupLevel) {
+                    ForEach(CleanupLevel.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                Text(settings.cleanupLevel.summary).font(.caption).foregroundStyle(.secondary)
+                Text("Say “new line”, “new paragraph” or “scratch that” (“ny rad”, “nytt stycke”, “stryk det”).")
+                    .font(.caption).foregroundStyle(.secondary)
+                if model.cleanupUnavailable {
+                    Text("Apple Intelligence is unavailable — basic cleanup is used.")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+            }
             Section("Push-to-talk") {
                 LabeledContent("Dictate", value: "Hold fn, speak, release")
-                LabeledContent("Cleanup", value: "Off (arrives in M3)")
             }
         }
         .formStyle(.grouped)

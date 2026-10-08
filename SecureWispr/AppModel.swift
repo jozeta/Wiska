@@ -24,6 +24,7 @@ final class AppModel {
     @ObservationIgnored private let hotkey = FnHotkeyMonitor()
     @ObservationIgnored private let apple: AppleTranscriber
     @ObservationIgnored private let parakeet: ParakeetTranscriber
+    @ObservationIgnored private let rewriter: FoundationModelsRewriter
     @ObservationIgnored private var controller: DictationController!
     @ObservationIgnored private var hotkeyTask: Task<Void, Never>?
     @ObservationIgnored private var pollTask: Task<Void, Never>?
@@ -40,10 +41,12 @@ final class AppModel {
         parakeetStore = store
         apple = AppleTranscriber(fallbackLanguage: { settings.lastDetectedLanguage })
         parakeet = ParakeetTranscriber(store: store)
+        let rewriter = FoundationModelsRewriter()
+        self.rewriter = rewriter
         controller = DictationController(
             audio: MicrophoneRecorder(),
             transcriber: { [weak self] in self?.activeTranscriber() ?? AppleTranscriber() },
-            cleaner: PassthroughCleaner(),
+            cleaner: CleanupPipeline(level: { settings.cleanupLevel }, rewriter: rewriter),
             injector: PasteboardInjector(),
             contextProvider: {
                 DictationContext(appBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
@@ -82,6 +85,11 @@ final class AppModel {
     /// True when Parakeet is selected but can't be used right now.
     var parakeetUnavailable: Bool {
         settings.engine == .parakeet && !parakeet.isReady
+    }
+
+    /// True when AI cleanup is selected but Apple Intelligence isn't available.
+    var cleanupUnavailable: Bool {
+        settings.cleanupLevel != .off && !rewriter.isAvailable
     }
 
     private func activeTranscriber() -> any Transcriber {
