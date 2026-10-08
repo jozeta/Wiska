@@ -1,0 +1,42 @@
+import Core
+import Foundation
+import Testing
+@testable import Preferences
+
+@MainActor
+struct SettingsStoreTests {
+    let defaults = UserDefaults(suiteName: "SecureWisprTests-\(UUID().uuidString)")!
+
+    @Test func defaultsMatchTheSpec() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.engine == .apple)
+        #expect(store.languageMode == .autoDetect)
+        #expect(store.primaryLanguage == .english)
+        #expect(store.toggleLanguage == .english)
+        #expect(store.lastDetectedLanguage == .english)
+    }
+
+    @Test func valuesPersistAcrossInstances() {
+        let store = SettingsStore(defaults: defaults)
+        store.engine = .parakeet
+        store.languageMode = .perLanguageHotkeys
+        store.primaryLanguage = .swedish
+        store.toggleLanguage = .swedish
+        store.lastDetectedLanguage = .swedish
+
+        let reloaded = SettingsStore(defaults: defaults)
+        #expect(reloaded.engine == .parakeet)
+        #expect(reloaded.languageMode == .perLanguageHotkeys)
+        #expect(reloaded.primaryLanguage == .swedish)
+        #expect(reloaded.toggleLanguage == .swedish)
+        #expect(reloaded.lastDetectedLanguage == .swedish)
+    }
+
+    @Test func corruptValuesFallBackToDefaults() {
+        defaults.set("banana", forKey: "engine")
+        defaults.set(42, forKey: "languageMode")
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.engine == .apple)
+        #expect(store.languageMode == .autoDetect)
+    }
+}
