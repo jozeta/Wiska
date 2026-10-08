@@ -166,6 +166,37 @@ struct DictationControllerTests {
         #expect(controller.state == .idle)
     }
 
+    @Test func quickTapRightAfterReleaseCannotStartSecondRecording() async {
+        // Review I1: release, then a <250 ms tap (→ .cancelled) and another press while
+        // the first dictation is still finishing must not start a second recording.
+        transcriber.makeDelay = .milliseconds(80)
+        let controller = makeController()
+        controller.handle(.pressed)
+        audio.emit([0.1])
+        controller.handle(.released)
+        controller.handle(.cancelled)
+        controller.handle(.pressed)
+        await controller.currentTask?.value
+
+        #expect(audio.startCount == 1)
+        #expect(injector.injected == ["cleaned: hello world"])
+        #expect(controller.state == .idle)
+    }
+
+    @Test func captureEndingUnexpectedlyFinishesDictation() async throws {
+        // Review I2: the mic stream ends on its own (device change) while still listening →
+        // transcribe what we have instead of showing "Listening" forever.
+        let controller = makeController()
+        controller.handle(.pressed)
+        audio.emit([0.3])
+        audio.stop()                          // the recorder gave up, not the user
+        try await Task.sleep(for: .milliseconds(50))
+        await controller.currentTask?.value
+
+        #expect(injector.injected == ["cleaned: hello world"])
+        #expect(controller.state == .idle)
+    }
+
     @Test func releaseWhenIdleIsIgnored() {
         let controller = makeController()
         controller.handle(.released)

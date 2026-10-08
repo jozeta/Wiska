@@ -63,6 +63,9 @@ public final class DictationController {
             startListening()
         case .released:
             guard state == .listening else { return }
+            // Leave .listening synchronously so a stray .cancelled/.pressed arriving while
+            // the pipeline runs can't cancel or restart it.
+            state = transcriber.isReady ? .transcribing : .preparingModel
             currentTask = Task { await finishDictation() }
         case .cancelled:
             guard state == .listening else { return }
@@ -92,9 +95,15 @@ public final class DictationController {
         // The chunk stream buffers while the session is being created, so audio
         // captured before the transcriber is ready is still delivered, in order.
         let transcriber = transcriber
-        sessionTask = Task {
+        sessionTask = Task { [weak self] in
             let session = try await transcriber.makeSession(language: .english)
             for await chunk in capture.chunks { session.append(chunk) }
+            // Stream ended while still listening: the recorder stopped on its own
+            // (e.g. audio device change). Transcribe what we have.
+            if self?.state == .listening {
+                Self.log.notice("audio capture ended unexpectedly; finishing dictation")
+                self?.handle(.released)
+            }
             return session
         }
         levelTask = Task { [weak self] in
@@ -113,7 +122,6 @@ public final class DictationController {
         stopCapture()
         guard let sessionTask else { return }
         self.sessionTask = nil
-        if !transcriber.isReady { state = .preparingModel }
 
         let transcript: Transcript
         do {

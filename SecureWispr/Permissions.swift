@@ -47,7 +47,9 @@ enum Permission: CaseIterable, Identifiable {
     @MainActor func request() {
         switch self {
         case .microphone:
-            AVCaptureDevice.requestAccess(for: .audio) { _ in }
+            // Async form: the completion-handler form calls back on a background queue, and a
+            // closure written here would inherit @MainActor and trap under Swift 6.
+            Task { _ = await AVCaptureDevice.requestAccess(for: .audio) }
         case .inputMonitoring:
             _ = CGRequestListenEventAccess()
         case .accessibility:
