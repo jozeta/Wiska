@@ -22,17 +22,22 @@ struct HybridRealAudioTests {
     private(set) var finishTime: Duration = .zero
 
     mutating func transcribe(_ samples: [Float]) async throws -> Transcript {
-        let parakeet = ParakeetTranscriber(store: ParakeetModelStore())
-        try await parakeet.prepare()
-        let hybrid = HybridTranscriber(parakeet: parakeet, apple: AppleTranscriber(),
-                                       appleLanguages: [.swedish], fallbackLanguage: { .english })
-        let session = try await hybrid.makeSession(language: .automatic)
-        for start in stride(from: 0, to: samples.count, by: 1_600) {
-            session.append(AudioChunk(samples: Array(samples[start..<min(start + 1_600, samples.count)])))
+        var finish: Duration = .zero
+        let transcript = try await RealAudioGate.run { () async throws -> Transcript in
+            let parakeet = ParakeetTranscriber(store: ParakeetModelStore())
+            try await parakeet.prepare()
+            let hybrid = HybridTranscriber(parakeet: parakeet, apple: AppleTranscriber(),
+                                           appleLanguages: [.swedish], fallbackLanguage: { .english })
+            let session = try await hybrid.makeSession(language: .automatic)
+            for start in stride(from: 0, to: samples.count, by: 1_600) {
+                session.append(AudioChunk(samples: Array(samples[start..<min(start + 1_600, samples.count)])))
+            }
+            let start = ContinuousClock.now
+            let transcript = try await session.finish()
+            finish = ContinuousClock.now - start
+            return transcript
         }
-        let start = ContinuousClock.now
-        let transcript = try await session.finish()
-        finishTime = ContinuousClock.now - start
+        finishTime = finish
         return transcript
     }
 
