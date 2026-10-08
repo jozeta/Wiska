@@ -79,6 +79,11 @@ public final class DictationController {
         case .cancel:
             guard state == .listening else { return }
             cancelListening()
+        case .switchLanguage(let choice):
+            guard state == .listening, choice != currentChoice else { return }
+            // Stay in .listening throughout so the HUD doesn't collapse and reopen.
+            cancelListening(endState: .listening)
+            startListening(choice)
         }
     }
 
@@ -196,12 +201,12 @@ public final class DictationController {
             duration: Double(capturedSamples) / AudioChunk.sampleRate))
     }
 
-    private func cancelListening() {
+    private func cancelListening(endState: State = .idle) {
         stopCapture()
         let pending = sessionTask
         sessionTask = nil
         pending?.cancel()
-        state = .idle
+        state = endState
         currentTask = Task {
             if let session = try? await pending?.value { session.cancel() }
         }

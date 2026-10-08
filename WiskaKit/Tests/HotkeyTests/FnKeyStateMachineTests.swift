@@ -33,7 +33,22 @@ struct FnKeyStateMachineTests {
     }
 
     @Test func repeatedFnDownIsIgnored() {
-        #expect(run([down(10), down(10.2, shift: true)]) == [.pressed(shifted: false), nil])
+        #expect(run([down(10), down(10.2)]) == [.pressed(shifted: false), nil])
+    }
+
+    @Test func shiftShortlyAfterFnIsReportedOnceAndShiftsTheTap() {
+        #expect(run([down(10), down(10.1, shift: true), down(10.15, shift: true), up(10.2)])
+                == [.pressed(shifted: false), .shiftAdded, nil, .tapped(shifted: true)])
+    }
+
+    @Test func shiftLateInAHoldIsIgnored() {
+        #expect(run([down(10), down(10.3, shift: true), up(10.5)])
+                == [.pressed(shifted: false), nil, .released])
+    }
+
+    @Test func shiftAfterACancelIsIgnored() {
+        #expect(run([down(10), .keyDown(time: 10.05), down(10.1, shift: true)])
+                == [.pressed(shifted: false), .cancelled, nil])
     }
 
     @Test func releaseWithoutPressIsIgnored() {

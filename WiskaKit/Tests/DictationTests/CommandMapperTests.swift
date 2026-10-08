@@ -36,4 +36,15 @@ struct CommandMapperTests {
     @Test func plainTapNeverFlips() {
         #expect(CommandMapper.map(.tapped(shifted: false), context: ctx(.toggle)).newToggleLanguage == nil)
     }
+
+    @Test func lateShiftSwitchesLanguageInPerLanguageMode() {
+        #expect(CommandMapper.map(.shiftAdded, context: ctx(.perLanguageHotkeys))
+                == MappedHotkey(command: .switchLanguage(.fixed(.swedish)), newToggleLanguage: nil))
+    }
+
+    @Test func lateShiftDoesNothingInOtherModesOrWithoutPermissions() {
+        #expect(CommandMapper.map(.shiftAdded, context: ctx(.toggle)).command == nil)
+        #expect(CommandMapper.map(.shiftAdded, context: ctx(.autoDetect)).command == nil)
+        #expect(CommandMapper.map(.shiftAdded, context: ctx(.perLanguageHotkeys, canStart: false)).command == nil)
+    }
 }

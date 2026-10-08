@@ -123,6 +123,30 @@ struct DictationControllerTests {
         #expect(transcriber.session.cancelled)
     }
 
+    @Test func switchLanguageRestartsTheRecordingInTheNewLanguage() async {
+        let controller = makeController()
+        let recorder = StateRecorder()
+        controller.onChange = { state, _ in recorder.record(state) }
+        controller.handle(en)
+        audio.emit([0.1])
+        controller.handle(.switchLanguage(.fixed(.swedish)))
+        #expect(!recorder.states.contains(.idle))
+        #expect(controller.state == .listening)
+        #expect(controller.currentChoice == .fixed(.swedish))
+        audio.emit([0.2])
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        #expect(transcriber.languages == [.fixed(.english), .fixed(.swedish)])
+        #expect(injector.injected.count == 1)
+    }
+
+    @Test func switchLanguageWhenNotListeningIsIgnored() async {
+        let controller = makeController()
+        controller.handle(.switchLanguage(.fixed(.swedish)))
+        #expect(controller.state == .idle)
+        #expect(transcriber.languages.isEmpty)
+    }
+
     @Test func emptyTranscriptFailsWithNoSpeech() async {
         transcriber.session.result = .success("")
         let controller = makeController()

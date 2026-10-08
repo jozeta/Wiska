@@ -7,6 +7,8 @@ public enum HotkeyEvent: Sendable, Equatable {
     case released
     /// fn went up before the minimum hold (accidental tap, or a deliberate quick tap).
     case tapped(shifted: Bool)
+    /// ⇧ went down within the first `minimumHold` of an fn hold that started without it.
+    case shiftAdded
     /// Another key went down while fn was held (fn+arrow etc.).
     case cancelled
 }

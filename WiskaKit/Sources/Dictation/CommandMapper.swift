@@ -39,6 +39,14 @@ public enum CommandMapper {
             return MappedHotkey(command: .finish, newToggleLanguage: nil)
         case .cancelled:
             return MappedHotkey(command: .cancel, newToggleLanguage: nil)
+        case .shiftAdded:
+            // Only Per-language mode picks the language from ⇧; Toggle uses it for the tap.
+            guard context.canStart, context.mode == .perLanguageHotkeys else {
+                return MappedHotkey(command: nil, newToggleLanguage: nil)
+            }
+            let choice = LanguageRouter.choice(mode: context.mode, shifted: true,
+                                               primary: context.primary, toggle: context.toggle)
+            return MappedHotkey(command: .switchLanguage(choice), newToggleLanguage: nil)
         case .tapped(let shifted):
             let flip = shifted && context.mode == .toggle ? context.toggle.other : nil
             return MappedHotkey(command: .cancel, newToggleLanguage: flip)

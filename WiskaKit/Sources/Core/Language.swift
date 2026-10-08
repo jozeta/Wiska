@@ -71,6 +71,8 @@ public enum SpeechEngine: String, Sendable, CaseIterable, Codable {
 /// What the dictation pipeline is asked to do. Produced from hotkey events by `CommandMapper`.
 public enum DictationCommand: Sendable, Equatable {
     case start(LanguageChoice)
+    /// Restart the recording in progress in another language (⇧ pressed just after fn).
+    case switchLanguage(LanguageChoice)
     case finish
     case cancel
 }

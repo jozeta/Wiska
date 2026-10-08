@@ -11,6 +11,8 @@ public enum KeyInput: Equatable {
 /// - fn up after ≥ `minimumHold` → `.released`; sooner → `.tapped(shifted:)`.
 /// - any key down while fn is held → `.cancelled` once; the later fn up is then silent.
 ///   ⇧ is a modifier (flagsChanged), so it never counts as "another key".
+/// - ⇧ down within `minimumHold` of fn down → `.shiftAdded` once, and a tap counts as shifted:
+///   people press fn+⇧ together, and ⇧ often lands a moment after fn.
 public struct FnKeyStateMachine {
     public var minimumHold: TimeInterval = 0.25
     private var pressedAt: TimeInterval?
@@ -22,8 +24,12 @@ public struct FnKeyStateMachine {
     public mutating func handle(_ input: KeyInput) -> HotkeyEvent? {
         switch input {
         case .flagsChanged(fnDown: true, shift: let shift, time: let time):
-            // fn went DOWN.
-            guard pressedAt == nil else { return nil }
+            // fn went DOWN, or another modifier changed while fn is held.
+            if let start = pressedAt {
+                guard shift, !shifted, !interrupted, time - start < minimumHold else { return nil }
+                shifted = true
+                return .shiftAdded
+            }
             pressedAt = time
             shifted = shift
             interrupted = false

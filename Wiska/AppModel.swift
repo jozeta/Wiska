@@ -244,7 +244,10 @@ final class AppModel {
         )
         let mapped = CommandMapper.map(event, context: context)
         if let command = mapped.command {
-            if case .start(let choice) = command { badge = badgeText(for: choice) }
+            switch command {
+            case .start(let choice), .switchLanguage(let choice): badge = badgeText(for: choice)
+            case .finish, .cancel: break
+            }
             controller.handle(command)
         }
         if mapped.newToggleLanguage != nil { switchToggleLanguage() }
