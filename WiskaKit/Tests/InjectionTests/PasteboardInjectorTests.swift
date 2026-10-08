@@ -21,7 +21,7 @@ final class RecordingKeySender: KeySender {
 
 @MainActor
 struct PasteboardInjectorTests {
-    let pasteboard = NSPasteboard(name: .init("SecureWisprTests-\(UUID().uuidString)"))
+    let pasteboard = NSPasteboard(name: .init("WiskaTests-\(UUID().uuidString)"))
 
     private func injector(_ sender: RecordingKeySender, secure: Bool = false) -> PasteboardInjector {
         PasteboardInjector(pasteboard: pasteboard, keySender: sender,
@@ -80,6 +80,20 @@ struct PasteboardInjectorTests {
 
         #expect(PasteboardSnapshot.capture(pasteboard) == before)
         #expect(pasteboard.data(forType: .png) == png)
+    }
+
+    @Test func restoredClipboardKeepsTheFormatOrder() async throws {
+        // Apps pick the first type they understand: rich text must stay ahead of plain text.
+        let types: [NSPasteboard.PasteboardType] = [.rtf, .html, .string, .init("com.example.a"), .init("com.example.b")]
+        pasteboard.clearContents()
+        let item = NSPasteboardItem()
+        for type in types { item.setData(Data(type.rawValue.utf8), forType: type) }
+        pasteboard.writeObjects([item])
+        let before = pasteboard.pasteboardItems?.first?.types
+
+        try await injector(RecordingKeySender(pasteboard: pasteboard)).inject("text")
+
+        #expect(pasteboard.pasteboardItems?.first?.types == before)
     }
 
     @Test func emptyClipboardStaysEmptyAfterPaste() async throws {

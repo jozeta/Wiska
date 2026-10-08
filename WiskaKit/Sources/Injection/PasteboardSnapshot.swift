@@ -1,15 +1,19 @@
 import AppKit
 
-/// A byte-for-byte copy of every item and type on a pasteboard.
+/// A byte-for-byte copy of every item and type on a pasteboard, in the original type order
+/// (apps paste the first type they understand, so order decides rich vs plain text).
 public struct PasteboardSnapshot: Equatable {
-    let items: [[NSPasteboard.PasteboardType: Data]]
+    struct Entry: Equatable {
+        let type: NSPasteboard.PasteboardType
+        let data: Data
+    }
+
+    let items: [[Entry]]
 
     @MainActor
     public static func capture(_ pasteboard: NSPasteboard) -> PasteboardSnapshot {
         let items = (pasteboard.pasteboardItems ?? []).map { item in
-            Dictionary(uniqueKeysWithValues: item.types.compactMap { type in
-                item.data(forType: type).map { (type, $0) }
-            })
+            item.types.compactMap { type in item.data(forType: type).map { Entry(type: type, data: $0) } }
         }
         return PasteboardSnapshot(items: items)
     }
@@ -18,9 +22,9 @@ public struct PasteboardSnapshot: Equatable {
     public func restore(to pasteboard: NSPasteboard) {
         pasteboard.clearContents()
         guard !items.isEmpty else { return }
-        pasteboard.writeObjects(items.map { types in
+        pasteboard.writeObjects(items.map { entries in
             let item = NSPasteboardItem()
-            for (type, data) in types { item.setData(data, forType: type) }
+            for entry in entries { item.setData(entry.data, forType: entry.type) }
             return item
         })
     }
