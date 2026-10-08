@@ -330,4 +330,15 @@ struct DictationControllerTests {
         #expect(controller.state == .idle)
         #expect(injector.injected == ["cleaned: hello world"])
     }
+
+    @Test func recordCarriesSpokenDuration() async {
+        let controller = makeController()
+        let records = recording(controller)
+        controller.handle(en)
+        audio.emit(Array(repeating: 0, count: 16_000))
+        audio.emit(Array(repeating: 0, count: 8_000))
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        #expect(records.value.first?.duration == 1.5)
+    }
 }

@@ -71,4 +71,16 @@ struct HistoryStoreTests {
         store.deleteAll()
         #expect(store.revision == start + 2)
     }
+
+    @Test func durationRoundTrips() {
+        var r = record("timed")
+        r.duration = 4.25
+        store.add(r, retention: .forever)
+        #expect(store.items(matching: "").first?.record.duration == 4.25)
+    }
+
+    @Test func entriesWithoutDurationLoadAsZero() {
+        store.add(record("old"), retention: .forever)          // record() leaves duration at default
+        #expect(store.items(matching: "").first?.record.duration == 0)
+    }
 }
