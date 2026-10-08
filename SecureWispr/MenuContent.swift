@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MenuContent: View {
     let model: AppModel
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         Text(model.statusLine)
@@ -24,8 +25,16 @@ struct MenuContent: View {
         }
         Divider()
         Text("Tip: Keyboard settings ▸ “Press 🌐 key to” ▸ Do Nothing")
-        SettingsLink {
-            Text("Settings…")
+        Button("Settings…") {
+            // A menu-bar-only app isn't active, so SettingsLink would open the window
+            // *behind* the frontmost app. Activate first, then raise the window.
+            NSApp.activate()
+            openSettings()
+            DispatchQueue.main.async {
+                NSApp.windows
+                    .first { $0.identifier?.rawValue == "com_apple_SwiftUI_Settings_window" || $0.title.contains("Settings") }?
+                    .orderFrontRegardless()
+            }
         }
         .keyboardShortcut(",")
         Button("Quit SecureWispr") {
