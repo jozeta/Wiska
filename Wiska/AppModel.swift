@@ -60,7 +60,7 @@ final class AppModel {
         self.rewriter = rewriter
         controller = DictationController(
             audio: MicrophoneRecorder(),
-            transcriber: { [weak self] _ in self?.activeTranscriber() ?? AppleTranscriber() },
+            transcriber: { [weak self] choice in self?.transcriber(for: choice) ?? AppleTranscriber() },
             cleaner: CleanupPipeline(level: { settings.cleanupLevel }, rewriter: rewriter,
                                      dictionary: { dictionaryStore.dictionary },
                                      isKnownWord: { lexicon.isKnown($0) }),
@@ -139,9 +139,9 @@ final class AppModel {
 
     // MARK: Engines
 
-    /// True when Parakeet is selected but can't be used right now.
+    /// True when some language is set to Parakeet but it can't be used right now.
     var parakeetUnavailable: Bool {
-        settings.engine == .parakeet && !parakeet.isReady
+        settings.usesParakeet && !parakeet.isReady
     }
 
     /// True when AI cleanup is selected but Apple Intelligence isn't available.
@@ -149,11 +149,20 @@ final class AppModel {
         settings.cleanupLevel != .off && !rewriter.isAvailable
     }
 
-    private func activeTranscriber() -> any Transcriber {
-        guard settings.engine == .parakeet else { return apple }
-        if parakeet.isReady { return parakeet }
-        warmUpParakeetIfSelected()
-        return apple
+    private func plan(for choice: LanguageChoice) -> EnginePlan {
+        EngineRouter.plan(choice: choice, engines: { self.settings.engine(for: $0) },
+                          parakeetReady: parakeet.isReady)
+    }
+
+    private func transcriber(for choice: LanguageChoice) -> any Transcriber {
+        if settings.usesParakeet && !parakeet.isReady { warmUpParakeetIfSelected() }
+        switch plan(for: choice) {
+        case .single(.apple): return apple
+        case .single(.parakeet): return parakeet
+        case .hybrid(let appleLanguages):
+            return HybridTranscriber(parakeet: parakeet, apple: apple, appleLanguages: appleLanguages,
+                                     fallbackLanguage: { [settings] in settings.lastDetectedLanguage })
+        }
     }
 
     /// A fresh download replaces whatever failed to load before.
@@ -163,7 +172,7 @@ final class AppModel {
     }
 
     func warmUpParakeetIfSelected() {
-        guard settings.engine == .parakeet, parakeetStore.isInstalled, !parakeet.isReady else { return }
+        guard settings.usesParakeet, parakeetStore.isInstalled, !parakeet.isReady else { return }
         Task { [parakeet] in
             do { try await parakeet.prepare() } catch {
                 Self.log.error("parakeet load failed: \(String(describing: error), privacy: .public)")
@@ -179,17 +188,28 @@ final class AppModel {
     }
 
     var languageStatus: String {
-        if settings.engine == .parakeet && parakeet.isReady { return "Parakeet · automatic language" }
-        return switch settings.languageMode {
-        case .autoDetect: "Auto-detect (English / Svenska)"
+        let mode = switch settings.languageMode {
+        case .autoDetect: "Auto-detect"
         case .toggle: "Toggle: \(settings.toggleLanguage.displayName)"
         case .perLanguageHotkeys:
             "fn: \(settings.primaryLanguage.displayName) · fn+⇧: \(settings.primaryLanguage.other.displayName)"
         }
+        return "\(mode) · \(engineSummary)"
+    }
+
+    /// What will actually run: "Parakeet", or "🇬🇧 Parakeet · 🇸🇪 Apple" per language.
+    private var engineSummary: String {
+        func usable(_ engine: SpeechEngine) -> SpeechEngine {
+            engine == .parakeet && !parakeet.isReady ? .apple : engine
+        }
+        guard settings.engineMode == .perLanguage else { return usable(settings.engine).shortName }
+        return Language.allCases
+            .map { "\($0.flag) \(usable(settings.engine(for: $0)).shortName)" }
+            .joined(separator: " · ")
     }
 
     private func badgeText(for choice: LanguageChoice) -> String {
-        if settings.engine == .parakeet && parakeet.isReady { return "AUTO" }
+        if case .single(.parakeet) = plan(for: choice) { return "AUTO" }   // Parakeet picks the language itself
         return switch choice {
         case .automatic: "AUTO"
         case .fixed(let language): language.badge

@@ -11,16 +11,33 @@ struct SettingsView: View {
         @Bindable var settings = model.settings
         Form {
             Section("Speech engine") {
-                Picker("Engine", selection: $settings.engine) {
-                    ForEach(SpeechEngine.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                Picker("Engines", selection: $settings.engineMode) {
+                    ForEach(EngineMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
-                .onChange(of: settings.engine) { model.warmUpParakeetIfSelected() }
+                .pickerStyle(.segmented)
+                switch settings.engineMode {
+                case .same:
+                    Picker("Engine", selection: $settings.engine) {
+                        ForEach(SpeechEngine.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    }
+                case .perLanguage:
+                    Picker("\(Language.english.flag) \(Language.english.displayName)", selection: $settings.englishEngine) {
+                        ForEach(SpeechEngine.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    }
+                    Picker("\(Language.swedish.flag) \(Language.swedish.displayName)", selection: $settings.swedishEngine) {
+                        ForEach(SpeechEngine.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    }
+                }
                 ParakeetCard(store: model.parakeetStore) { model.parakeetModelBecameReady() }
                 if model.parakeetUnavailable {
                     Text("Parakeet is selected but not ready — Apple is used until it is.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
+            .onChange(of: settings.engine) { model.warmUpParakeetIfSelected() }
+            .onChange(of: settings.engineMode) { model.warmUpParakeetIfSelected() }
+            .onChange(of: settings.englishEngine) { model.warmUpParakeetIfSelected() }
+            .onChange(of: settings.swedishEngine) { model.warmUpParakeetIfSelected() }
             Section("Language") {
                 Picker("Mode", selection: $settings.languageMode) {
                     ForEach(LanguageMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
