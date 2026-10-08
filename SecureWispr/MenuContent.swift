@@ -1,3 +1,4 @@
+import Core
 import SwiftUI
 
 struct MenuContent: View {
@@ -14,6 +15,22 @@ struct MenuContent: View {
         }
         if model.parakeetUnavailable {
             Text("Parakeet unavailable — using Apple")
+        }
+        Menu("Cleanup: \(model.settings.cleanupLevel.displayName)") {
+            ForEach(CleanupLevel.allCases, id: \.self) { level in
+                Button {
+                    model.settings.cleanupLevel = level
+                } label: {
+                    if level == model.settings.cleanupLevel {
+                        Label(level.displayName, systemImage: "checkmark")
+                    } else {
+                        Text(level.displayName)
+                    }
+                }
+            }
+        }
+        if model.cleanupUnavailable {
+            Text("AI cleanup unavailable — using basic cleanup")
         }
         if !model.missingPermissions.isEmpty {
             Divider()
