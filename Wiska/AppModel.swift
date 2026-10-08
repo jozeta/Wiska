@@ -37,6 +37,7 @@ final class AppModel {
     @ObservationIgnored private var badge = "AUTO"
 
     init() {
+        LegacyMigration.run()   // before any store touches the data folder
         // Build dependencies as locals first: reading self.* before every stored
         // property is initialized is a compile error.
         let settings = SettingsStore()
@@ -81,14 +82,13 @@ final class AppModel {
         }
         controller.onDictationFinished = { [weak self] record in
             guard let self else { return }
+            if record.pasted && !settings.firstDictationDone { settings.firstDictationDone = true }
             history?.add(record, retention: settings.historyRetention)
         }
     }
 
     func start() {
-        for permission in Permission.allCases where !permission.isGranted {
-            permission.request()
-        }
+        refreshPermissions()
         Task { [apple] in try? await apple.prepare() }
         warmUpParakeetIfSelected()
         // TCC has no change notification, so keep polling (cheap) to notice grants and revocations.
@@ -109,6 +109,25 @@ final class AppModel {
 
     func applyRetention() {
         history?.apply(retention: settings.historyRetention)
+    }
+
+    var onboarding: OnboardingState {
+        OnboardingState(microphone: !missingPermissions.contains(.microphone),
+                        inputMonitoring: !missingPermissions.contains(.inputMonitoring),
+                        accessibility: !missingPermissions.contains(.accessibility),
+                        fnKeyConfirmed: settings.fnKeyConfirmed,
+                        firstDictationDone: settings.firstDictationDone)
+    }
+
+    var shouldShowOnboardingAtLaunch: Bool {
+        onboarding.shouldOpenAtLaunch(completed: settings.onboardingCompleted)
+    }
+
+    /// "This week: … words · … saved", nil when there's nothing to show.
+    var statsLine: String? {
+        guard settings.historyRetention != .off, let history else { return nil }
+        _ = history.revision
+        return StatsFormatter.menuLine(history.stats())
     }
 
     // MARK: Engines

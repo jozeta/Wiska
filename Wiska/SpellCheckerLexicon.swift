@@ -36,3 +36,18 @@ enum HistoryWindow {
         }
     }
 }
+
+/// The first-run checklist window, opened in front like Settings and History.
+@MainActor
+enum OnboardingWindow {
+    static let id = "onboarding"
+    static let title = "Welcome to Wiska"
+
+    static func open(_ openWindow: OpenWindowAction) {
+        NSApp.activate()
+        openWindow(id: id)
+        DispatchQueue.main.async {
+            NSApp.windows.first { $0.title == title }?.orderFrontRegardless()
+        }
+    }
+}
