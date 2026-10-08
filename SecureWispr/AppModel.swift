@@ -7,26 +7,42 @@ import HUD
 import Hotkey
 import Injection
 import Observation
+import Parakeet
+import Preferences
 import SpeechToText
 
 @MainActor @Observable
 final class AppModel {
     private static let log = Log.logger("App")
 
+    let settings: SettingsStore
+    let parakeetStore: ParakeetModelStore
     private(set) var missingPermissions: [Permission] = []
     private(set) var dictationState: DictationController.State = .idle
 
     @ObservationIgnored private let hud = HUDPanelController()
     @ObservationIgnored private let hotkey = FnHotkeyMonitor()
-    @ObservationIgnored private let transcriber = AppleTranscriber()
-    @ObservationIgnored private let controller: DictationController
+    @ObservationIgnored private let apple: AppleTranscriber
+    @ObservationIgnored private let parakeet: ParakeetTranscriber
+    @ObservationIgnored private var controller: DictationController!
     @ObservationIgnored private var hotkeyTask: Task<Void, Never>?
     @ObservationIgnored private var pollTask: Task<Void, Never>?
+    @ObservationIgnored private var flashTask: Task<Void, Never>?
+    @ObservationIgnored private var hotkeyFailureLogged = false
+    @ObservationIgnored private var badge = "AUTO"
 
     init() {
+        // Build dependencies as locals first: reading self.* before every stored
+        // property is initialized is a compile error.
+        let settings = SettingsStore()
+        let store = ParakeetModelStore()
+        self.settings = settings
+        parakeetStore = store
+        apple = AppleTranscriber(fallbackLanguage: { settings.lastDetectedLanguage })
+        parakeet = ParakeetTranscriber(store: store)
         controller = DictationController(
             audio: MicrophoneRecorder(),
-            transcriber: { [transcriber] in transcriber },
+            transcriber: { [weak self] in self?.activeTranscriber() ?? AppleTranscriber() },
             cleaner: PassthroughCleaner(),
             injector: PasteboardInjector(),
             contextProvider: {
@@ -36,7 +52,13 @@ final class AppModel {
         controller.onChange = { [weak self] state, levels in
             guard let self else { return }
             if dictationState != state { dictationState = state }
-            hud.show(Self.hudContent(for: state, levels: levels))
+            if state != .idle { flashTask?.cancel() }
+            hud.show(hudContent(for: state, levels: levels))
+        }
+        controller.onLanguageDetected = { [weak self] language in
+            guard let self else { return }
+            settings.lastDetectedLanguage = language
+            flash("\(language.flag) \(language.displayName)", for: .milliseconds(800))
         }
     }
 
@@ -44,8 +66,9 @@ final class AppModel {
         for permission in Permission.allCases where !permission.isGranted {
             permission.request()
         }
-        Task { [transcriber] in try? await transcriber.prepare() }
-        // TCC has no change notification; poll until everything is granted.
+        Task { [apple] in try? await apple.prepare() }
+        warmUpParakeetIfSelected()
+        // TCC has no change notification, so keep polling (cheap) to notice grants and revocations.
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 self?.refreshPermissions()
@@ -53,6 +76,56 @@ final class AppModel {
             }
         }
     }
+
+    // MARK: Engines
+
+    /// True when Parakeet is selected but can't be used right now.
+    var parakeetUnavailable: Bool {
+        settings.engine == .parakeet && !parakeet.isReady
+    }
+
+    private func activeTranscriber() -> any Transcriber {
+        guard settings.engine == .parakeet else { return apple }
+        if parakeet.isReady { return parakeet }
+        warmUpParakeetIfSelected()
+        return apple
+    }
+
+    func warmUpParakeetIfSelected() {
+        guard settings.engine == .parakeet, parakeetStore.isInstalled, !parakeet.isReady else { return }
+        Task { [parakeet] in
+            do { try await parakeet.prepare() } catch {
+                Self.log.error("parakeet load failed: \(String(describing: error), privacy: .public)")
+            }
+        }
+    }
+
+    // MARK: Language
+
+    func switchToggleLanguage() {
+        settings.toggleLanguage = settings.toggleLanguage.other
+        flash("\(settings.toggleLanguage.flag) \(settings.toggleLanguage.displayName)", for: .seconds(1))
+    }
+
+    var languageStatus: String {
+        if settings.engine == .parakeet && parakeet.isReady { return "Parakeet · automatic language" }
+        return switch settings.languageMode {
+        case .autoDetect: "Auto-detect (English / Svenska)"
+        case .toggle: "Toggle: \(settings.toggleLanguage.displayName)"
+        case .perLanguageHotkeys:
+            "fn: \(settings.primaryLanguage.displayName) · fn+⇧: \(settings.primaryLanguage.other.displayName)"
+        }
+    }
+
+    private func badgeText(for choice: LanguageChoice) -> String {
+        if settings.engine == .parakeet && parakeet.isReady { return "AUTO" }
+        return switch choice {
+        case .automatic: "AUTO"
+        case .fixed(let language): language.badge
+        }
+    }
+
+    // MARK: Menu bar
 
     var menuBarSymbol: String {
         if !missingPermissions.isEmpty { return "exclamationmark.triangle" }
@@ -74,6 +147,8 @@ final class AppModel {
         }
     }
 
+    // MARK: Hotkey
+
     private func refreshPermissions() {
         let missing = Permission.allCases.filter { !$0.isGranted }
         if missing != missingPermissions { missingPermissions = missing }
@@ -86,24 +161,47 @@ final class AppModel {
         do {
             try hotkey.start()
         } catch {
-            Self.log.error("could not start fn event tap: \(String(describing: error), privacy: .public)")
+            if !hotkeyFailureLogged {   // minor e: once per launch
+                hotkeyFailureLogged = true
+                Self.log.error("could not start fn event tap: \(String(describing: error), privacy: .public)")
+            }
             return
         }
         hotkeyTask = Task { [weak self] in
             guard let self else { return }
-            for await event in hotkey.events {
-                let mapped = CommandMapper.map(event, context: HotkeyContext(
-                    mode: .autoDetect, primary: .english, toggle: .english,
-                    canStart: missingPermissions.isEmpty))
-                if let command = mapped.command { controller.handle(command) }
-            }
+            for await event in hotkey.events { handle(event) }
         }
     }
 
-    static func hudContent(for state: DictationController.State, levels: [Float]) -> HUDContent {
+    private func handle(_ event: HotkeyEvent) {
+        let context = HotkeyContext(
+            mode: settings.languageMode, primary: settings.primaryLanguage,
+            toggle: settings.toggleLanguage, canStart: missingPermissions.isEmpty   // minor d
+        )
+        let mapped = CommandMapper.map(event, context: context)
+        if let command = mapped.command {
+            if case .start(let choice) = command { badge = badgeText(for: choice) }
+            controller.handle(command)
+        }
+        if mapped.newToggleLanguage != nil { switchToggleLanguage() }
+    }
+
+    // MARK: HUD
+
+    private func flash(_ text: String, for duration: Duration) {
+        flashTask?.cancel()
+        hud.show(.message(text))
+        flashTask = Task { [weak self] in
+            try? await Task.sleep(for: duration)
+            guard !Task.isCancelled, let self, dictationState == .idle else { return }
+            hud.show(.hidden)
+        }
+    }
+
+    private func hudContent(for state: DictationController.State, levels: [Float]) -> HUDContent {
         switch state {
         case .idle: .hidden
-        case .listening: .listening(levels: levels)
+        case .listening: .listening(levels: levels, badge: badge)
         case .preparingModel: .working("Downloading speech model…")
         case .transcribing, .cleaning, .injecting: .working("Transcribing…")
         case .failed(let failure): .message(failure.message)
