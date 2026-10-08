@@ -61,17 +61,22 @@ public final class AppleTranscriber: Transcriber {
             try await prepare(fixed)
             return try await AppleTranscriptionSession.start(language: fixed, vocabulary: words)
         case .automatic:
-            try await prepare(.english)
-            try await prepare(.swedish)
-            let english = try await AppleTranscriptionSession.start(language: .english, vocabulary: words)
-            let swedish: AppleTranscriptionSession
-            do {
-                swedish = try await AppleTranscriptionSession.start(language: .swedish, vocabulary: words)
-            } catch {
-                english.cancel()
-                throw error
+            // A language that can't start is left out rather than failing the dictation:
+            // with one language left, that language is used as-is.
+            var sessions: [any TranscriptionSession] = []
+            var firstError: Error?
+            for language in Language.allCases {
+                do {
+                    try await prepare(language)
+                    sessions.append(try await AppleTranscriptionSession.start(language: language, vocabulary: words))
+                } catch {
+                    Self.log.error("auto-detect without \(language.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    firstError = firstError ?? error
+                }
             }
-            return AutoDetectSession(sessions: [english, swedish], fallback: fallbackLanguage())
+            if let only = sessions.first, sessions.count == 1 { return only }
+            guard !sessions.isEmpty else { throw firstError ?? TranscriptionError.noCompatibleAudioFormat }
+            return AutoDetectSession(sessions: sessions, fallback: fallbackLanguage())
         }
     }
 }

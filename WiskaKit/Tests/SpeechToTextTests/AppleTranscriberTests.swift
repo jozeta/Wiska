@@ -116,6 +116,26 @@ struct AppleTranscriberTests {
     }
 
     @Test(.timeLimit(.minutes(2)))
+    func autoDetectFallsBackToTheLanguageThatStarts() async throws {
+        let transcriber = AppleTranscriber(fallbackLanguage: { .swedish }, installer: { language in
+            if language == .swedish { throw TranscriptionError.unsupportedLocale("sv_SE") }
+            try await AppleTranscriber.installAssets(for: language)
+        })
+        let samples = try spokenSamples("hello world this is a test")
+        let transcript = try await transcribe(samples, .automatic, transcriber: transcriber)
+        #expect(transcript.language == .english)
+    }
+
+    @Test func autoDetectFailsOnlyWhenNoLanguageStarts() async throws {
+        let transcriber = AppleTranscriber(installer: { language in
+            throw TranscriptionError.unsupportedLocale(language.rawValue)
+        })
+        await #expect(throws: TranscriptionError.self) {
+            _ = try await transcriber.makeSession(language: .automatic)
+        }
+    }
+
+    @Test(.timeLimit(.minutes(2)))
     func swedishUsesTheDictionaryAsHints() async throws {
         let samples = try spokenSamples("Skicka rapporten om Kvarnholmen till Ylva Zetterström och Jozeta",
                                         voice: "Alva")
