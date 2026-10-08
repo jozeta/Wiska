@@ -178,7 +178,7 @@ whitespace. The real cleaner lands in M3 behind the same protocol.
 4. After ~300 ms, restore the snapshot only if `changeCount` is still ours.
 
 **HUD.** Borderless, non-activating `NSPanel` (never steals focus), bottom
-center of the screen that contains the frontmost window, showing a live
+center of the screen under the mouse pointer, showing a live
 waveform from level samples while listening and a spinner while
 transcribing/injecting. Plain styling in M1; branded in M5.
 
