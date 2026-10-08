@@ -9,13 +9,16 @@ struct CleanupTimeout: Error {}
 public final class CleanupPipeline: TextCleaner {
     private static let log = Log.logger("Cleanup")
     static let shortSegmentWords = 3
+    /// Release→paste must stay under 1.5 s; after the 150 ms release tail and transcription,
+    /// cleanup gets at most 1 s (review I3).
+    public static let defaultTimeout: Duration = .milliseconds(1_000)
 
     private let level: @MainActor () -> CleanupLevel
     private let rewriter: any TextRewriter
     private let timeout: Duration
 
     public init(level: @escaping @MainActor () -> CleanupLevel, rewriter: any TextRewriter,
-                timeout: Duration = .milliseconds(1_500)) {
+                timeout: Duration = CleanupPipeline.defaultTimeout) {
         self.level = level
         self.rewriter = rewriter
         self.timeout = timeout
@@ -50,7 +53,7 @@ public final class CleanupPipeline: TextCleaner {
             let output = Self.stripWrappingQuotes(try await rewrite(segment, level: level, deadline: deadline))
             switch CleanupGuard.check(original: segment, cleaned: output, level: level) {
             case .accept:
-                return output
+                return Self.finishSentence(output)
             case .reject(let reason):
                 Self.log.notice("model output rejected: \(reason, privacy: .public)")
                 return RuleCleaner.clean(segment)
@@ -78,6 +81,14 @@ public final class CleanupPipeline: TextCleaner {
                 work.cancel()
             }
         }
+    }
+
+    /// The model sometimes skips punctuation; make accepted output look typed (review I5).
+    static func finishSentence(_ text: String) -> String {
+        guard let first = text.first else { return text }
+        var result = first.uppercased() + text.dropFirst()
+        if let last = result.last, !".?!…:".contains(last) { result += "." }
+        return result
     }
 
     static func stripWrappingQuotes(_ text: String) -> String {

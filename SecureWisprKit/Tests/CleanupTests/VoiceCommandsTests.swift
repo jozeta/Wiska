@@ -23,4 +23,17 @@ struct VoiceCommandsTests {
     @Test func scratchAppliesBeforeLineCommands() {
         #expect(VoiceCommands.apply("one new line two scratch that three new line four") == "three\nfour")
     }
+
+    @Test(arguments: [
+        "We launched a new line of products",
+        "Lägg till en ny rad i tabellen",
+        "ett nytt stycke musik",
+        "Is this a new line?",
+        "I need to scratch that itch",
+        "the new paragraph explains it",
+    ])
+    func ordinaryPhrasesAreNotCommands(input: String) {
+        // Review I2: a determiner before the phrase (or "to" before "scratch that") means prose.
+        #expect(VoiceCommands.apply(input) == input)
+    }
 }

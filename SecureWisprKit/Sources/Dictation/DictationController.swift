@@ -155,6 +155,11 @@ public final class DictationController {
         do {
             state = .cleaning
             let cleaned = try await cleaner.clean(transcript.text, context: context)
+            // Voice commands can remove everything ("scratch that" alone): nothing to paste.
+            guard !cleaned.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                fail(.noSpeech)
+                return
+            }
             state = .injecting
             try await injector.inject(cleaned)
         } catch InjectionError.secureInputActive {

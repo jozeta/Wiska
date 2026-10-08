@@ -85,8 +85,11 @@ final class FakeCleaner: TextCleaner {
     private(set) var prewarmCount = 0
     func prewarm() { prewarmCount += 1 }
 
+    var output: String?
+
     func clean(_ text: String, context: DictationContext) async throws -> String {
         contexts.append(context)
+        if let output { return output }
         return "cleaned: \(text)"
     }
 }

@@ -261,4 +261,15 @@ struct DictationControllerTests {
         controller.handle(.cancel)
         await controller.currentTask?.value
     }
+
+    @Test func cleanupLeavingNothingIsNoSpeech() async {
+        // Review I1: saying only "scratch that" must not paste an empty string.
+        cleaner.output = "  \n"
+        let controller = makeController()
+        controller.handle(en)
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        #expect(controller.state == .failed(.noSpeech))
+        #expect(injector.injected.isEmpty)
+    }
 }
