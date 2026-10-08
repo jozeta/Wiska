@@ -122,4 +122,56 @@ final class SettingsStoreTests {
         store.setEngine(.parakeet, for: .swedish)
         #expect(store.usesParakeet)
     }
+
+    @Test func englishAndSwedishAreTickedByDefault() {
+        #expect(SettingsStore(defaults: defaults).enabledLanguages == [.english, .swedish])
+    }
+
+    @Test func tickedLanguagesPersistInDisplayOrder() {
+        let store = SettingsStore(defaults: defaults)
+        store.enabledLanguages = [.dutch, .english, .german]
+        #expect(SettingsStore(defaults: defaults).enabledLanguages == [.english, .german, .dutch])
+    }
+
+    @Test func theLastLanguageCannotBeUnticked() {
+        let store = SettingsStore(defaults: defaults)
+        store.enabledLanguages = []
+        #expect(store.enabledLanguages == [.english, .swedish])
+    }
+
+    @Test func atMostFiveLanguagesCanBeTicked() {
+        let store = SettingsStore(defaults: defaults)
+        store.enabledLanguages = [.english, .swedish, .german, .french, .spanish, .italian]
+        #expect(store.enabledLanguages == [.english, .swedish])
+        store.enabledLanguages = [.english, .swedish, .german, .french, .spanish]
+        #expect(store.enabledLanguages.count == 5)
+    }
+
+    @Test func untickedLanguagesFallBackToTheFirstTicked() {
+        let store = SettingsStore(defaults: defaults)
+        store.toggleLanguage = .swedish
+        store.primaryLanguage = .swedish
+        store.enabledLanguages = [.german, .french]
+        #expect(store.toggleLanguage == .german)
+        #expect(store.primaryLanguage == .german)
+        #expect(store.secondaryLanguage == .french)
+    }
+
+    @Test func secondaryLanguageIsStoredAndNeverThePrimary() {
+        let store = SettingsStore(defaults: defaults)
+        store.enabledLanguages = [.english, .swedish, .german]
+        store.secondaryLanguage = .german
+        #expect(SettingsStore(defaults: defaults).secondaryLanguage == .german)
+        store.primaryLanguage = .german
+        #expect(store.secondaryLanguage == .english)
+    }
+
+    @Test func usesParakeetOnlyCountsTickedLanguages() {
+        let store = SettingsStore(defaults: defaults)
+        store.engineMode = .perLanguage
+        store.setEngine(.parakeet, for: .italian)
+        #expect(!store.usesParakeet)
+        store.enabledLanguages = [.english, .italian]
+        #expect(store.usesParakeet)
+    }
 }

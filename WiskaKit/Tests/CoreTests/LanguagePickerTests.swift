@@ -33,7 +33,7 @@ struct LanguagePickerTests {
     }
 
     @Test func languageHelpers() {
-        #expect(Language.english.other == .swedish)
+        #expect(Language.english.next(in: [.english, .swedish]) == .swedish)
         #expect(Language.swedish.locale.identifier == "sv_SE")
         #expect(Language.swedish.badge == "SV")
     }

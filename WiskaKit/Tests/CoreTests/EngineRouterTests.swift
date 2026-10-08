@@ -45,4 +45,12 @@ struct EngineRouterTests {
         #expect(EngineRouter.languageChoiceMatters(engines: engines(en: .parakeet, sv: .parakeet), parakeetReady: false))
         #expect(EngineRouter.languageChoiceMatters(engines: engines(en: .parakeet, sv: .apple), parakeetReady: true))
     }
+
+    @Test func onlyTickedLanguagesCount() {
+        let engines: (Language) -> SpeechEngine = { $0 == .german ? .parakeet : .apple }
+        #expect(EngineRouter.plan(choice: .automatic, languages: [.english, .swedish], engines: engines,
+                                  parakeetReady: true) == .single(.apple))
+        #expect(EngineRouter.plan(choice: .automatic, languages: [.english, .german], engines: engines,
+                                  parakeetReady: true) == .hybrid(apple: [.english]))
+    }
 }

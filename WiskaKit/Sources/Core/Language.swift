@@ -11,9 +11,6 @@ public enum Language: String, Sendable, CaseIterable, Codable {
     case danish
     case dutch
 
-    /// Removed in favour of `next(in:)` once ticked languages drive routing.
-    public var other: Language { self == .english ? .swedish : .english }
-
     /// The following ticked language in display order, wrapping; itself when alone.
     public func next(in languages: [Language]) -> Language {
         let all = Language.allCases

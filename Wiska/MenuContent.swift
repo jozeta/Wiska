@@ -12,8 +12,9 @@ struct MenuContent: View {
         if let stats = model.statsLine {
             Text(stats)
         }
-        if model.settings.languageMode == .toggle && model.toggleLanguageMatters {
-            Button("Switch to \(model.settings.toggleLanguage.other.displayName)") {
+        if model.settings.languageMode == .toggle && model.settings.enabledLanguages.count > 1
+            && model.toggleLanguageMatters {
+            Button("Switch to \(model.settings.toggleLanguage.next(in: model.settings.enabledLanguages).displayName)") {
                 model.switchToggleLanguage()
             }
         }

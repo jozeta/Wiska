@@ -66,7 +66,8 @@ final class AppModel {
                                      isKnownWord: { lexicon.isKnown($0) }),
             injector: PasteboardInjector(),
             contextProvider: {
-                DictationContext(appBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
+                DictationContext(appBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
+                                 enabledLanguages: settings.enabledLanguages)
             }
         )
         controller.onChange = { [weak self] state, levels in
@@ -152,7 +153,8 @@ final class AppModel {
 
     /// False when every language is on Parakeet, which picks the language itself.
     var toggleLanguageMatters: Bool {
-        EngineRouter.languageChoiceMatters(engines: { settings.engine(for: $0) }, parakeetReady: parakeet.isReady)
+        EngineRouter.languageChoiceMatters(languages: settings.enabledLanguages, engines: { settings.engine(for: $0) },
+                                           parakeetReady: parakeet.isReady)
     }
 
     /// True when AI cleanup is selected but Apple Intelligence isn't available.
@@ -161,7 +163,7 @@ final class AppModel {
     }
 
     private func plan(for choice: LanguageChoice) -> EnginePlan {
-        EngineRouter.plan(choice: choice, engines: { self.settings.engine(for: $0) },
+        EngineRouter.plan(choice: choice, languages: settings.enabledLanguages, engines: { self.settings.engine(for: $0) },
                           parakeetReady: parakeet.isReady)
     }
 
@@ -196,7 +198,7 @@ final class AppModel {
     // MARK: Language
 
     func switchToggleLanguage() {
-        settings.toggleLanguage = settings.toggleLanguage.other
+        settings.toggleLanguage = settings.toggleLanguage.next(in: settings.enabledLanguages)
         flash("\(settings.toggleLanguage.flag) \(settings.toggleLanguage.displayName)", for: .seconds(1))
     }
 
@@ -205,7 +207,7 @@ final class AppModel {
         case .autoDetect: "Auto-detect"
         case .toggle: "Toggle: \(settings.toggleLanguage.displayName)"
         case .perLanguageHotkeys:
-            "fn: \(settings.primaryLanguage.displayName) · fn+⇧: \(settings.primaryLanguage.other.displayName)"
+            "fn: \(settings.primaryLanguage.displayName) · fn+⇧: \(settings.secondaryLanguage.displayName)"
         }
         return "\(mode) · \(engineSummary)"
     }
@@ -216,7 +218,7 @@ final class AppModel {
             engine == .parakeet && !parakeet.isReady ? .apple : engine
         }
         guard settings.engineMode == .perLanguage else { return usable(settings.engine).shortName }
-        return Language.allCases
+        return settings.enabledLanguages
             .map { "\($0.flag) \(usable(settings.engine(for: $0)).shortName)" }
             .joined(separator: " · ")
     }
@@ -279,8 +281,9 @@ final class AppModel {
 
     private func handle(_ event: HotkeyEvent) {
         let context = HotkeyContext(
-            mode: settings.languageMode, primary: settings.primaryLanguage,
-            toggle: settings.toggleLanguage, canStart: missingPermissions.isEmpty   // minor d
+            mode: settings.languageMode, primary: settings.primaryLanguage, secondary: settings.secondaryLanguage,
+            toggle: settings.toggleLanguage, enabled: settings.enabledLanguages,
+            canStart: missingPermissions.isEmpty   // minor d
         )
         let mapped = CommandMapper.map(event, context: context)
         if let command = mapped.command {

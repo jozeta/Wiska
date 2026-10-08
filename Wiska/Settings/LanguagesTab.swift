@@ -14,19 +14,22 @@ struct LanguagesTab: View {
                 }
                 switch settings.languageMode {
                 case .autoDetect:
-                    Text("Each dictation is transcribed in English and Svenska; the more confident result is used.")
+                    Text("Each dictation is matched against your ticked languages; the most confident result is used.")
                         .font(.caption).foregroundStyle(.secondary)
                 case .toggle:
                     Picker("Current language", selection: $settings.toggleLanguage) {
-                        ForEach(Language.allCases, id: \.self) { Text("\($0.flag) \($0.displayName)").tag($0) }
+                        ForEach(settings.enabledLanguages, id: \.self) { Text("\($0.flag) \($0.displayName)").tag($0) }
                     }
-                    Text("Quick-tap fn+⇧ to switch.").font(.caption).foregroundStyle(.secondary)
+                    Text("Quick-tap fn+⇧ to move to the next ticked language.").font(.caption).foregroundStyle(.secondary)
                 case .perLanguageHotkeys:
                     Picker("fn dictates in", selection: $settings.primaryLanguage) {
-                        ForEach(Language.allCases, id: \.self) { Text("\($0.flag) \($0.displayName)").tag($0) }
+                        ForEach(settings.enabledLanguages, id: \.self) { Text("\($0.flag) \($0.displayName)").tag($0) }
                     }
-                    Text("fn+⇧ dictates in \(settings.primaryLanguage.other.displayName).")
-                        .font(.caption).foregroundStyle(.secondary)
+                    Picker("fn+⇧ dictates in", selection: $settings.secondaryLanguage) {
+                        ForEach(settings.enabledLanguages.filter { $0 != settings.primaryLanguage }, id: \.self) {
+                            Text("\($0.flag) \($0.displayName)").tag($0)
+                        }
+                    }
                 }
             }
         }

@@ -13,6 +13,8 @@ public final class SettingsStore {
         static let primaryLanguage = "primaryLanguage"
         static let toggleLanguage = "toggleLanguage"
         static let lastDetectedLanguage = "lastDetectedLanguage"
+        static let languages = "languages"
+        static let secondaryLanguage = "secondaryLanguage"
         static let cleanupLevel = "cleanupLevel"
         static let historyRetention = "historyRetention"
         static let onboardingCompleted = "onboardingCompleted"
@@ -54,13 +56,57 @@ public final class SettingsStore {
 
     /// True when any language is set to Parakeet (so it should be loaded).
     public var usesParakeet: Bool {
-        Language.allCases.contains { engine(for: $0) == .parakeet }
+        enabledLanguages.contains { engine(for: $0) == .parakeet }
     }
     public var languageMode: LanguageMode { didSet { defaults.set(languageMode.rawValue, forKey: Key.languageMode) } }
-    public var primaryLanguage: Language { didSet { defaults.set(primaryLanguage.rawValue, forKey: Key.primaryLanguage) } }
-    public var toggleLanguage: Language { didSet { defaults.set(toggleLanguage.rawValue, forKey: Key.toggleLanguage) } }
+    /// Apple reserves speech models for at most 5 locales per app.
+    public static let maxLanguages = 5
+
+    private var storedLanguages: [Language]
+    private var storedPrimary: Language
+    private var storedSecondary: Language?
+    private var storedToggle: Language
+    private var storedLastDetected: Language
+
+    /// The ticked languages, in display order: 1 to `maxLanguages` of them. Other sets are ignored.
+    public var enabledLanguages: [Language] {
+        get { storedLanguages }
+        set {
+            let ordered = Language.allCases.filter(newValue.contains)
+            guard (1...Self.maxLanguages).contains(ordered.count) else { return }
+            storedLanguages = ordered
+            defaults.set(ordered.map(\.rawValue), forKey: Key.languages)
+        }
+    }
+
+    /// A language that isn't ticked reads as the first ticked one.
+    private func ticked(_ language: Language) -> Language {
+        storedLanguages.contains(language) ? language : storedLanguages[0]
+    }
+
+    public var primaryLanguage: Language {
+        get { ticked(storedPrimary) }
+        set { storedPrimary = newValue; defaults.set(newValue.rawValue, forKey: Key.primaryLanguage) }
+    }
+
+    /// fn+⇧ language in Per-language hotkeys mode: ticked and never the primary (when possible).
+    public var secondaryLanguage: Language {
+        get {
+            let primary = primaryLanguage
+            if let stored = storedSecondary, stored != primary, storedLanguages.contains(stored) { return stored }
+            return storedLanguages.first { $0 != primary } ?? primary
+        }
+        set { storedSecondary = newValue; defaults.set(newValue.rawValue, forKey: Key.secondaryLanguage) }
+    }
+
+    public var toggleLanguage: Language {
+        get { ticked(storedToggle) }
+        set { storedToggle = newValue; defaults.set(newValue.rawValue, forKey: Key.toggleLanguage) }
+    }
+
     public var lastDetectedLanguage: Language {
-        didSet { defaults.set(lastDetectedLanguage.rawValue, forKey: Key.lastDetectedLanguage) }
+        get { ticked(storedLastDetected) }
+        set { storedLastDetected = newValue; defaults.set(newValue.rawValue, forKey: Key.lastDetectedLanguage) }
     }
 
     public var highlight: Highlight { didSet { defaults.set(highlight.rawValue, forKey: Key.highlight) } }
@@ -84,9 +130,13 @@ public final class SettingsStore {
             defaults.string(forKey: Self.engineKey(language)).flatMap(SpeechEngine.init(rawValue:)).map { (language, $0) }
         })
         languageMode = Self.read(defaults, Key.languageMode, LanguageMode.autoDetect)
-        primaryLanguage = Self.read(defaults, Key.primaryLanguage, Language.english)
-        toggleLanguage = Self.read(defaults, Key.toggleLanguage, Language.english)
-        lastDetectedLanguage = Self.read(defaults, Key.lastDetectedLanguage, Language.english)
+        let stored = (defaults.stringArray(forKey: Key.languages) ?? []).compactMap(Language.init(rawValue:))
+        let ticked = Language.allCases.filter(stored.contains)
+        storedLanguages = (1...Self.maxLanguages).contains(ticked.count) ? ticked : [.english, .swedish]
+        storedPrimary = Self.read(defaults, Key.primaryLanguage, Language.english)
+        storedSecondary = defaults.string(forKey: Key.secondaryLanguage).flatMap(Language.init(rawValue:))
+        storedToggle = Self.read(defaults, Key.toggleLanguage, Language.english)
+        storedLastDetected = Self.read(defaults, Key.lastDetectedLanguage, Language.english)
         cleanupLevel = Self.read(defaults, Key.cleanupLevel, CleanupLevel.polished)
         highlight = Self.read(defaults, Key.highlight, Highlight.aurora)
         historyRetention = Self.read(defaults, Key.historyRetention, HistoryRetention.week)

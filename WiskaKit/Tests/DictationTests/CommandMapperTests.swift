@@ -4,7 +4,8 @@ import Testing
 
 struct CommandMapperTests {
     private func ctx(_ mode: LanguageMode, canStart: Bool = true) -> HotkeyContext {
-        HotkeyContext(mode: mode, primary: .english, toggle: .swedish, canStart: canStart)
+        HotkeyContext(mode: mode, primary: .english, secondary: .swedish, toggle: .swedish,
+                      enabled: [.english, .swedish], canStart: canStart)
     }
 
     @Test func pressStartsWithRoutedLanguage() {
@@ -46,5 +47,17 @@ struct CommandMapperTests {
         #expect(CommandMapper.map(.shiftAdded, context: ctx(.toggle)).command == nil)
         #expect(CommandMapper.map(.shiftAdded, context: ctx(.autoDetect)).command == nil)
         #expect(CommandMapper.map(.shiftAdded, context: ctx(.perLanguageHotkeys, canStart: false)).command == nil)
+    }
+
+    @Test func shiftTapCyclesThroughThreeTickedLanguages() {
+        let context = HotkeyContext(mode: .toggle, primary: .english, secondary: .swedish, toggle: .swedish,
+                                    enabled: [.english, .swedish, .german], canStart: true)
+        #expect(CommandMapper.map(.tapped(shifted: true), context: context).newToggleLanguage == .german)
+    }
+
+    @Test func shiftTapWithOneLanguageChangesNothing() {
+        let context = HotkeyContext(mode: .toggle, primary: .english, secondary: .english, toggle: .english,
+                                    enabled: [.english], canStart: true)
+        #expect(CommandMapper.map(.tapped(shifted: true), context: context).newToggleLanguage == nil)
     }
 }
