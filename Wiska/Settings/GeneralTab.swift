@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct GeneralTab: View {
@@ -35,5 +36,8 @@ struct GeneralTab: View {
         .formStyle(.grouped)
         .fixedSize(horizontal: false, vertical: true)
         .onAppear { login.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            login.refresh()
+        }
     }
 }

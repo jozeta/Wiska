@@ -2,11 +2,13 @@ import AppKit
 import Core
 import History
 import HUD
+import Preferences
 import SwiftUI
 
 struct HistoryView: View {
     let store: HistoryStore?
-    let highlight: Highlight
+    let settings: SettingsStore
+    private var highlight: Highlight { settings.highlight }
     @State private var query = ""
     @State private var confirmClear = false
 

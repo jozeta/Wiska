@@ -9,7 +9,7 @@ public final class HUDPanelController {
     static let contentSize = CGSize(width: NotchLayout.fallbackWidth, height: HUDView.contentHeight)
 
     private let model = HUDModel()
-    private let panel: NSPanel
+    let panel: NSPanel
     private var requested: HUDContent = .hidden
     /// Bumped by every show and hide, so a finished hide animation only orders the panel out
     /// if nothing has happened since (a quick hide → show must not cut short).
@@ -26,7 +26,10 @@ public final class HUDPanelController {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.contentView = NSHostingView(rootView: HUDView(model: model))
+        let hosting = NSHostingView(rootView: HUDView(model: model))
+        // The panel's size comes from NotchLayout only: long text truncates instead of widening it.
+        hosting.sizingOptions = []
+        panel.contentView = hosting
     }
 
     public var highlight: Highlight {
