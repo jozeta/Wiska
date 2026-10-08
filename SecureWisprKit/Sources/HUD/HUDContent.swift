@@ -2,7 +2,7 @@ import Observation
 
 public enum HUDContent: Equatable, Sendable {
     case hidden
-    case listening(levels: [Float])
+    case listening(levels: [Float], badge: String)
     case working(String)
     case message(String)
 }

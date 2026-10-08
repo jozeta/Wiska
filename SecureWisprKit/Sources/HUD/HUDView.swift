@@ -8,8 +8,15 @@ struct HUDView: View {
             switch model.content {
             case .hidden:
                 EmptyView()
-            case .listening(let levels):
-                WaveformView(levels: levels)
+            case .listening(let levels, let badge):
+                HStack(spacing: 10) {
+                    Text(badge)
+                        .font(.caption2.weight(.bold).monospaced())
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
+                    WaveformView(levels: levels)
+                }
             case .working(let text):
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
