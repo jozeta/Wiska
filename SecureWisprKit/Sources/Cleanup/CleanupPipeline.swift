@@ -17,13 +17,16 @@ public final class CleanupPipeline: TextCleaner {
     private let rewriter: any TextRewriter
     private let timeout: Duration
     private let dictionary: @MainActor () -> PersonalDictionary
+    private let isKnownWord: @MainActor (String) -> Bool
 
     public init(level: @escaping @MainActor () -> CleanupLevel, rewriter: any TextRewriter,
                 dictionary: @escaping @MainActor () -> PersonalDictionary = { PersonalDictionary() },
+                isKnownWord: @escaping @MainActor (String) -> Bool = { _ in false },
                 timeout: Duration = CleanupPipeline.defaultTimeout) {
         self.level = level
         self.rewriter = rewriter
         self.dictionary = dictionary
+        self.isKnownWord = isKnownWord
         self.timeout = timeout
     }
 
@@ -37,7 +40,8 @@ public final class CleanupPipeline: TextCleaner {
         let level = level()
         let dictionary = dictionary()
         // The dictionary is spelling, not cleanup: it applies at every level.
-        let corrected = DictionaryCorrector.apply(VoiceCommands.apply(text), dictionary: dictionary)
+        let corrected = DictionaryCorrector.apply(VoiceCommands.apply(text), dictionary: dictionary,
+                                                  isKnownWord: isKnownWord)
         guard level != .off else { return corrected }
         let deadline = ContinuousClock.now + timeout
         var cleaned: [String] = []
@@ -60,7 +64,8 @@ public final class CleanupPipeline: TextCleaner {
             switch CleanupGuard.check(original: segment, cleaned: output, level: level) {
             case .accept:
                 // The model never sees the dictionary; re-apply so it can't undo the user's spellings.
-                return Self.finishSentence(DictionaryCorrector.apply(output, dictionary: dictionary))
+                return Self.finishSentence(DictionaryCorrector.apply(output, dictionary: dictionary,
+                                                                           isKnownWord: isKnownWord))
             case .reject(let reason):
                 Self.log.notice("model output rejected: \(reason, privacy: .public)")
                 return RuleCleaner.clean(segment)

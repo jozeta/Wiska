@@ -5,6 +5,7 @@ import SwiftUI
 
 struct SettingsView: View {
     let model: AppModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var settings = model.settings
@@ -62,6 +63,7 @@ struct SettingsView: View {
                 .onChange(of: settings.historyRetention) { model.applyRetention() }
                 Text("Stored only on this Mac. Off deletes all history immediately.")
                     .font(.caption).foregroundStyle(.secondary)
+                Button("Open History…") { HistoryWindow.open(openWindow) }
             }
             Section("Push-to-talk") {
                 LabeledContent("Dictate", value: "Hold fn, speak, release")

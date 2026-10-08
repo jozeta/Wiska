@@ -16,7 +16,7 @@ struct SecureWisprApp: App {
         } label: {
             Image(systemName: model.menuBarSymbol)
         }
-        Window("Dictation History", id: "history") {
+        Window(HistoryWindow.title, id: HistoryWindow.id) {
             HistoryView(store: model.history)
         }
         Settings {

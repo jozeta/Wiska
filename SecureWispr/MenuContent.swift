@@ -44,8 +44,7 @@ struct MenuContent: View {
         Divider()
         Text("Tip: Keyboard settings ▸ “Press 🌐 key to” ▸ Do Nothing")
         Button("History…") {
-            NSApp.activate()
-            openWindow(id: "history")
+            HistoryWindow.open(openWindow)
         }
         .keyboardShortcut("y")
         Button("Settings…") {
