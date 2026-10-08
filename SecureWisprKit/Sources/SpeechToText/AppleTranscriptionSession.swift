@@ -21,12 +21,18 @@ final class AppleTranscriptionSession: TranscriptionSession {
         self.collector = collector
     }
 
-    static func start(language: Language) async throws -> AppleTranscriptionSession {
+    static func start(language: Language, vocabulary: [String]) async throws -> AppleTranscriptionSession {
         let apple = AppleModule.make(language)
         guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [apple.module]) else {
             throw TranscriptionError.noCompatibleAudioFormat
         }
         let analyzer = SpeechAnalyzer(modules: [apple.module])
+        if !vocabulary.isEmpty {
+            // Honoured by DictationTranscriber (Swedish); SpeechTranscriber ignores it (probed).
+            let context = AnalysisContext()
+            context.contextualStrings[.general] = vocabulary
+            try await analyzer.setContext(context)
+        }
         try await analyzer.prepareToAnalyze(in: format)
 
         let collector = Task<[AttributedString], Error> { try await apple.collect() }

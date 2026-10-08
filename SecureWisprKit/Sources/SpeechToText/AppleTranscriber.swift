@@ -11,13 +11,16 @@ public final class AppleTranscriber: Transcriber {
     private var installing: [Language: Task<Void, Error>] = [:]
     private let installer: @MainActor (Language) async throws -> Void
     let fallbackLanguage: @MainActor () -> Language
+    private let vocabulary: @MainActor () -> [String]
 
     /// True once assets for *both* languages are installed (drives the "Downloading…" HUD state).
     public var isReady: Bool { installed.count == Language.allCases.count }
 
     public init(fallbackLanguage: @escaping @MainActor () -> Language = { .english },
+                vocabulary: @escaping @MainActor () -> [String] = { [] },
                 installer: @escaping @MainActor (Language) async throws -> Void = AppleTranscriber.installAssets) {
         self.fallbackLanguage = fallbackLanguage
+        self.vocabulary = vocabulary
         self.installer = installer
     }
 
@@ -52,17 +55,18 @@ public final class AppleTranscriber: Transcriber {
     }
 
     public func makeSession(language: LanguageChoice) async throws -> any TranscriptionSession {
+        let words = vocabulary()
         switch language {
         case .fixed(let fixed):
             try await prepare(fixed)
-            return try await AppleTranscriptionSession.start(language: fixed)
+            return try await AppleTranscriptionSession.start(language: fixed, vocabulary: words)
         case .automatic:
             try await prepare(.english)
             try await prepare(.swedish)
-            let english = try await AppleTranscriptionSession.start(language: .english)
+            let english = try await AppleTranscriptionSession.start(language: .english, vocabulary: words)
             let swedish: AppleTranscriptionSession
             do {
-                swedish = try await AppleTranscriptionSession.start(language: .swedish)
+                swedish = try await AppleTranscriptionSession.start(language: .swedish, vocabulary: words)
             } catch {
                 english.cancel()
                 throw error
