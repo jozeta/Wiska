@@ -33,8 +33,10 @@ public final class AppleTranscriber: Transcriber {
     public func makeSession(language: LanguageChoice) async throws -> any TranscriptionSession {
         try await prepare()
         switch language {
-        case .english:
+        case .fixed(.english), .automatic:
             return try await AppleTranscriptionSession.start(module: Self.makeModule(), locale: Self.english)
+        case .fixed(.swedish):
+            throw TranscriptionError.unsupportedLocale("sv_SE")
         }
     }
 

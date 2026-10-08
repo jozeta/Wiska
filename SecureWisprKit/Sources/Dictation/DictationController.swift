@@ -96,7 +96,7 @@ public final class DictationController {
         // captured before the transcriber is ready is still delivered, in order.
         let transcriber = transcriber
         sessionTask = Task { [weak self] in
-            let session = try await transcriber.makeSession(language: .english)
+            let session = try await transcriber.makeSession(language: .fixed(.english))
             for await chunk in capture.chunks { session.append(chunk) }
             // Stream ended while still listening: the recorder stopped on its own
             // (e.g. audio device change). Transcribe what we have.

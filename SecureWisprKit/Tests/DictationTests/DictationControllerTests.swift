@@ -30,7 +30,7 @@ struct DictationControllerTests {
         await controller.currentTask?.value
 
         #expect(transcriber.session.appended == [[0.1, 0.2], [0.3]])
-        #expect(transcriber.languages == [.english])
+        #expect(transcriber.languages == [.fixed(.english)])
         #expect(cleaner.contexts == [DictationContext(appBundleID: "com.apple.TextEdit")])
         #expect(injector.injected == ["cleaned: hello world"])
         #expect(recorder.states == [.listening, .transcribing, .cleaning, .injecting, .idle])

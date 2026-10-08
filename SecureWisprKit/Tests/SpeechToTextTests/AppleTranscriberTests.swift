@@ -30,7 +30,7 @@ struct AppleTranscriberTests {
     func transcribesSpokenEnglish() async throws {
         let samples = try spokenSamples("hello world this is a test")
         let transcriber = AppleTranscriber()
-        let session = try await transcriber.makeSession(language: .english)
+        let session = try await transcriber.makeSession(language: .fixed(.english))
         // Feed in 100 ms chunks, like the microphone does.
         for start in stride(from: 0, to: samples.count, by: 1_600) {
             session.append(AudioChunk(samples: Array(samples[start..<min(start + 1_600, samples.count)])))
@@ -45,7 +45,7 @@ struct AppleTranscriberTests {
 
     @Test(.enabled(if: SpeechTranscriber.isAvailable), .timeLimit(.minutes(1)))
     func silenceGivesEmptyText() async throws {
-        let session = try await AppleTranscriber().makeSession(language: .english)
+        let session = try await AppleTranscriber().makeSession(language: .fixed(.english))
         session.append(AudioChunk(samples: Array(repeating: 0, count: 16_000)))
         let transcript = try await session.finish()
         #expect(transcript.text.isEmpty)
