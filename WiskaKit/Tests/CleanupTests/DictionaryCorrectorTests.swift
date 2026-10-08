@@ -106,6 +106,13 @@ struct DictionaryCorrectorTests {
                 == "send the Kvarnholmen report och Jozeta")
     }
 
+    @Test func decomposedAccentsArePartOfTheWord() {
+        // "cafe" + U+0301 is "café" spelled with a combining mark: not a match for "cafe".
+        #expect(fix("a cafe\u{301} au lait", [("cafe", "Kafé")]) == "a cafe\u{301} au lait")
+        // ...and it matches a rule typed as precomposed "café".
+        #expect(fix("a cafe\u{301} au lait", [("café", "Café")]) == "a Café au lait")
+    }
+
     @Test func caseOnlyReplacementsWork() {
         // Review I1.
         let rules = [("github", "GitHub"), ("macos", "macOS")]

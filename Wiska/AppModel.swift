@@ -99,9 +99,10 @@ final class AppModel {
             }
         }
         applyRetention()
+        // Every minute, so expired entries leave History promptly; a no-op costs one small query.
         retentionTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3_600))
+                try? await Task.sleep(for: .seconds(60))
                 self?.applyRetention()
             }
         }

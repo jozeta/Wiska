@@ -89,16 +89,21 @@ private struct StatsHeader: View {
             tile(stats.words.formatted(), "words this week")
             tile(StatsFormatter.savedText(stats.timeSaved), "time saved")
             VStack(alignment: .leading, spacing: 6) {
-                Text("🇸🇪 \(Int((stats.swedishShare * 100).rounded()))%  ·  🇬🇧 \(Int((stats.englishShare * 100).rounded()))%")
-                    .font(.headline)
-                GeometryReader { proxy in
-                    HStack(spacing: 0) {
-                        AuroraTheme.teal.frame(width: proxy.size.width * stats.swedishShare)
-                        AuroraTheme.violet.frame(width: proxy.size.width * stats.englishShare)
+                if let split = StatsFormatter.languagePercents(stats) {
+                    Text("🇸🇪 \(split.swedish)%  ·  🇬🇧 \(split.english)%")
+                        .font(.headline)
+                    GeometryReader { proxy in
+                        HStack(spacing: 0) {
+                            AuroraTheme.teal.frame(width: proxy.size.width * Double(split.swedish) / 100)
+                            AuroraTheme.violet.frame(width: proxy.size.width * Double(split.english) / 100)
+                        }
                     }
+                    .frame(height: 6)
+                    .clipShape(Capsule())
+                } else {
+                    Text("🇸🇪 · 🇬🇧").font(.headline)
+                    Text("no language yet").font(.caption).foregroundStyle(.secondary)
                 }
-                .frame(height: 6)
-                .clipShape(Capsule())
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)

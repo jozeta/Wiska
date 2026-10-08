@@ -9,9 +9,12 @@ public enum DictionaryCorrector {
     ///   "hann" never becomes "Hanna" and "klara" never becomes "Klara" (review C1).
     public static func apply(_ text: String, dictionary: PersonalDictionary,
                              isKnownWord: (String) -> Bool = { _ in false }) -> String {
-        var result = text
+        // One spelling of "é": composed and combining-mark forms must match each other.
+        var result = text.precomposedStringWithCanonicalMapping
         for replacement in dictionary.replacements {
-            result = replace(replacement, in: result)
+            result = replace(Replacement(heard: replacement.heard.precomposedStringWithCanonicalMapping,
+                                         written: replacement.written.precomposedStringWithCanonicalMapping),
+                             in: result)
         }
         return correctNearMisses(in: result, words: dictionary.words, isKnownWord: isKnownWord)
     }
@@ -22,7 +25,8 @@ public enum DictionaryCorrector {
         let words = phrase.split(whereSeparator: \.isWhitespace)
             .map { NSRegularExpression.escapedPattern(for: String($0)) }
         // \b only makes sense next to word characters; use look-arounds so "(beta)" and "c++" work.
-        return "(?<![\\p{L}\\p{N}])" + words.joined(separator: "[\\s,]+") + "(?![\\p{L}\\p{N}])"
+        // \p{M}: a combining accent belongs to the word it follows.
+        return "(?<![\\p{L}\\p{M}\\p{N}])" + words.joined(separator: "[\\s,]+") + "(?![\\p{L}\\p{M}\\p{N}])"
     }
 
     private static func replace(_ replacement: Replacement, in text: String) -> String {

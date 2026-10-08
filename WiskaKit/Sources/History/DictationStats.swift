@@ -4,6 +4,7 @@ import Foundation
 /// Weekly numbers computed from history; nothing extra is stored.
 public struct DictationStats: Equatable, Sendable {
     public static let typingWordsPerMinute = 40.0
+    public static let window: TimeInterval = 7 * 86_400
 
     public var words: Int
     public var timeSaved: TimeInterval
@@ -18,7 +19,7 @@ public struct DictationStats: Equatable, Sendable {
     }
 
     public static func compute(_ records: [DictationRecord], now: Date,
-                               window: TimeInterval = 7 * 86_400) -> DictationStats {
+                               window: TimeInterval = DictationStats.window) -> DictationStats {
         let recent = records.filter { $0.pasted && $0.date >= now.addingTimeInterval(-window) }
         func count(_ r: DictationRecord) -> Int { r.finalText.split(whereSeparator: \.isWhitespace).count }
         let words = recent.reduce(0) { $0 + count($1) }
@@ -42,6 +43,13 @@ public enum StatsFormatter {
         formatter.numberStyle = .decimal
         let words = formatter.string(from: NSNumber(value: stats.words)) ?? "\(stats.words)"
         return "This week: \(words) words · \(savedText(stats.timeSaved)) saved"
+    }
+
+    /// Whole percentages that add up to 100, or nil when no dictation had a known language.
+    public static func languagePercents(_ stats: DictationStats) -> (swedish: Int, english: Int)? {
+        guard stats.swedishShare + stats.englishShare > 0 else { return nil }
+        let swedish = Int((stats.swedishShare * 100).rounded())
+        return (swedish, 100 - swedish)
     }
 
     public static func savedText(_ seconds: TimeInterval) -> String {

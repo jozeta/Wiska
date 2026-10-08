@@ -50,4 +50,16 @@ struct DictationStatsTests {
     @Test func menuLineHiddenWhenNoWords() {
         #expect(StatsFormatter.menuLine(DictationStats(words: 0, timeSaved: 0, swedishShare: 0, englishShare: 0)) == nil)
     }
+
+    @Test func languagePercentsAlwaysAddUpTo100() {
+        let stats = DictationStats(words: 3, timeSaved: 0, swedishShare: 0.335, englishShare: 0.665)
+        let split = StatsFormatter.languagePercents(stats)
+        #expect(split?.swedish == 34)
+        #expect(split?.english == 66)
+    }
+
+    @Test func noLanguagePercentsWhenNoLanguageIsKnown() {
+        #expect(StatsFormatter.languagePercents(DictationStats(words: 5, timeSaved: 0,
+                                                               swedishShare: 0, englishShare: 0)) == nil)
+    }
 }

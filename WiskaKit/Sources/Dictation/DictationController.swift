@@ -183,9 +183,9 @@ public final class DictationController {
             fail(.injection(String(describing: error)))
             return
         }
-        record(transcript, finalText, pasted: true)
         let latency = ContinuousClock.now - releasedAt
         lastLatency = latency
+        record(transcript, finalText, pasted: true)   // after measuring: saving isn't latency
         Self.log.info("release→inject \(latency.formatted(.units(allowed: [.milliseconds])), privacy: .public)")
         state = .idle
         if currentChoice == .automatic, let language = transcript.language {

@@ -65,6 +65,27 @@ struct HistoryStoreTests {
         #expect(store.items(matching: "").isEmpty)
     }
 
+    @Test func deletingAnEntryThatRetentionAlreadyRemovedIsHarmless() {
+        store.add(record("a"), retention: .forever)
+        let id = store.items(matching: "")[0].id
+        store.apply(retention: .off, now: now)
+        store.delete(id)
+        #expect(store.items(matching: "").isEmpty)
+    }
+
+    @Test func retentionWithNothingToDeleteLeavesRevisionAlone() {
+        store.add(record("fresh"), retention: .forever)
+        let start = store.revision
+        store.apply(retention: .week, now: now)
+        #expect(store.revision == start)
+    }
+
+    @Test func statsOnlyReadTheWindow() {
+        store.add(record("old words here", ageDays: 30), retention: .forever)
+        store.add(record("new", ageDays: 1), retention: .forever)
+        #expect(store.stats(now: now).words == 1)
+    }
+
     @Test func revisionChangesOnEveryMutation() {
         let start = store.revision
         store.add(record("a"), retention: .forever)

@@ -51,12 +51,20 @@ public final class HistoryStore {
             .map { HistoryItem(id: $0.persistentModelID, record: $0.record) }
     }
 
+    /// Reads only the stats window, so it stays fast with Forever retention.
     public func stats(now: Date = Date()) -> DictationStats {
-        DictationStats.compute(items(matching: "").map(\.record), now: now)
+        let start = now.addingTimeInterval(-DictationStats.window)
+        let descriptor = FetchDescriptor<HistoryEntry>(predicate: #Predicate { $0.date >= start })
+        let records = ((try? context.fetch(descriptor)) ?? []).map(\.record)
+        return DictationStats.compute(records, now: now)
     }
 
     public func delete(_ id: PersistentIdentifier) {
-        guard let entry = context.model(for: id) as? HistoryEntry else { return }
+        // Fetched, not `model(for:)`: that returns a stale object for an entry retention
+        // already deleted, and touching it crashes.
+        var descriptor = FetchDescriptor<HistoryEntry>(predicate: #Predicate { $0.persistentModelID == id })
+        descriptor.fetchLimit = 1
+        guard let entry = try? context.fetch(descriptor).first else { return }
         context.delete(entry)
         save()
     }
@@ -73,7 +81,9 @@ public final class HistoryStore {
         guard let cutoff = retention.cutoff(now: now) else { return }
         if retention == .off { return deleteAll() }
         let descriptor = FetchDescriptor<HistoryEntry>(predicate: #Predicate { $0.date < cutoff })
-        for entry in (try? context.fetch(descriptor)) ?? [] { context.delete(entry) }
+        let expired = (try? context.fetch(descriptor)) ?? []
+        guard !expired.isEmpty else { return }   // runs every minute: don't redraw for nothing
+        for entry in expired { context.delete(entry) }
         save()
     }
 
