@@ -4,6 +4,7 @@ import Cleanup
 import Core
 import Dictation
 import HUD
+import History
 import Hotkey
 import Injection
 import Observation
@@ -17,6 +18,9 @@ final class AppModel {
 
     let settings: SettingsStore
     let parakeetStore: ParakeetModelStore
+    let dictionaryStore: DictionaryStore
+    let history: HistoryStore?
+    @ObservationIgnored private var retentionTask: Task<Void, Never>?
     private(set) var missingPermissions: [Permission] = []
     private(set) var dictationState: DictationController.State = .idle
 
@@ -37,16 +41,26 @@ final class AppModel {
         // property is initialized is a compile error.
         let settings = SettingsStore()
         let store = ParakeetModelStore()
+        let dictionaryStore = DictionaryStore()
+        self.dictionaryStore = dictionaryStore
+        do {
+            history = try HistoryStore()
+        } catch {
+            Self.log.error("history unavailable: \(error.localizedDescription, privacy: .public)")
+            history = nil
+        }
         self.settings = settings
         parakeetStore = store
-        apple = AppleTranscriber(fallbackLanguage: { settings.lastDetectedLanguage })
+        apple = AppleTranscriber(fallbackLanguage: { settings.lastDetectedLanguage },
+                                 vocabulary: { dictionaryStore.dictionary.words })
         parakeet = ParakeetTranscriber(store: store)
         let rewriter = FoundationModelsRewriter()
         self.rewriter = rewriter
         controller = DictationController(
             audio: MicrophoneRecorder(),
             transcriber: { [weak self] in self?.activeTranscriber() ?? AppleTranscriber() },
-            cleaner: CleanupPipeline(level: { settings.cleanupLevel }, rewriter: rewriter),
+            cleaner: CleanupPipeline(level: { settings.cleanupLevel }, rewriter: rewriter,
+                                     dictionary: { dictionaryStore.dictionary }),
             injector: PasteboardInjector(),
             contextProvider: {
                 DictationContext(appBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
@@ -63,6 +77,10 @@ final class AppModel {
             settings.lastDetectedLanguage = language
             flash("\(language.flag) \(language.displayName)", for: .milliseconds(800))
         }
+        controller.onDictationFinished = { [weak self] record in
+            guard let self else { return }
+            history?.add(record, retention: settings.historyRetention)
+        }
     }
 
     func start() {
@@ -78,6 +96,17 @@ final class AppModel {
                 try? await Task.sleep(for: .seconds(2))
             }
         }
+        applyRetention()
+        retentionTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3_600))
+                self?.applyRetention()
+            }
+        }
+    }
+
+    func applyRetention() {
+        history?.apply(retention: settings.historyRetention)
     }
 
     // MARK: Engines
