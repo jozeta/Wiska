@@ -15,16 +15,18 @@ struct SpeechTab: View {
                 }
                 .pickerStyle(.segmented)
                 switch settings.engineMode {
-                    case .same:
+                case .same:
                     Picker("Engine", selection: $settings.engine) {
                         ForEach(SpeechEngine.allCases, id: \.self) { Text($0.displayName).tag($0) }
                     }
-                    case .perLanguage:
-                    Picker("\(Language.english.flag) \(Language.english.displayName)", selection: $settings.englishEngine) {
-                        ForEach(SpeechEngine.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                    }
-                    Picker("\(Language.swedish.flag) \(Language.swedish.displayName)", selection: $settings.swedishEngine) {
-                        ForEach(SpeechEngine.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                case .perLanguage:
+                    ForEach(Language.allCases, id: \.self) { language in
+                        Picker("\(language.flag) \(language.displayName)",
+                               selection: Binding(get: { settings.engine(for: language) },
+                                                  set: { settings.setEngine($0, for: language)
+                                                         model.warmUpParakeetIfSelected() })) {
+                            ForEach(SpeechEngine.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                        }
                     }
                 }
                 ParakeetCard(store: model.parakeetStore) { model.parakeetModelBecameReady() }
@@ -35,8 +37,6 @@ struct SpeechTab: View {
             }
             .onChange(of: settings.engine) { model.warmUpParakeetIfSelected() }
             .onChange(of: settings.engineMode) { model.warmUpParakeetIfSelected() }
-            .onChange(of: settings.englishEngine) { model.warmUpParakeetIfSelected() }
-            .onChange(of: settings.swedishEngine) { model.warmUpParakeetIfSelected() }
         }
         .formStyle(.grouped)
         .fixedSize(horizontal: false, vertical: true)

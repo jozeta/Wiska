@@ -68,58 +68,58 @@ final class SettingsStoreTests {
         #expect(reloaded.onboardingCompleted && reloaded.fnKeyConfirmed && reloaded.firstDictationDone)
     }
 
+    @Test func highlightDefaultsToAuroraAndPersists() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.highlight == .aurora)
+        store.highlight = .sunset
+        #expect(SettingsStore(defaults: defaults).highlight == .sunset)
+    }
+
     @Test func perLanguageEnginesStartFromTheCurrentEngine() {
         defaults.set("parakeet", forKey: "engine")
         let store = SettingsStore(defaults: defaults)
-        #expect(store.engineMode == .same)
-        #expect(store.englishEngine == .parakeet)
-        #expect(store.swedishEngine == .parakeet)
+        store.engineMode = .perLanguage
+        #expect(Language.allCases.allSatisfy { store.engine(for: $0) == .parakeet })
+    }
+
+    @Test func existingEnglishAndSwedishEnginesCarryOver() {
+        defaults.set("perLanguage", forKey: "engineMode")
+        defaults.set("parakeet", forKey: "englishEngine")
+        defaults.set("apple", forKey: "swedishEngine")
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.engine(for: .english) == .parakeet)
+        #expect(store.engine(for: .swedish) == .apple)
     }
 
     @Test func engineForLanguageFollowsTheMode() {
         let store = SettingsStore(defaults: defaults)
         store.engine = .parakeet
-        store.englishEngine = .parakeet
-        store.swedishEngine = .apple
-        #expect(store.engine(for: .swedish) == .parakeet)   // same for all
+        store.setEngine(.apple, for: .german)
+        #expect(store.engine(for: .german) == .parakeet)   // same for all
         store.engineMode = .perLanguage
-        #expect(store.engine(for: .english) == .parakeet)
-        #expect(store.engine(for: .swedish) == .apple)
+        #expect(store.engine(for: .german) == .apple)
+    }
+
+    @Test func engineSettingsPersist() {
+        let store = SettingsStore(defaults: defaults)
+        store.engineMode = .perLanguage
+        store.setEngine(.parakeet, for: .dutch)
+        #expect(SettingsStore(defaults: defaults).engine(for: .dutch) == .parakeet)
+    }
+
+    @Test func perLanguageEnginesAreSavedWhenThatModeIsChosen() {
+        let store = SettingsStore(defaults: defaults)
+        store.engine = .parakeet
+        store.engineMode = .perLanguage
+        store.engine = .apple
+        #expect(SettingsStore(defaults: defaults).engine(for: .italian) == .parakeet)
     }
 
     @Test func usesParakeetWhenAnyLanguageDoes() {
         let store = SettingsStore(defaults: defaults)
         #expect(!store.usesParakeet)
         store.engineMode = .perLanguage
-        store.swedishEngine = .parakeet
+        store.setEngine(.parakeet, for: .swedish)
         #expect(store.usesParakeet)
-    }
-
-    @Test func engineSettingsPersist() {
-        let store = SettingsStore(defaults: defaults)
-        store.engineMode = .perLanguage
-        store.englishEngine = .parakeet
-        store.swedishEngine = .apple
-        let reloaded = SettingsStore(defaults: defaults)
-        #expect(reloaded.engineMode == .perLanguage)
-        #expect(reloaded.englishEngine == .parakeet)
-        #expect(reloaded.swedishEngine == .apple)
-    }
-
-    @Test func perLanguageEnginesAreSavedWhenThatModeIsChosen() {
-        let store = SettingsStore(defaults: defaults)
-        store.engine = .parakeet
-        store.engineMode = .perLanguage   // both start as Parakeet and are now saved
-        store.engine = .apple             // a later "Same for all" change must not move them
-        let reloaded = SettingsStore(defaults: defaults)
-        #expect(reloaded.englishEngine == .parakeet)
-        #expect(reloaded.swedishEngine == .parakeet)
-    }
-
-    @Test func highlightDefaultsToAuroraAndPersists() {
-        let store = SettingsStore(defaults: defaults)
-        #expect(store.highlight == .aurora)
-        store.highlight = .sunset
-        #expect(SettingsStore(defaults: defaults).highlight == .sunset)
     }
 }

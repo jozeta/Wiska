@@ -9,8 +9,6 @@ public final class SettingsStore {
         static let engine = "engine"
         static let engineMode = "engineMode"
         static let highlight = "highlight"
-        static let englishEngine = "englishEngine"
-        static let swedishEngine = "swedishEngine"
         static let languageMode = "languageMode"
         static let primaryLanguage = "primaryLanguage"
         static let toggleLanguage = "toggleLanguage"
@@ -28,24 +26,30 @@ public final class SettingsStore {
     public var engineMode: EngineMode {
         didSet {
             defaults.set(engineMode.rawValue, forKey: Key.engineMode)
-            // First switch to Per language: start both languages from the engine in use now, and
-            // save them (their didSets), so a later "Same for all" change can't move them.
-            if engineMode == .perLanguage, defaults.object(forKey: Key.englishEngine) == nil {
-                englishEngine = engine
-                swedishEngine = engine
+            // First switch to Per language: start every language from the engine in use now, and
+            // save them, so a later "Same for all" change can't move them.
+            if engineMode == .perLanguage {
+                for language in Language.allCases where languageEngines[language] == nil {
+                    setEngine(engine, for: language)
+                }
             }
         }
     }
-    public var englishEngine: SpeechEngine { didSet { defaults.set(englishEngine.rawValue, forKey: Key.englishEngine) } }
-    public var swedishEngine: SpeechEngine { didSet { defaults.set(swedishEngine.rawValue, forKey: Key.swedishEngine) } }
+    /// Engines chosen per language (Per language mode). Missing entries use `engine`.
+    public private(set) var languageEngines: [Language: SpeechEngine]
+
+    /// `englishEngine` / `swedishEngine` are the keys earlier versions used, so choices carry over.
+    private static func engineKey(_ language: Language) -> String { "\(language.rawValue)Engine" }
+
+    public func setEngine(_ engine: SpeechEngine, for language: Language) {
+        languageEngines[language] = engine
+        defaults.set(engine.rawValue, forKey: Self.engineKey(language))
+    }
 
     /// The engine a language uses in the current mode.
     public func engine(for language: Language) -> SpeechEngine {
         guard engineMode == .perLanguage else { return engine }
-        return switch language {
-        case .english: englishEngine
-        case .swedish: swedishEngine
-        }
+        return languageEngines[language] ?? engine
     }
 
     /// True when any language is set to Parakeet (so it should be loaded).
@@ -76,9 +80,9 @@ public final class SettingsStore {
         let engine = Self.read(defaults, Key.engine, SpeechEngine.apple)
         self.engine = engine
         engineMode = Self.read(defaults, Key.engineMode, EngineMode.same)
-        // Unset per-language engines start from the engine the user already has.
-        englishEngine = Self.read(defaults, Key.englishEngine, engine)
-        swedishEngine = Self.read(defaults, Key.swedishEngine, engine)
+        languageEngines = Dictionary(uniqueKeysWithValues: Language.allCases.compactMap { language in
+            defaults.string(forKey: Self.engineKey(language)).flatMap(SpeechEngine.init(rawValue:)).map { (language, $0) }
+        })
         languageMode = Self.read(defaults, Key.languageMode, LanguageMode.autoDetect)
         primaryLanguage = Self.read(defaults, Key.primaryLanguage, Language.english)
         toggleLanguage = Self.read(defaults, Key.toggleLanguage, Language.english)

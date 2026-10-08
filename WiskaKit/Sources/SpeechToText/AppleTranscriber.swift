@@ -11,16 +11,20 @@ public final class AppleTranscriber: Transcriber {
     private var installing: [Language: Task<Void, Error>] = [:]
     private let installer: @MainActor (Language) async throws -> Void
     let fallbackLanguage: @MainActor () -> Language
+    /// The ticked languages: only these get assets (Apple reserves at most 5 per app).
+    private let languages: @MainActor () -> [Language]
     private let vocabulary: @MainActor () -> [String]
 
-    /// True once assets for *both* languages are installed (drives the "Downloading…" HUD state).
-    public var isReady: Bool { installed.count == Language.allCases.count }
+    /// True once assets for every ticked language are installed (drives the "Downloading…" HUD state).
+    public var isReady: Bool { Set(languages()).isSubset(of: installed) }
 
     public func isReady(for language: Language) -> Bool { installed.contains(language) }
 
-    public init(fallbackLanguage: @escaping @MainActor () -> Language = { .english },
+    public init(languages: @escaping @MainActor () -> [Language] = { [.english, .swedish] },
+                fallbackLanguage: @escaping @MainActor () -> Language = { .english },
                 vocabulary: @escaping @MainActor () -> [String] = { [] },
                 installer: @escaping @MainActor (Language) async throws -> Void = AppleTranscriber.installAssets) {
+        self.languages = languages
         self.fallbackLanguage = fallbackLanguage
         self.vocabulary = vocabulary
         self.installer = installer
@@ -30,11 +34,11 @@ public final class AppleTranscriber: Transcriber {
         try await AppleSpeechAssets.ensureInstalled(AppleModule.make(language).module, locale: language.locale)
     }
 
-    /// Warm-up: installs assets for both languages. Failures are per language, so a failed
+    /// Warm-up: installs assets for the ticked languages. Failures are per language, so a failed
     /// Swedish install never blocks English (review I3).
     public func prepare() async throws {
         var firstError: Error?
-        for language in Language.allCases {
+        for language in languages() {
             do { try await prepare(language) } catch { firstError = firstError ?? error }
         }
         if let firstError { throw firstError }
@@ -56,6 +60,21 @@ public final class AppleTranscriber: Transcriber {
         }
     }
 
+    /// Gives back Apple's reservations for languages that are no longer ticked, so the
+    /// 5-locale limit leaves room for the ones that are.
+    public func releaseUnticked() async {
+        let ticked = Set(languages().map { $0.locale.identifier(.bcp47) })
+        for locale in await AssetInventory.reservedLocales where !ticked.contains(locale.identifier(.bcp47)) {
+            _ = await AssetInventory.release(reservedLocale: locale)
+        }
+        installed.formIntersection(languages())
+    }
+
+    /// Releases specific languages' reservations (tests use it to stay under Apple's limit).
+    public static func release(_ languages: [Language]) async {
+        for language in languages { _ = await AssetInventory.release(reservedLocale: language.locale) }
+    }
+
     public func makeSession(language: LanguageChoice) async throws -> any TranscriptionSession {
         let words = vocabulary()
         switch language {
@@ -67,7 +86,7 @@ public final class AppleTranscriber: Transcriber {
             // with one language left, that language is used as-is.
             var sessions: [any TranscriptionSession] = []
             var firstError: Error?
-            for language in Language.allCases {
+            for language in languages() {
                 do {
                     try await prepare(language)
                     sessions.append(try await AppleTranscriptionSession.start(language: language, vocabulary: words))

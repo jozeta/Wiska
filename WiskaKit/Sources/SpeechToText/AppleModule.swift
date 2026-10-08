@@ -3,15 +3,14 @@ import Foundation
 import Speech
 
 /// One configured Apple speech module plus a way to collect its final results.
-/// English uses SpeechTranscriber; Swedish uses DictationTranscriber (SpeechTranscriber has no sv_SE).
+/// SpeechTranscriber where it has a model; DictationTranscriber for Swedish, Danish and Dutch.
 struct AppleModule {
     let language: Language
     let module: any SpeechModule
     let collect: @Sendable () async throws -> [AttributedString]
 
     static func make(_ language: Language) -> AppleModule {
-        switch language {
-        case .english:
+        if !language.usesDictationTranscriber {
             let module = SpeechTranscriber(
                 locale: language.locale, transcriptionOptions: [], reportingOptions: [],
                 attributeOptions: [.transcriptionConfidence]
@@ -22,7 +21,7 @@ struct AppleModule {
                 for try await result in results { texts.append(result.text) }
                 return texts
             }
-        case .swedish:
+        } else {
             let module = DictationTranscriber(
                 locale: language.locale, contentHints: [.shortForm], transcriptionOptions: [.punctuation],
                 reportingOptions: [], attributeOptions: [.transcriptionConfidence]

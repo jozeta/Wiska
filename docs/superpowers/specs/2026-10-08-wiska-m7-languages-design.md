@@ -34,6 +34,10 @@ ticks more. Locales: en_US, sv_SE, de_DE, fr_FR, es_ES, it_IT, pt_PT, da_DK, nl_
 | Svenska, Dansk, Nederlands | ❌ | ✅ | ✅ | ✅ |
 
 - Assets for de/fr/es/it/pt/da/nl are not installed yet; Apple downloads them on demand.
+- **Apple allows an app at most 5 reserved speech locales** (`AssetInventory.maximumReservedLocales
+  == 5`; a sixth fails with "Too many allocated locales, 5 maximum"). Found while implementing;
+  user decision: **at most 5 ticked languages**. Unticking a language releases its reservation
+  (`AssetInventory.release(reservedLocale:)`), so the user can swap languages.
 - System voices for tests: Anna (de_DE), Thomas (fr_FR), Mónica (es_ES), Alice (it_IT),
   Joana (pt_PT), Sara (da_DK), Xander (nl_NL), plus Samantha (en) and Alva (sv).
 
@@ -54,7 +58,7 @@ Français, Español, Italiano, Português, Dansk, Nederlands.
 
 | Key | Type | Default | Notes |
 |---|---|---|---|
-| `languages` (new) | array of raw values | `["english", "swedish"]` | the ticked set; stored in `allCases` order; never empty (unticking the last one is refused) |
+| `languages` (new) | array of raw values | `["english", "swedish"]` | the ticked set; stored in `allCases` order; 1–5 languages (unticking the last or ticking a sixth is refused) |
 | `<raw>Engine` (generalised) | `SpeechEngine` | current `engine` | `englishEngine`/`swedishEngine` keep their keys, so existing choices carry over; first switch to Per language seeds and saves every language |
 | `secondaryLanguage` (new) | `Language` | first ticked language ≠ primary | fn+⇧ language in Per-language hotkeys mode |
 | `primaryLanguage`, `toggleLanguage`, `lastDetectedLanguage` | existing | — | if not ticked, they read as the first ticked language |
@@ -157,7 +161,7 @@ affect that case.
 ## 6. Settings UI and app
 
 - **Languages tab:** "My languages" — a checkbox per language (flag + native name); the
-  last ticked one is disabled. Then the existing mode picker; Toggle's "Current language"
+  last ticked one is disabled, and unticked ones are disabled while five are ticked. Then the existing mode picker; Toggle's "Current language"
   and Per-language hotkeys' "fn" / "fn+⇧" pickers list ticked languages only.
 - **Speech tab:** in Per language mode, one engine picker per ticked language.
 - **Menu:** "Switch to <next>" uses `next(in:)`; hidden when one language is ticked or
@@ -174,7 +178,9 @@ affect that case.
 
 ## 8. Error handling
 
-- Unticking the last language is impossible (checkbox disabled; setter ignores empty).
+- Unticking the last language or ticking a sixth is impossible (checkboxes disabled with a note
+  "Up to 5 languages — Apple's limit"; the setter ignores empty or > 5).
+- Unticked languages' Apple reservations are released when the ticked set changes.
 - A stored primary/secondary/toggle language that isn't ticked reads as the first ticked.
 - Unknown stored language raw values are dropped when reading `languages`.
 - Asset download failure for one language never blocks others (existing per-language
@@ -195,8 +201,9 @@ affect that case.
 - `DictationStats` shares and percents summing to 100 for three languages.
 - Real audio (Apple): one sentence per new language with its voice, fixed language.
 - Real audio (Parakeet): one sentence per new language; `LanguageGuess` returns it.
-- Real audio auto-detect: with all nine ticked and all on Apple, de/fr/es/it/pt/da/nl
-  sentences are detected correctly (a miss is reported, test allows at most one).
+- Real audio auto-detect (Apple, five ticked at a time): {en, sv, de, fr, es}, {en, sv, it, pt,
+  da} and {en, sv, nl} — each new language's sentence detected correctly (at most one miss in
+  total). Real-audio tests run serialized and release the locales they reserved.
 - Manual (user): tick Deutsch (or another), dictate, check text, History language, badge.
 
 ## 10. Out of scope

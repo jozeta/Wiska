@@ -3,13 +3,42 @@ import Foundation
 public enum Language: String, Sendable, CaseIterable, Codable {
     case english
     case swedish
+    case german
+    case french
+    case spanish
+    case italian
+    case portuguese
+    case danish
+    case dutch
 
+    /// Removed in favour of `next(in:)` once ticked languages drive routing.
     public var other: Language { self == .english ? .swedish : .english }
+
+    /// The following ticked language in display order, wrapping; itself when alone.
+    public func next(in languages: [Language]) -> Language {
+        let all = Language.allCases
+        let start = all.firstIndex(of: self)!
+        for offset in 1...all.count {
+            let candidate = all[(start + offset) % all.count]
+            if languages.contains(candidate) { return candidate }
+        }
+        return self
+    }
+
+    /// Apple's SpeechTranscriber has no model for these; DictationTranscriber does.
+    public var usesDictationTranscriber: Bool { [.swedish, .danish, .dutch].contains(self) }
 
     public var locale: Locale {
         switch self {
         case .english: Locale(identifier: "en_US")
         case .swedish: Locale(identifier: "sv_SE")
+        case .german: Locale(identifier: "de_DE")
+        case .french: Locale(identifier: "fr_FR")
+        case .spanish: Locale(identifier: "es_ES")
+        case .italian: Locale(identifier: "it_IT")
+        case .portuguese: Locale(identifier: "pt_PT")
+        case .danish: Locale(identifier: "da_DK")
+        case .dutch: Locale(identifier: "nl_NL")
         }
     }
 
@@ -17,6 +46,13 @@ public enum Language: String, Sendable, CaseIterable, Codable {
         switch self {
         case .english: "English"
         case .swedish: "Svenska"
+        case .german: "Deutsch"
+        case .french: "Français"
+        case .spanish: "Español"
+        case .italian: "Italiano"
+        case .portuguese: "Português"
+        case .danish: "Dansk"
+        case .dutch: "Nederlands"
         }
     }
 
@@ -24,6 +60,13 @@ public enum Language: String, Sendable, CaseIterable, Codable {
         switch self {
         case .english: "🇬🇧"
         case .swedish: "🇸🇪"
+        case .german: "🇩🇪"
+        case .french: "🇫🇷"
+        case .spanish: "🇪🇸"
+        case .italian: "🇮🇹"
+        case .portuguese: "🇵🇹"
+        case .danish: "🇩🇰"
+        case .dutch: "🇳🇱"
         }
     }
 
@@ -32,6 +75,13 @@ public enum Language: String, Sendable, CaseIterable, Codable {
         switch self {
         case .english: "EN"
         case .swedish: "SV"
+        case .german: "DE"
+        case .french: "FR"
+        case .spanish: "ES"
+        case .italian: "IT"
+        case .portuguese: "PT"
+        case .danish: "DA"
+        case .dutch: "NL"
         }
     }
 }
