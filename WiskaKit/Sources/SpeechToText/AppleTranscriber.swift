@@ -16,6 +16,8 @@ public final class AppleTranscriber: Transcriber {
     /// True once assets for *both* languages are installed (drives the "Downloading…" HUD state).
     public var isReady: Bool { installed.count == Language.allCases.count }
 
+    public func isReady(for language: Language) -> Bool { installed.contains(language) }
+
     public init(fallbackLanguage: @escaping @MainActor () -> Language = { .english },
                 vocabulary: @escaping @MainActor () -> [String] = { [] },
                 installer: @escaping @MainActor (Language) async throws -> Void = AppleTranscriber.installAssets) {

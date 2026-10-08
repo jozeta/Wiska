@@ -24,7 +24,17 @@ public final class SettingsStore {
     @ObservationIgnored private let defaults: UserDefaults
 
     public var engine: SpeechEngine { didSet { defaults.set(engine.rawValue, forKey: Key.engine) } }
-    public var engineMode: EngineMode { didSet { defaults.set(engineMode.rawValue, forKey: Key.engineMode) } }
+    public var engineMode: EngineMode {
+        didSet {
+            defaults.set(engineMode.rawValue, forKey: Key.engineMode)
+            // First switch to Per language: start both languages from the engine in use now, and
+            // save them (their didSets), so a later "Same for all" change can't move them.
+            if engineMode == .perLanguage, defaults.object(forKey: Key.englishEngine) == nil {
+                englishEngine = engine
+                swedishEngine = engine
+            }
+        }
+    }
     public var englishEngine: SpeechEngine { didSet { defaults.set(englishEngine.rawValue, forKey: Key.englishEngine) } }
     public var swedishEngine: SpeechEngine { didSet { defaults.set(swedishEngine.rawValue, forKey: Key.swedishEngine) } }
 

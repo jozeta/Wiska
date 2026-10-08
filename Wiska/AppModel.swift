@@ -144,6 +144,11 @@ final class AppModel {
         settings.usesParakeet && !parakeet.isReady
     }
 
+    /// False when every language is on Parakeet, which picks the language itself.
+    var toggleLanguageMatters: Bool {
+        EngineRouter.languageChoiceMatters(engines: { settings.engine(for: $0) }, parakeetReady: parakeet.isReady)
+    }
+
     /// True when AI cleanup is selected but Apple Intelligence isn't available.
     var cleanupUnavailable: Bool {
         settings.cleanupLevel != .off && !rewriter.isAvailable
@@ -172,7 +177,9 @@ final class AppModel {
     }
 
     func warmUpParakeetIfSelected() {
-        guard settings.usesParakeet, parakeetStore.isInstalled, !parakeet.isReady else { return }
+        // A failed load is remembered: retrying (and logging) on every key press can't help.
+        // A fresh download clears it (parakeetModelBecameReady).
+        guard settings.usesParakeet, parakeetStore.isInstalled, !parakeet.isReady, !parakeet.hasLoadFailure else { return }
         Task { [parakeet] in
             do { try await parakeet.prepare() } catch {
                 Self.log.error("parakeet load failed: \(String(describing: error), privacy: .public)")

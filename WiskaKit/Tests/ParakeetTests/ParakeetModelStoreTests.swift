@@ -121,9 +121,11 @@ struct ParakeetModelStoreTests {
     @Test func progressNeverGoesBackwards() async throws {
         let downloader = FakeDownloader(installed: false)
         downloader.progressSteps = [0.6, 0.3]
-        downloader.delay = .milliseconds(100)
+        downloader.delay = .seconds(5)   // stays downloading while we look; cancelled below
         let store = ParakeetModelStore(directory: dir, downloader: downloader)
         store.download()
+        // Wait for the progress hops (timing varies under load), then give the 0.3 hop time to land.
+        for _ in 0..<200 where store.status == .downloading(0) { try await Task.sleep(for: .milliseconds(10)) }
         try await Task.sleep(for: .milliseconds(50))
         #expect(store.status == .downloading(0.6))
         store.cancelDownload()

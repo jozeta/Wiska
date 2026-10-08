@@ -21,4 +21,12 @@ public enum EngineRouter {
             return .hybrid(apple: Set(Language.allCases.filter { usable(engines($0)) == .apple }))
         }
     }
+
+    /// False when every fixed language ends up on Parakeet, which picks the language itself:
+    /// then switching the Toggle language changes nothing.
+    public static func languageChoiceMatters(engines: (Language) -> SpeechEngine, parakeetReady: Bool) -> Bool {
+        Language.allCases.contains {
+            plan(choice: .fixed($0), engines: engines, parakeetReady: parakeetReady) != .single(.parakeet)
+        }
+    }
 }

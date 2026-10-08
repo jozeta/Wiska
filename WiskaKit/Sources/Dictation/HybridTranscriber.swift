@@ -18,7 +18,10 @@ public final class HybridTranscriber: Transcriber {
         self.fallbackLanguage = fallbackLanguage
     }
 
-    public var isReady: Bool { parakeet.isReady && apple.isReady }
+    /// Only the Apple languages this hybrid uses need their assets.
+    public var isReady: Bool {
+        parakeet.isReady && appleLanguages.allSatisfy { apple.isReady(for: $0) }
+    }
     public var engine: SpeechEngine { .parakeet }
 
     public func prepare() async throws {
@@ -80,6 +83,7 @@ final class HybridSession: TranscriptionSession {
         let language = heard.language ?? fallbackLanguage
         guard let chosen = appleResults[language] else {
             cancelApple(appleResults)
+            fromParakeet.language = language   // the fallback, so History and the flash have one
             return fromParakeet
         }
         cancelApple(appleResults.filter { $0.key != language })

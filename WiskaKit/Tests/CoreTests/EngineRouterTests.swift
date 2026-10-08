@@ -39,4 +39,10 @@ struct EngineRouterTests {
         #expect(Transcript(text: "a", locale: .current).engine == nil)
         #expect(Transcript(text: "a", locale: .current, engine: .parakeet).engine == .parakeet)
     }
+
+    @Test func languageChoiceMattersUnlessEveryLanguageUsesParakeet() {
+        #expect(!EngineRouter.languageChoiceMatters(engines: engines(en: .parakeet, sv: .parakeet), parakeetReady: true))
+        #expect(EngineRouter.languageChoiceMatters(engines: engines(en: .parakeet, sv: .parakeet), parakeetReady: false))
+        #expect(EngineRouter.languageChoiceMatters(engines: engines(en: .parakeet, sv: .apple), parakeetReady: true))
+    }
 }

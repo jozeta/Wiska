@@ -105,4 +105,14 @@ final class SettingsStoreTests {
         #expect(reloaded.englishEngine == .parakeet)
         #expect(reloaded.swedishEngine == .apple)
     }
+
+    @Test func perLanguageEnginesAreSavedWhenThatModeIsChosen() {
+        let store = SettingsStore(defaults: defaults)
+        store.engine = .parakeet
+        store.engineMode = .perLanguage   // both start as Parakeet and are now saved
+        store.engine = .apple             // a later "Same for all" change must not move them
+        let reloaded = SettingsStore(defaults: defaults)
+        #expect(reloaded.englishEngine == .parakeet)
+        #expect(reloaded.swedishEngine == .parakeet)
+    }
 }

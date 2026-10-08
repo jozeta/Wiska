@@ -145,6 +145,17 @@ struct ParakeetTests {
         #expect(loaded == nil)
     }
 
+    @Test func loadFailureIsVisibleUntilForgotten() async throws {
+        let counter = CountingLoader()
+        counter.fail = true
+        let t = transcriber(try installedStore(), counter)
+        #expect(!t.hasLoadFailure)
+        _ = try? await t.prepare()
+        #expect(t.hasLoadFailure)
+        t.forgetLoadFailure()
+        #expect(!t.hasLoadFailure)
+    }
+
     /// Only run against a *completed* install made by the app: constructing a store on an
     /// unmarked folder deletes it as a partial download, and tests must never touch user data.
     nonisolated static var completedInstallPresent: Bool {

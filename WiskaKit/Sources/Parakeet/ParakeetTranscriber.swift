@@ -37,6 +37,9 @@ public final class ParakeetTranscriber: Transcriber {
         backend = nil
     }
 
+    /// True after a failed load, until `forgetLoadFailure()`: warming up again would only fail again.
+    public var hasLoadFailure: Bool { loadFailure != nil }
+
     /// Allow another load attempt after a failure (e.g. the model was re-downloaded).
     public func forgetLoadFailure() {
         loadFailure = nil

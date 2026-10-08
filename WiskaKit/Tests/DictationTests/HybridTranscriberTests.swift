@@ -7,12 +7,14 @@ import Testing
 @MainActor
 final class SessionsTranscriber: Transcriber {
     var isReady = true
+    var unreadyLanguages: Set<Language> = []
     var failToStart: Set<String> = []
     private(set) var sessions: [String: FakeSession] = [:]
     let name: SpeechEngine
     init(_ name: SpeechEngine) { self.name = name }
     var engine: SpeechEngine { name }
     func prepare() async throws {}
+    func isReady(for language: Language) -> Bool { isReady && !unreadyLanguages.contains(language) }
 
     static func key(_ choice: LanguageChoice) -> String {
         switch choice {
@@ -146,5 +148,18 @@ struct HybridTranscriberTests {
     @Test func readyOnlyWhenBothEnginesAre() {
         apple.isReady = false
         #expect(!hybrid().isReady)
+    }
+
+    @Test func readyIgnoresAppleLanguagesTheHybridDoesNotUse() {
+        apple.unreadyLanguages = [.english]   // hybrid only uses Apple for Swedish
+        #expect(hybrid().isReady)
+        apple.unreadyLanguages = [.swedish]
+        #expect(!hybrid().isReady)
+    }
+
+    @Test func fallbackLanguageIsRecordedWhenParakeetHasNoGuess() async throws {
+        let transcript = try await run(hybrid(last: .english), parakeetSays: "ok", language: nil)
+        #expect(transcript.engine == .parakeet)
+        #expect(transcript.language == .english)
     }
 }
