@@ -9,24 +9,28 @@ struct DictationControllerTests {
     let cleaner = FakeCleaner()
     let injector = FakeInjector()
 
-    func makeController(maxDuration: Duration = .seconds(300)) -> DictationController {
-        DictationController(
-            audio: audio, transcriber: transcriber, cleaner: cleaner, injector: injector,
+    func makeController(maxDuration: Duration = .seconds(300), releaseTail: Duration = .zero,
+                        provider: (@MainActor () -> any Transcriber)? = nil) -> DictationController {
+        let transcriber = transcriber
+        return DictationController(
+            audio: audio, transcriber: provider ?? { transcriber }, cleaner: cleaner, injector: injector,
             contextProvider: { DictationContext(appBundleID: "com.apple.TextEdit") },
-            maxDuration: maxDuration, noticeDuration: .seconds(60)
+            maxDuration: maxDuration, noticeDuration: .seconds(60), releaseTail: releaseTail
         )
     }
+
+    let en = DictationCommand.start(.fixed(.english))
 
     @Test func happyPathTranscribesCleansAndInjects() async {
         let controller = makeController()
         let recorder = StateRecorder()
         controller.onChange = { state, _ in recorder.record(state) }
 
-        controller.handle(.pressed(shifted: false))
+        controller.handle(en)
         #expect(controller.state == .listening)
         audio.emit([0.1, 0.2])
         audio.emit([0.3])
-        controller.handle(.released)
+        controller.handle(.finish)
         await controller.currentTask?.value
 
         #expect(transcriber.session.appended == [[0.1, 0.2], [0.3]])
@@ -37,24 +41,83 @@ struct DictationControllerTests {
         #expect(controller.lastLatency != nil)
     }
 
+    @Test func startPassesLanguageChoiceToTranscriber() async {
+        let controller = makeController()
+        controller.handle(.start(.automatic))
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        #expect(transcriber.languages == [.automatic])
+        #expect(controller.currentChoice == .automatic)
+    }
+
+    @Test func automaticDictationReportsDetectedLanguageAfterIdle() async {
+        transcriber.session.language = .swedish
+        let controller = makeController()
+        let detected = Box<[Language]>([])
+        let stateAtCallback = Box<DictationController.State?>(nil)
+        controller.onLanguageDetected = { [unowned controller] language in
+            detected.value.append(language)
+            stateAtCallback.value = controller.state
+        }
+        controller.handle(.start(.automatic))
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        #expect(detected.value == [.swedish])
+        #expect(stateAtCallback.value == .idle)
+    }
+
+    @Test func fixedDictationDoesNotReportDetectedLanguage() async {
+        let controller = makeController()
+        let called = Box(false)
+        controller.onLanguageDetected = { _ in called.value = true }
+        controller.handle(en)
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        #expect(!called.value)
+    }
+
+    @Test func transcriberIsChosenAtStartNotAtFinish() async {
+        let other = FakeTranscriber()
+        let useOther = Box(false)
+        let first = transcriber
+        let controller = makeController(provider: { useOther.value ? other : first })
+        controller.handle(en)
+        useOther.value = true                // user switches engine mid-hold
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        #expect(first.languages.count == 1)
+        #expect(other.languages.isEmpty)
+        #expect(injector.injected == ["cleaned: hello world"])
+    }
+
+    @Test func releaseTailKeepsCapturingBriefly() async throws {
+        let controller = makeController(releaseTail: .milliseconds(150))
+        controller.handle(en)
+        audio.emit([0.1])
+        controller.handle(.finish)
+        try await Task.sleep(for: .milliseconds(30))
+        audio.emit([0.9])                    // the last syllable, after fn-up
+        await controller.currentTask?.value
+        #expect(transcriber.session.appended == [[0.1], [0.9]])
+    }
+
     @Test func levelsAreTrackedForTheWaveform() async {
         let controller = makeController()
-        controller.handle(.pressed(shifted: false))
+        controller.handle(en)
         audio.emitLevel(0.5)
         audio.emitLevel(0.7)
         try? await Task.sleep(for: .milliseconds(20))
         #expect(controller.levels == [0.5, 0.7])
-        controller.handle(.released)
+        controller.handle(.finish)
         await controller.currentTask?.value
     }
 
-    @Test func cancelledDiscardsAudioAndInjectsNothing() async {
+    @Test func cancelDiscardsAudioAndInjectsNothing() async {
         let controller = makeController()
-        controller.handle(.pressed(shifted: false))
+        controller.handle(en)
         audio.emit([0.1])
-        controller.handle(.cancelled)
+        controller.handle(.cancel)
         await controller.currentTask?.value
-
         #expect(controller.state == .idle)
         #expect(injector.injected.isEmpty)
         #expect(transcriber.session.cancelled)
@@ -63,10 +126,9 @@ struct DictationControllerTests {
     @Test func emptyTranscriptFailsWithNoSpeech() async {
         transcriber.session.result = .success("")
         let controller = makeController()
-        controller.handle(.pressed(shifted: false))
-        controller.handle(.released)
+        controller.handle(en)
+        controller.handle(.finish)
         await controller.currentTask?.value
-
         #expect(controller.state == .failed(.noSpeech))
         #expect(injector.injected.isEmpty)
     }
@@ -74,10 +136,9 @@ struct DictationControllerTests {
     @Test func transcriberErrorFails() async {
         transcriber.session.result = .failure(FakeError())
         let controller = makeController()
-        controller.handle(.pressed(shifted: false))
-        controller.handle(.released)
+        controller.handle(en)
+        controller.handle(.finish)
         await controller.currentTask?.value
-
         guard case .failed(.transcription) = controller.state else {
             Issue.record("expected transcription failure, got \(controller.state)")
             return
@@ -87,31 +148,29 @@ struct DictationControllerTests {
     @Test func secureInputFailsWithSecureInput() async {
         injector.error = .secureInputActive
         let controller = makeController()
-        controller.handle(.pressed(shifted: false))
-        controller.handle(.released)
+        controller.handle(en)
+        controller.handle(.finish)
         await controller.currentTask?.value
-
         #expect(controller.state == .failed(.secureInput))
     }
 
     @Test func microphoneFailureFailsImmediately() {
         audio.failOnStart = true
         let controller = makeController()
-        controller.handle(.pressed(shifted: false))
+        controller.handle(en)
         guard case .failed(.audio) = controller.state else {
             Issue.record("expected audio failure, got \(controller.state)")
             return
         }
     }
 
-    @Test func pressWhileBusyIsIgnored() async {
+    @Test func startWhileBusyIsIgnored() async {
         transcriber.session.finishDelay = .milliseconds(100)
         let controller = makeController()
-        controller.handle(.pressed(shifted: false))
-        controller.handle(.released)
-        controller.handle(.pressed(shifted: false))          // user presses again while transcribing
+        controller.handle(en)
+        controller.handle(.finish)
+        controller.handle(en)
         await controller.currentTask?.value
-
         #expect(audio.startCount == 1)
         #expect(injector.injected.count == 1)
         #expect(controller.state == .idle)
@@ -120,12 +179,11 @@ struct DictationControllerTests {
     @Test func canStartAgainAfterFailure() async {
         transcriber.session.result = .success("")
         let controller = makeController()
-        controller.handle(.pressed(shifted: false))
-        controller.handle(.released)
+        controller.handle(en)
+        controller.handle(.finish)
         await controller.currentTask?.value
         #expect(controller.state == .failed(.noSpeech))
-
-        controller.handle(.pressed(shifted: false))
+        controller.handle(en)
         #expect(controller.state == .listening)
         #expect(audio.startCount == 2)
     }
@@ -133,12 +191,11 @@ struct DictationControllerTests {
     @Test func audioBeforeSessionReadyIsStillTranscribed() async {
         transcriber.makeDelay = .milliseconds(80)
         let controller = makeController()
-        controller.handle(.pressed(shifted: false))
+        controller.handle(en)
         audio.emit([0.1])
         audio.emit([0.2])
-        controller.handle(.released)         // before makeSession returned
+        controller.handle(.finish)
         await controller.currentTask?.value
-
         #expect(transcriber.session.appended == [[0.1], [0.2]])
         #expect(injector.injected == ["cleaned: hello world"])
     }
@@ -148,60 +205,52 @@ struct DictationControllerTests {
         let controller = makeController()
         let recorder = StateRecorder()
         controller.onChange = { state, _ in recorder.record(state) }
-        controller.handle(.pressed(shifted: false))
-        controller.handle(.released)
+        controller.handle(en)
+        controller.handle(.finish)
         await controller.currentTask?.value
-
         #expect(recorder.states.contains(.preparingModel))
     }
 
-    @Test func maxDurationAutoReleases() async throws {
+    @Test func maxDurationAutoFinishes() async throws {
         let controller = makeController(maxDuration: .milliseconds(50))
-        controller.handle(.pressed(shifted: false))
+        controller.handle(en)
         audio.emit([0.4])
         try await Task.sleep(for: .milliseconds(150))
         await controller.currentTask?.value
-
         #expect(injector.injected == ["cleaned: hello world"])
         #expect(controller.state == .idle)
     }
 
-    @Test func quickTapRightAfterReleaseCannotStartSecondRecording() async {
-        // Review I1: release, then a <250 ms tap (→ .cancelled) and another press while
-        // the first dictation is still finishing must not start a second recording.
+    @Test func finishOrCancelWhenIdleIsIgnored() {
+        let controller = makeController()
+        controller.handle(.finish)
+        controller.handle(.cancel)
+        #expect(controller.state == .idle)
+        #expect(audio.startCount == 0)
+    }
+
+    @Test func strayCancelAndStartRightAfterFinishCannotStartSecondRecording() async {
         transcriber.makeDelay = .milliseconds(80)
         let controller = makeController()
-        controller.handle(.pressed(shifted: false))
+        controller.handle(en)
         audio.emit([0.1])
-        controller.handle(.released)
-        controller.handle(.cancelled)
-        controller.handle(.pressed(shifted: false))
+        controller.handle(.finish)
+        controller.handle(.cancel)
+        controller.handle(en)
         await controller.currentTask?.value
-
         #expect(audio.startCount == 1)
         #expect(injector.injected == ["cleaned: hello world"])
         #expect(controller.state == .idle)
     }
 
     @Test func captureEndingUnexpectedlyFinishesDictation() async throws {
-        // Review I2: the mic stream ends on its own (device change) while still listening →
-        // transcribe what we have instead of showing "Listening" forever.
         let controller = makeController()
-        controller.handle(.pressed(shifted: false))
+        controller.handle(en)
         audio.emit([0.3])
-        audio.stop()                          // the recorder gave up, not the user
+        audio.stop()
         try await Task.sleep(for: .milliseconds(50))
         await controller.currentTask?.value
-
         #expect(injector.injected == ["cleaned: hello world"])
         #expect(controller.state == .idle)
-    }
-
-    @Test func releaseWhenIdleIsIgnored() {
-        let controller = makeController()
-        controller.handle(.released)
-        controller.handle(.cancelled)
-        #expect(controller.state == .idle)
-        #expect(audio.startCount == 0)
     }
 }

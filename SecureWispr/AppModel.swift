@@ -26,7 +26,7 @@ final class AppModel {
     init() {
         controller = DictationController(
             audio: MicrophoneRecorder(),
-            transcriber: transcriber,
+            transcriber: { [transcriber] in transcriber },
             cleaner: PassthroughCleaner(),
             injector: PasteboardInjector(),
             contextProvider: {
@@ -92,8 +92,10 @@ final class AppModel {
         hotkeyTask = Task { [weak self] in
             guard let self else { return }
             for await event in hotkey.events {
-                guard missingPermissions.isEmpty else { continue }
-                controller.handle(event)
+                let mapped = CommandMapper.map(event, context: HotkeyContext(
+                    mode: .autoDetect, primary: .english, toggle: .english,
+                    canStart: missingPermissions.isEmpty))
+                if let command = mapped.command { controller.handle(command) }
             }
         }
     }
