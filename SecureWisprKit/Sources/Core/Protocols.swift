@@ -47,6 +47,13 @@ public protocol TranscriptionSession: AnyObject, Sendable {
 @MainActor
 public protocol TextCleaner {
     func clean(_ text: String, context: DictationContext) async throws -> String
+    /// Called when a dictation starts so slow resources (a language model) can load while
+    /// the user speaks.
+    func prewarm()
+}
+
+public extension TextCleaner {
+    func prewarm() {}
 }
 
 @MainActor
