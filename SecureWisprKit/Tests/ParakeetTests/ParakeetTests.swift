@@ -4,6 +4,8 @@ import Foundation
 import Testing
 @testable import Parakeet
 
+struct StubLoadError: Error {}
+
 final class FakeBackend: SpeechRecognizerBackend, @unchecked Sendable {
     var text = "Kan du skicka rapporten till mig innan lunch imorgon?"
     var receivedCounts: [Int] = []
@@ -13,8 +15,53 @@ final class FakeBackend: SpeechRecognizerBackend, @unchecked Sendable {
     }
 }
 
+final class CountingLoader: @unchecked Sendable {
+    var calls = 0
+    var fail = false
+    var delay: Duration = .zero
+}
+
 @MainActor
 struct ParakeetTests {
+    private func installedStore() throws -> ParakeetModelStore {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data().write(to: dir.appendingPathComponent(ParakeetModelStore.completionMarker))
+        return ParakeetModelStore(directory: dir, downloader: FakeDownloader(installed: true))
+    }
+
+    private func transcriber(_ store: ParakeetModelStore, _ counter: CountingLoader) -> ParakeetTranscriber {
+        ParakeetTranscriber(store: store, loader: { _ in
+            counter.calls += 1
+            if counter.delay > .zero { try await Task.sleep(for: counter.delay) }
+            if counter.fail { throw StubLoadError() }
+            return FakeBackend()
+        })
+    }
+
+    @Test func concurrentPreparesLoadOnce() async throws {
+        let counter = CountingLoader()
+        counter.delay = .milliseconds(50)
+        let t = transcriber(try installedStore(), counter)
+        async let a: Void = t.prepare()
+        async let b: Void = t.prepare()
+        _ = try await (a, b)
+        #expect(counter.calls == 1)
+    }
+
+    @Test func failedLoadIsNotRetriedOnEveryPress() async throws {
+        let counter = CountingLoader()
+        counter.fail = true
+        let t = transcriber(try installedStore(), counter)
+        _ = try? await t.prepare()
+        _ = try? await t.prepare()
+        #expect(counter.calls == 1)
+        t.forgetLoadFailure()
+        counter.fail = false
+        try await t.prepare()
+        #expect(counter.calls == 2)
+        #expect(t.isReady)
+    }
     @Test func guessesSwedishAndEnglish() {
         #expect(LanguageGuess.detect("Kan du skicka rapporten till mig innan lunch imorgon") == .swedish)
         #expect(LanguageGuess.detect("Can you send me the quarterly report before lunch") == .english)
@@ -67,8 +114,7 @@ struct ParakeetTests {
     }
 
     @Test func transcriberLoadsAndMakesSessions() async throws {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let store = ParakeetModelStore(directory: dir, downloader: FakeDownloader(installed: true))
+        let store = try installedStore()
         let transcriber = ParakeetTranscriber(store: store, loader: { _ in FakeBackend() })
         try await transcriber.prepare()
         #expect(transcriber.isReady)
@@ -78,8 +124,7 @@ struct ParakeetTests {
     }
 
     @Test func removingModelMakesTranscriberNotReady() async throws {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let store = ParakeetModelStore(directory: dir, downloader: FakeDownloader(installed: true))
+        let store = try installedStore()
         let transcriber = ParakeetTranscriber(store: store, loader: { _ in FakeBackend() })
         try await transcriber.prepare()
         store.remove()

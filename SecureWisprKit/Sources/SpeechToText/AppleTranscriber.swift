@@ -7,41 +7,58 @@ import Speech
 public final class AppleTranscriber: Transcriber {
     private static let log = Log.logger("SpeechToText")
 
-    public private(set) var isReady = false
-    private var preparation: Task<Void, Error>?
+    private var installed: Set<Language> = []
+    private var installing: [Language: Task<Void, Error>] = [:]
+    private let installer: @MainActor (Language) async throws -> Void
     let fallbackLanguage: @MainActor () -> Language
 
-    public init(fallbackLanguage: @escaping @MainActor () -> Language = { .english }) {
+    /// True once assets for *both* languages are installed (drives the "Downloading…" HUD state).
+    public var isReady: Bool { installed.count == Language.allCases.count }
+
+    public init(fallbackLanguage: @escaping @MainActor () -> Language = { .english },
+                installer: @escaping @MainActor (Language) async throws -> Void = AppleTranscriber.installAssets) {
         self.fallbackLanguage = fallbackLanguage
+        self.installer = installer
     }
 
-    /// Installs assets for both languages.
+    public static func installAssets(for language: Language) async throws {
+        try await AppleSpeechAssets.ensureInstalled(AppleModule.make(language).module, locale: language.locale)
+    }
+
+    /// Warm-up: installs assets for both languages. Failures are per language, so a failed
+    /// Swedish install never blocks English (review I3).
     public func prepare() async throws {
-        if isReady { return }
-        if let preparation { return try await preparation.value }
-        let task = Task<Void, Error> {
-            for language in Language.allCases {
-                try await AppleSpeechAssets.ensureInstalled(AppleModule.make(language).module,
-                                                            locale: language.locale)
-            }
+        var firstError: Error?
+        for language in Language.allCases {
+            do { try await prepare(language) } catch { firstError = firstError ?? error }
         }
-        preparation = task
+        if let firstError { throw firstError }
+    }
+
+    private func prepare(_ language: Language) async throws {
+        if installed.contains(language) { return }
+        if let running = installing[language] { return try await running.value }
+        let installer = installer
+        let task = Task<Void, Error> { try await installer(language) }
+        installing[language] = task
+        defer { installing[language] = nil }
         do {
             try await task.value
-            isReady = true
+            installed.insert(language)
         } catch {
-            preparation = nil
-            Self.log.error("speech preparation failed: \(error.localizedDescription, privacy: .public)")
+            Self.log.error("speech assets for \(language.rawValue, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
             throw error
         }
     }
 
     public func makeSession(language: LanguageChoice) async throws -> any TranscriptionSession {
-        try await prepare()
         switch language {
         case .fixed(let fixed):
+            try await prepare(fixed)
             return try await AppleTranscriptionSession.start(language: fixed)
         case .automatic:
+            try await prepare(.english)
+            try await prepare(.swedish)
             let english = try await AppleTranscriptionSession.start(language: .english)
             let swedish: AppleTranscriptionSession
             do {
