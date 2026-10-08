@@ -42,8 +42,15 @@ public final class AppleTranscriber: Transcriber {
         case .fixed(let fixed):
             return try await AppleTranscriptionSession.start(language: fixed)
         case .automatic:
-            // Task 5 replaces this with AutoDetectSession.
-            return try await AppleTranscriptionSession.start(language: fallbackLanguage())
+            let english = try await AppleTranscriptionSession.start(language: .english)
+            let swedish: AppleTranscriptionSession
+            do {
+                swedish = try await AppleTranscriptionSession.start(language: .swedish)
+            } catch {
+                english.cancel()
+                throw error
+            }
+            return AutoDetectSession(sessions: [english, swedish], fallback: fallbackLanguage())
         }
     }
 }
