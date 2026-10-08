@@ -1,9 +1,9 @@
 import CoreGraphics
 
-/// Where the capsule goes: out of the notch when there is one, under the menu bar otherwise.
+/// Where the capsule goes: exactly the notch when there is one, the same width under the menu bar otherwise.
 public enum NotchLayout {
-    public static let notchPadding: CGFloat = 40
-    public static let menuBarGap: CGFloat = 6
+    /// The MacBook notch width, used when no screen reports one.
+    public static let fallbackWidth: CGFloat = 331
 
     public struct Screen {
         public var frame: CGRect
@@ -28,19 +28,21 @@ public enum NotchLayout {
         public var hasNotch: Bool
     }
 
-    public static func placement(on screen: Screen, content: CGSize) -> Placement {
-        if screen.safeTop > 0, let left = screen.auxLeft, let right = screen.auxRight, right.minX > left.maxX {
-            let notchWidth = right.minX - left.maxX
-            let width = max(content.width, notchWidth + notchPadding)
-            let height = screen.safeTop + content.height
-            let midX = (left.maxX + right.minX) / 2
-            return Placement(frame: CGRect(x: midX - width / 2, y: screen.frame.maxY - height,
-                                           width: width, height: height),
+    public static func notchWidth(_ screen: Screen) -> CGFloat? {
+        guard screen.safeTop > 0, let left = screen.auxLeft, let right = screen.auxRight,
+              right.minX > left.maxX else { return nil }
+        return right.minX - left.maxX
+    }
+
+    /// Exactly the notch on notched screens; elsewhere the same width, hanging from under the menu bar.
+    public static func placement(on screen: Screen, referenceWidth: CGFloat, contentHeight: CGFloat) -> Placement {
+        if let width = notchWidth(screen), let left = screen.auxLeft {
+            let height = screen.safeTop + contentHeight
+            return Placement(frame: CGRect(x: left.maxX, y: screen.frame.maxY - height, width: width, height: height),
                              contentInsetTop: screen.safeTop, hasNotch: true)
         }
-        let frame = CGRect(x: screen.frame.midX - content.width / 2,
-                           y: screen.visibleFrame.maxY - menuBarGap - content.height,
-                           width: content.width, height: content.height)
+        let frame = CGRect(x: screen.frame.midX - referenceWidth / 2, y: screen.visibleFrame.maxY - contentHeight,
+                           width: referenceWidth, height: contentHeight)
         return Placement(frame: frame, contentInsetTop: 0, hasNotch: false)
     }
 }

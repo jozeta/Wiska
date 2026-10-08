@@ -16,25 +16,26 @@ struct NotchLayoutTests {
         visibleFrame: CGRect(x: 2704, y: 0, width: 1920, height: 1055),
         safeTop: 0, auxLeft: nil, auxRight: nil)
 
-    @Test func notchedScreenGrowsOutOfTheNotch() {
-        let p = NotchLayout.placement(on: macBook, content: CGSize(width: 240, height: 44))
+    @Test func notchedScreenIsExactlyAsWideAsTheNotch() {
+        let p = NotchLayout.placement(on: macBook, referenceWidth: 331, contentHeight: 44)
         #expect(p.hasNotch)
-        #expect(p.frame.width == 371)                 // notch 331 + 40 > content 240
-        #expect(p.frame.height == 101)                // 57 + 44
-        #expect(p.frame.maxY == 1756)                 // flush with the top edge
-        #expect(p.frame.midX == 1352)                 // centred on the notch
+        #expect(p.frame == CGRect(x: 1186.5, y: 1756 - 101, width: 331, height: 101))
         #expect(p.contentInsetTop == 57)
     }
 
-    @Test func wideContentWidensTheCapsule() {
-        let p = NotchLayout.placement(on: macBook, content: CGSize(width: 420, height: 44))
-        #expect(p.frame.width == 420)
+    @Test func notchWidthIsMeasuredFromTheScreen() {
+        #expect(NotchLayout.notchWidth(macBook) == 331)
+        #expect(NotchLayout.notchWidth(external) == nil)
     }
 
-    @Test func plainScreenHangsBelowMenuBar() {
-        let p = NotchLayout.placement(on: external, content: CGSize(width: 240, height: 44))
+    @Test func plainScreenUsesTheReferenceWidth() {
+        let p = NotchLayout.placement(on: external, referenceWidth: 331, contentHeight: 44)
         #expect(!p.hasNotch)
-        #expect(p.frame == CGRect(x: 2704 + 840, y: 1055 - 6 - 44, width: 240, height: 44))
+        #expect(p.frame == CGRect(x: 3498.5, y: 1011, width: 331, height: 44))   // centred: 2704 + (1920 − 331) / 2
         #expect(p.contentInsetTop == 0)
+    }
+
+    @Test func fallbackWidthMatchesTheMacBookNotch() {
+        #expect(NotchLayout.fallbackWidth == 331)
     }
 }

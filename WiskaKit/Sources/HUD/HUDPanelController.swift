@@ -45,13 +45,11 @@ public final class HUDPanelController {
         let placement = NotchLayout.placement(on: NotchLayout.Screen(
             frame: screen.frame, visibleFrame: screen.visibleFrame, safeTop: screen.safeAreaInsets.top,
             auxLeft: screen.auxiliaryTopLeftArea, auxRight: screen.auxiliaryTopRightArea),
-            content: Self.contentSize)
+            referenceWidth: NotchLayout.fallbackWidth, contentHeight: Self.contentSize.height)
         self.placement = placement
         model.insetTop = placement.contentInsetTop
         model.hasNotch = placement.hasNotch
-        let start = HUDTransition.expandStart(placement: placement, currentFrame: panel.frame,
-                                              isVisible: panel.isVisible)
-        panel.setFrame(start, display: false)
+        panel.setFrame(placement.frame, display: false)
         panel.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { context in
             context.duration = Self.animation
@@ -68,7 +66,7 @@ public final class HUDPanelController {
         }
         generation += 1
         let collapse = generation
-        let end = HUDTransition.collapsedFrame(placement)
+        let end = placement.frame
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = Self.animation
             panel.animator().setFrame(end, display: true)
