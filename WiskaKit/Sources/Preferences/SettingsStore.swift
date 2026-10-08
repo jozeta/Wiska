@@ -8,6 +8,7 @@ public final class SettingsStore {
     private enum Key {
         static let engine = "engine"
         static let engineMode = "engineMode"
+        static let highlight = "highlight"
         static let englishEngine = "englishEngine"
         static let swedishEngine = "swedishEngine"
         static let languageMode = "languageMode"
@@ -58,6 +59,8 @@ public final class SettingsStore {
         didSet { defaults.set(lastDetectedLanguage.rawValue, forKey: Key.lastDetectedLanguage) }
     }
 
+    public var highlight: Highlight { didSet { defaults.set(highlight.rawValue, forKey: Key.highlight) } }
+
     public var cleanupLevel: CleanupLevel { didSet { defaults.set(cleanupLevel.rawValue, forKey: Key.cleanupLevel) } }
 
     public var historyRetention: HistoryRetention {
@@ -81,6 +84,7 @@ public final class SettingsStore {
         toggleLanguage = Self.read(defaults, Key.toggleLanguage, Language.english)
         lastDetectedLanguage = Self.read(defaults, Key.lastDetectedLanguage, Language.english)
         cleanupLevel = Self.read(defaults, Key.cleanupLevel, CleanupLevel.polished)
+        highlight = Self.read(defaults, Key.highlight, Highlight.aurora)
         historyRetention = Self.read(defaults, Key.historyRetention, HistoryRetention.week)
         onboardingCompleted = defaults.bool(forKey: Key.onboardingCompleted)
         fnKeyConfirmed = defaults.bool(forKey: Key.fnKeyConfirmed)

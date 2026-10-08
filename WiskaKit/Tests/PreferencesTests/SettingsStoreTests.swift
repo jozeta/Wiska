@@ -115,4 +115,11 @@ final class SettingsStoreTests {
         #expect(reloaded.englishEngine == .parakeet)
         #expect(reloaded.swedishEngine == .parakeet)
     }
+
+    @Test func highlightDefaultsToAuroraAndPersists() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.highlight == .aurora)
+        store.highlight = .sunset
+        #expect(SettingsStore(defaults: defaults).highlight == .sunset)
+    }
 }
