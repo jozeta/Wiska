@@ -42,7 +42,7 @@ private struct MenuBarLabel: View {
             }
         }
         .onAppear {
-            if model.shouldShowOnboardingAtLaunch { OnboardingWindow.open(openWindow) }
+            if model.takeOnboardingLaunchOffer() { OnboardingWindow.open(openWindow) }
         }
     }
 }

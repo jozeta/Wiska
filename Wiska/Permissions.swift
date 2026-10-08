@@ -63,15 +63,31 @@ enum Permission: CaseIterable, Identifiable {
     }
 
     /// Prompt the first time; afterwards (or when the prompt can't show) open the right pane.
+    /// Never both at once: the prompt and System Settings would cover each other.
     @MainActor func requestOrOpenSettings() {
         switch self {
         case .microphone:
             if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined { request() } else { openSettings() }
-        case .inputMonitoring:
-            if !CGRequestListenEventAccess() { openSettings() }
-        case .accessibility:
-            request()
-            openSettings()
+        case .inputMonitoring, .accessibility:
+            // macOS shows these prompts only once per app and can't tell us whether it did,
+            // so remember our own first request.
+            if wasPrompted {
+                openSettings()
+            } else {
+                markPrompted()
+                request()
+            }
         }
+    }
+
+    private static let promptedKey = "promptedPermissions"
+
+    @MainActor private var wasPrompted: Bool {
+        UserDefaults.standard.stringArray(forKey: Self.promptedKey)?.contains(settingsAnchor) ?? false
+    }
+
+    @MainActor private func markPrompted() {
+        let prompted = UserDefaults.standard.stringArray(forKey: Self.promptedKey) ?? []
+        UserDefaults.standard.set(prompted + [settingsAnchor], forKey: Self.promptedKey)
     }
 }
