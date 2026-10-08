@@ -2,48 +2,48 @@ import AVFoundation
 import Core
 import Speech
 
-/// One push-to-talk utterance streamed into a SpeechAnalyzer.
+/// One push-to-talk utterance streamed into a SpeechAnalyzer for one language.
 @MainActor
 final class AppleTranscriptionSession: TranscriptionSession {
-    private let locale: Locale
+    private let language: Language
     private let analyzer: SpeechAnalyzer
     private let input: AsyncStream<AnalyzerInput>.Continuation
     private let converter: PCMConverter
-    private let collector: Task<String, Error>
+    private let collector: Task<[AttributedString], Error>
 
-    private init(locale: Locale, analyzer: SpeechAnalyzer,
+    private init(language: Language, analyzer: SpeechAnalyzer,
                  input: AsyncStream<AnalyzerInput>.Continuation,
-                 converter: PCMConverter, collector: Task<String, Error>) {
-        self.locale = locale
+                 converter: PCMConverter, collector: Task<[AttributedString], Error>) {
+        self.language = language
         self.analyzer = analyzer
         self.input = input
         self.converter = converter
         self.collector = collector
     }
 
-    static func start(module: SpeechTranscriber, locale: Locale) async throws -> AppleTranscriptionSession {
-        guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [module]) else {
+    static func start(language: Language) async throws -> AppleTranscriptionSession {
+        let apple = AppleModule.make(language)
+        guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [apple.module]) else {
             throw TranscriptionError.noCompatibleAudioFormat
         }
-        let analyzer = SpeechAnalyzer(modules: [module])
+        let analyzer = SpeechAnalyzer(modules: [apple.module])
         try await analyzer.prepareToAnalyze(in: format)
 
-        let results = module.results
-        let collector = Task<String, Error> {
-            var parts: [String] = []
-            for try await result in results {
-                parts.append(String(result.text.characters))
-            }
-            return parts.joined(separator: " ")
-                .split(whereSeparator: \.isWhitespace)
-                .joined(separator: " ")
-        }
+        let collector = Task<[AttributedString], Error> { try await apple.collect() }
         let (stream, continuation) = AsyncStream.makeStream(of: AnalyzerInput.self)
-        try await analyzer.start(inputSequence: stream)
-        return AppleTranscriptionSession(
-            locale: locale, analyzer: analyzer, input: continuation,
-            converter: try PCMConverter(from: .speech16kMono, to: format), collector: collector
-        )
+        do {
+            try await analyzer.start(inputSequence: stream)
+            return AppleTranscriptionSession(
+                language: language, analyzer: analyzer, input: continuation,
+                converter: try PCMConverter(from: .speech16kMono, to: format), collector: collector
+            )
+        } catch {
+            // Don't leak the collector or the analyzer (minor a).
+            continuation.finish()
+            collector.cancel()
+            await analyzer.cancelAndFinishNow()
+            throw error
+        }
     }
 
     func append(_ chunk: AudioChunk) {
@@ -54,9 +54,15 @@ final class AppleTranscriptionSession: TranscriptionSession {
 
     func finish() async throws -> Transcript {
         input.finish()
-        try await analyzer.finalizeAndFinishThroughEndOfInput()
-        let text = try await collector.value
-        return Transcript(text: text, locale: locale)
+        do {
+            try await analyzer.finalizeAndFinishThroughEndOfInput()
+        } catch {
+            cancel()   // minor a
+            throw error
+        }
+        let summary = AppleModule.summarize(try await collector.value)
+        return Transcript(text: summary.text, locale: language.locale,
+                          confidence: summary.confidence, language: language)
     }
 
     func cancel() {

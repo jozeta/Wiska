@@ -5,7 +5,7 @@ enum AppleSpeechAssets {
     private static let log = Log.logger("SpeechToText")
 
     /// Ensures the on-device model for `module` is installed, downloading it if needed.
-    static func ensureInstalled(_ module: SpeechTranscriber, locale: Locale) async throws {
+    static func ensureInstalled(_ module: any SpeechModule, locale: Locale) async throws {
         switch await AssetInventory.status(forModules: [module]) {
         case .installed:
             return
