@@ -8,29 +8,36 @@ struct FnKeyStateMachineTests {
         return inputs.map { machine.handle($0) }
     }
 
+    private func down(_ t: Double, shift: Bool = false) -> KeyInput { .flagsChanged(fnDown: true, shift: shift, time: t) }
+    private func up(_ t: Double, shift: Bool = false) -> KeyInput { .flagsChanged(fnDown: false, shift: shift, time: t) }
+
     @Test func holdThenReleaseEmitsPressedThenReleased() {
-        #expect(run([.flagsChanged(fnDown: true, time: 10), .flagsChanged(fnDown: false, time: 10.5)])
-                == [.pressed, .released])
+        #expect(run([down(10), up(10.5)]) == [.pressed(shifted: false), .released])
     }
 
-    @Test func shortTapIsCancelled() {
-        #expect(run([.flagsChanged(fnDown: true, time: 10), .flagsChanged(fnDown: false, time: 10.1)])
-                == [.pressed, .cancelled])
+    @Test func shiftHeldAtFnDownIsReported() {
+        #expect(run([down(10, shift: true), up(10.5, shift: true)]) == [.pressed(shifted: true), .released])
+    }
+
+    @Test func shortTapIsTapped() {
+        #expect(run([down(10), up(10.1)]) == [.pressed(shifted: false), .tapped(shifted: false)])
+    }
+
+    @Test func shortShiftTapIsShiftedTap() {
+        #expect(run([down(10, shift: true), up(10.1)]) == [.pressed(shifted: true), .tapped(shifted: true)])
     }
 
     @Test func otherKeyWhileHeldCancelsOnceAndReleaseIsSilent() {
-        #expect(run([.flagsChanged(fnDown: true, time: 10), .keyDown(time: 10.4),
-                     .keyDown(time: 10.5), .flagsChanged(fnDown: false, time: 11)])
-                == [.pressed, .cancelled, nil, nil])
+        #expect(run([down(10), .keyDown(time: 10.4), .keyDown(time: 10.5), up(11)])
+                == [.pressed(shifted: false), .cancelled, nil, nil])
     }
 
     @Test func repeatedFnDownIsIgnored() {
-        #expect(run([.flagsChanged(fnDown: true, time: 10), .flagsChanged(fnDown: true, time: 10.2)])
-                == [.pressed, nil])
+        #expect(run([down(10), down(10.2, shift: true)]) == [.pressed(shifted: false), nil])
     }
 
     @Test func releaseWithoutPressIsIgnored() {
-        #expect(run([.flagsChanged(fnDown: false, time: 10)]) == [nil])
+        #expect(run([up(10)]) == [nil])
     }
 
     @Test func keyDownWithoutFnIsIgnored() {
@@ -38,9 +45,16 @@ struct FnKeyStateMachineTests {
     }
 
     @Test func machineIsReusableAfterCancel() {
-        #expect(run([.flagsChanged(fnDown: true, time: 10), .keyDown(time: 10.3),
-                     .flagsChanged(fnDown: false, time: 10.6),
-                     .flagsChanged(fnDown: true, time: 20), .flagsChanged(fnDown: false, time: 21)])
-                == [.pressed, .cancelled, nil, .pressed, .released])
+        #expect(run([down(10), .keyDown(time: 10.3), up(10.6), down(20), up(21)])
+                == [.pressed(shifted: false), .cancelled, nil, .pressed(shifted: false), .released])
+    }
+
+    @Test func resetForgetsAHoldInProgress() {
+        var machine = FnKeyStateMachine()
+        _ = machine.handle(down(10))
+        #expect(machine.reset() == true)
+        #expect(machine.handle(down(20)) == .pressed(shifted: false))   // not stuck
+        #expect(machine.reset() == true)
+        #expect(machine.reset() == false)
     }
 }
