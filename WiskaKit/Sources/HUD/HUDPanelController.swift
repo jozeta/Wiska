@@ -52,9 +52,8 @@ public final class HUDPanelController {
         self.placement = placement
         model.insetTop = placement.contentInsetTop
         model.hasNotch = placement.hasNotch
-        var start = placement.frame
-        start.origin.y = placement.frame.maxY - placement.contentInsetTop - 1
-        start.size.height = placement.contentInsetTop + 1
+        let start = HUDTransition.expandStart(placement: placement, currentFrame: panel.frame,
+                                              isVisible: panel.isVisible)
         panel.setFrame(start, display: false)
         panel.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { context in
@@ -70,9 +69,7 @@ public final class HUDPanelController {
             panel.orderOut(nil)
             return
         }
-        var end = placement.frame
-        end.origin.y = placement.frame.maxY - placement.contentInsetTop - 1
-        end.size.height = placement.contentInsetTop + 1
+        let end = HUDTransition.collapsedFrame(placement)
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = Self.animation
             panel.animator().setFrame(end, display: true)
