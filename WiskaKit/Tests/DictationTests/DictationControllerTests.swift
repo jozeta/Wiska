@@ -10,10 +10,10 @@ struct DictationControllerTests {
     let injector = FakeInjector()
 
     func makeController(maxDuration: Duration = .seconds(300), releaseTail: Duration = .zero,
-                        provider: (@MainActor () -> any Transcriber)? = nil) -> DictationController {
+                        provider: (@MainActor (LanguageChoice) -> any Transcriber)? = nil) -> DictationController {
         let transcriber = transcriber
         return DictationController(
-            audio: audio, transcriber: provider ?? { transcriber }, cleaner: cleaner, injector: injector,
+            audio: audio, transcriber: provider ?? { _ in transcriber }, cleaner: cleaner, injector: injector,
             contextProvider: { DictationContext(appBundleID: "com.apple.TextEdit") },
             maxDuration: maxDuration, noticeDuration: .seconds(60), releaseTail: releaseTail
         )
@@ -80,7 +80,7 @@ struct DictationControllerTests {
         let other = FakeTranscriber()
         let useOther = Box(false)
         let first = transcriber
-        let controller = makeController(provider: { useOther.value ? other : first })
+        let controller = makeController(provider: { _ in useOther.value ? other : first })
         controller.handle(en)
         useOther.value = true                // user switches engine mid-hold
         controller.handle(.finish)
@@ -147,6 +147,30 @@ struct DictationControllerTests {
         controller.handle(.switchLanguage(.fixed(.swedish)))
         #expect(controller.state == .idle)
         #expect(transcriber.languages.isEmpty)
+    }
+
+    @Test func switchLanguagePassesTheNewChoiceToTheProvider() async {
+        let choices = Box<[LanguageChoice]>([])
+        let transcriber = transcriber
+        let controller = makeController(provider: { choice in
+            choices.value.append(choice)
+            return transcriber
+        })
+        controller.handle(en)
+        controller.handle(.switchLanguage(.fixed(.swedish)))
+        controller.handle(.cancel)
+        await controller.currentTask?.value
+        #expect(choices.value == [.fixed(.english), .fixed(.swedish)])
+    }
+
+    @Test func recordUsesTheEngineThatProducedTheText() async {
+        transcriber.session.engine = .parakeet   // FakeTranscriber itself reports .apple
+        let controller = makeController()
+        let records = recording(controller)
+        controller.handle(en)
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        #expect(records.value.first?.engine == .parakeet)
     }
 
     @Test func emptyTranscriptFailsWithNoSpeech() async {

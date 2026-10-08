@@ -60,7 +60,7 @@ final class AppModel {
         self.rewriter = rewriter
         controller = DictationController(
             audio: MicrophoneRecorder(),
-            transcriber: { [weak self] in self?.activeTranscriber() ?? AppleTranscriber() },
+            transcriber: { [weak self] _ in self?.activeTranscriber() ?? AppleTranscriber() },
             cleaner: CleanupPipeline(level: { settings.cleanupLevel }, rewriter: rewriter,
                                      dictionary: { dictionaryStore.dictionary },
                                      isKnownWord: { lexicon.isKnown($0) }),

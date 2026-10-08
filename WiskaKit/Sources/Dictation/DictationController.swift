@@ -29,7 +29,7 @@ public final class DictationController {
     public var onDictationFinished: (@MainActor (DictationRecord) -> Void)?
 
     private let audio: any AudioSource
-    private let transcriberProvider: @MainActor () -> any Transcriber
+    private let transcriberProvider: @MainActor (LanguageChoice) -> any Transcriber
     private let cleaner: any TextCleaner
     private let injector: any TextInjector
     private let contextProvider: @MainActor () -> DictationContext
@@ -47,7 +47,7 @@ public final class DictationController {
 
     public init(
         audio: any AudioSource,
-        transcriber: @escaping @MainActor () -> any Transcriber,
+        transcriber: @escaping @MainActor (LanguageChoice) -> any Transcriber,
         cleaner: any TextCleaner,
         injector: any TextInjector,
         contextProvider: @escaping @MainActor () -> DictationContext = { DictationContext() },
@@ -105,8 +105,8 @@ public final class DictationController {
             return
         }
         currentChoice = choice
-        // Chosen once per dictation: changing engine in Settings mid-hold affects the next one.
-        let transcriber = transcriberProvider()
+        // Chosen once per dictation, for its language: changing engines mid-hold affects the next one.
+        let transcriber = transcriberProvider(choice)
         activeTranscriber = transcriber
         state = .listening
         capturedSamples = 0
@@ -197,7 +197,7 @@ public final class DictationController {
     private func record(_ transcript: Transcript, _ finalText: String, pasted: Bool) {
         onDictationFinished?(DictationRecord(
             date: Date(), appBundleID: context.appBundleID, language: transcript.language,
-            engine: activeTranscriber?.engine ?? .apple, rawText: transcript.text,
+            engine: transcript.engine ?? activeTranscriber?.engine ?? .apple, rawText: transcript.text,
             finalText: finalText, pasted: pasted,
             duration: Double(capturedSamples) / AudioChunk.sampleRate))
     }

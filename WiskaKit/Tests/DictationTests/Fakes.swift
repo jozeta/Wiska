@@ -44,6 +44,7 @@ final class FakeSession: TranscriptionSession {
     var result: Result<String, FakeError> = .success("hello world")
     var language: Language? = .english
     var finishDelay: Duration = .zero
+    var engine: SpeechEngine?
     private(set) var appended: [[Float]] = []
     private(set) var cancelled = false
 
@@ -51,7 +52,8 @@ final class FakeSession: TranscriptionSession {
 
     func finish() async throws -> Transcript {
         if finishDelay > .zero { try await Task.sleep(for: finishDelay) }
-        return Transcript(text: try result.get(), locale: Locale(identifier: "en_US"), language: language)
+        return Transcript(text: try result.get(), locale: Locale(identifier: "en_US"), language: language,
+                          engine: engine)
     }
 
     func cancel() { cancelled = true }
