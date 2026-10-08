@@ -84,4 +84,22 @@ struct AppleTranscriberTests {
         try await transcriber.prepare()
         #expect(transcriber.isReady)
     }
+
+    @Test(.timeLimit(.minutes(2)))
+    func autoDetectPicksEnglishForEnglishSpeech() async throws {
+        let samples = try spokenSamples("Can you send me the quarterly report before lunch tomorrow")
+        let transcript = try await transcribe(samples, .automatic,
+                                              transcriber: AppleTranscriber(fallbackLanguage: { .swedish }))
+        #expect(transcript.language == .english)
+        #expect(transcript.text.lowercased().contains("quarterly report"))
+    }
+
+    @Test(.timeLimit(.minutes(2)))
+    func autoDetectPicksSwedishForSwedishSpeech() async throws {
+        let samples = try spokenSamples("Kan du skicka rapporten till mig innan lunch imorgon", voice: "Alva")
+        let transcript = try await transcribe(samples, .automatic,
+                                              transcriber: AppleTranscriber(fallbackLanguage: { .english }))
+        #expect(transcript.language == .swedish)
+        #expect(transcript.text.lowercased().contains("rapporten"))
+    }
 }
