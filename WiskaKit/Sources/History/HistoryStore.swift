@@ -14,7 +14,7 @@ public final class HistoryStore {
     private static let log = Log.logger("History")
 
     public nonisolated static var defaultURL: URL {
-        URL.applicationSupportDirectory.appendingPathComponent("SecureWispr/History.store")
+        AppPaths.file("History.store")
     }
 
     /// Bumped on every change so SwiftUI views re-query.

@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct SecureWisprApp: App {
+struct WiskaApp: App {
     @State private var model: AppModel
 
     init() {

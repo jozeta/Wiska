@@ -59,7 +59,7 @@ struct MenuContent: View {
             }
         }
         .keyboardShortcut(",")
-        Button("Quit SecureWispr") {
+        Button("Quit Wiska") {
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q")

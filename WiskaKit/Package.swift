@@ -2,10 +2,10 @@
 import PackageDescription
 
 let package = Package(
-    name: "SecureWisprKit",
+    name: "WiskaKit",
     platforms: [.macOS("26.0")],
     products: [
-        .library(name: "SecureWisprKit", targets: ["Core", "Hotkey", "Audio", "SpeechToText", "Cleanup", "Injection", "Dictation", "HUD", "Preferences", "Parakeet", "History"]),
+        .library(name: "WiskaKit", targets: ["Core", "Hotkey", "Audio", "SpeechToText", "Cleanup", "Injection", "Dictation", "HUD", "Preferences", "Parakeet", "History"]),
     ],
     dependencies: [
         .package(url: "https://github.com/FluidInference/FluidAudio", exact: "0.17.7"),

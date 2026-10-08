@@ -41,8 +41,8 @@ public final class ParakeetModelStore {
     /// FluidAudio stores models in `<parent>/<Repo.folderName>` regardless of the directory it is
     /// given, so we use exactly that folder: the one we mark complete and delete is the one it writes.
     public nonisolated static var defaultDirectory: URL {
-        URL.applicationSupportDirectory
-            .appendingPathComponent("SecureWispr/Models", isDirectory: true)
+        AppPaths.supportDirectory
+            .appendingPathComponent("Models", isDirectory: true)
             .appendingPathComponent(Repo.parakeetV3.folderName, isDirectory: true)
     }
 

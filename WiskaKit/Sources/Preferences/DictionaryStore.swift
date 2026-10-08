@@ -8,7 +8,7 @@ public final class DictionaryStore {
     private static let log = Log.logger("Preferences")
 
     public nonisolated static var defaultURL: URL {
-        URL.applicationSupportDirectory.appendingPathComponent("SecureWispr/dictionary.json")
+        AppPaths.file("dictionary.json")
     }
 
     public private(set) var dictionary: PersonalDictionary
