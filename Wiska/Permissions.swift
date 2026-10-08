@@ -61,4 +61,17 @@ enum Permission: CaseIterable, Identifiable {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(settingsAnchor)")!
         NSWorkspace.shared.open(url)
     }
+
+    /// Prompt the first time; afterwards (or when the prompt can't show) open the right pane.
+    @MainActor func requestOrOpenSettings() {
+        switch self {
+        case .microphone:
+            if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined { request() } else { openSettings() }
+        case .inputMonitoring:
+            if !CGRequestListenEventAccess() { openSettings() }
+        case .accessibility:
+            request()
+            openSettings()
+        }
+    }
 }

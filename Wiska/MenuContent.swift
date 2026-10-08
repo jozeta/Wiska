@@ -9,6 +9,9 @@ struct MenuContent: View {
     var body: some View {
         Text(model.statusLine)
         Text(model.languageStatus)
+        if let stats = model.statsLine {
+            Text(stats)
+        }
         if model.settings.languageMode == .toggle && !model.parakeetUnavailable {
             Button("Switch to \(model.settings.toggleLanguage.other.displayName)") {
                 model.switchToggleLanguage()
@@ -43,6 +46,9 @@ struct MenuContent: View {
         }
         Divider()
         Text("Tip: Keyboard settings ▸ “Press 🌐 key to” ▸ Do Nothing")
+        Button("Setup…") {
+            OnboardingWindow.open(openWindow)
+        }
         Button("History…") {
             HistoryWindow.open(openWindow)
         }
