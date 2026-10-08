@@ -38,11 +38,12 @@ public final class ParakeetModelStore {
     /// Written after a download fully succeeds; files without it are a partial download (review I1).
     public nonisolated static let completionMarker = ".securewispr-complete"
 
-    /// FluidAudio stores models in `<parent>/<repo folder>`, so pointing it at the repo folder
-    /// itself makes the directory we delete the directory it writes (review C1).
+    /// FluidAudio stores models in `<parent>/<Repo.folderName>` regardless of the directory it is
+    /// given, so we use exactly that folder: the one we mark complete and delete is the one it writes.
     public nonisolated static var defaultDirectory: URL {
         URL.applicationSupportDirectory
-            .appendingPathComponent("SecureWispr/Models/parakeet-tdt-0.6b-v3-coreml", isDirectory: true)
+            .appendingPathComponent("SecureWispr/Models", isDirectory: true)
+            .appendingPathComponent(Repo.parakeetV3.folderName, isDirectory: true)
     }
 
     public private(set) var status: Status

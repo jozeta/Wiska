@@ -131,7 +131,15 @@ struct ParakeetTests {
         #expect(!transcriber.isReady)
     }
 
-    @Test(.enabled(if: FluidAudioDownloader().exists(at: ParakeetModelStore.defaultDirectory)),
+    /// Only run against a *completed* install made by the app: constructing a store on an
+    /// unmarked folder deletes it as a partial download, and tests must never touch user data.
+    nonisolated static var completedInstallPresent: Bool {
+        let dir = ParakeetModelStore.defaultDirectory
+        return FluidAudioDownloader().exists(at: dir) && FileManager.default.fileExists(
+            atPath: dir.appendingPathComponent(ParakeetModelStore.completionMarker).path)
+    }
+
+    @Test(.enabled(if: ParakeetTests.completedInstallPresent),
           .timeLimit(.minutes(3)))
     func realParakeetTranscribesEnglish() async throws {
         let transcriber = ParakeetTranscriber(store: ParakeetModelStore())
