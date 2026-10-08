@@ -18,7 +18,10 @@ struct HybridRealAudioTests {
         return try AVAudioFileReader.samples16k(url)
     }
 
-    func transcribe(_ samples: [Float]) async throws -> Transcript {
+    /// Time from release (finish) to transcript, the part the user waits for.
+    private(set) var finishTime: Duration = .zero
+
+    mutating func transcribe(_ samples: [Float]) async throws -> Transcript {
         let parakeet = ParakeetTranscriber(store: ParakeetModelStore())
         try await parakeet.prepare()
         let hybrid = HybridTranscriber(parakeet: parakeet, apple: AppleTranscriber(),
@@ -27,19 +30,25 @@ struct HybridRealAudioTests {
         for start in stride(from: 0, to: samples.count, by: 1_600) {
             session.append(AudioChunk(samples: Array(samples[start..<min(start + 1_600, samples.count)])))
         }
-        return try await session.finish()
+        let start = ContinuousClock.now
+        let transcript = try await session.finish()
+        finishTime = ContinuousClock.now - start
+        return transcript
     }
 
     @Test(.enabled(if: ParakeetTests.completedInstallPresent), .timeLimit(.minutes(3)))
-    func englishComesFromParakeet() async throws {
+    mutating func englishComesFromParakeet() async throws {
         let transcript = try await transcribe(try speak("Can you send me the quarterly report before lunch tomorrow",
                                                         voice: "Samantha"))
         #expect(transcript.engine == .parakeet)
         #expect(transcript.text.lowercased().contains("quarterly report"))
+        // Spec: English stays at Parakeet speed (~50–160 ms) even with Apple Swedish running alongside.
+        print("hybrid English finish: \(finishTime)")
+        #expect(finishTime < .milliseconds(300))
     }
 
     @Test(.enabled(if: ParakeetTests.completedInstallPresent), .timeLimit(.minutes(3)))
-    func swedishComesFromApple() async throws {
+    mutating func swedishComesFromApple() async throws {
         let transcript = try await transcribe(try speak(
             "Vi gick igenom siffrorna för tredje kvartalet och resultatet ser bättre ut än väntat", voice: "Alva"))
         #expect(transcript.engine == .apple)

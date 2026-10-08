@@ -33,7 +33,7 @@ public final class HybridTranscriber: Transcriber {
             parakeetSession = try await parakeet.makeSession(language: .automatic)
         } catch {
             Self.log.error("hybrid: parakeet can't start (\(String(describing: type(of: error)), privacy: .public)); using apple auto-detect")
-            return try await apple.makeSession(language: .automatic)
+            return LabeledSession(try await apple.makeSession(language: .automatic), engine: .apple)
         }
         var appleSessions: [Language: any TranscriptionSession] = [:]
         for language in Language.allCases where appleLanguages.contains(language) {
@@ -114,4 +114,27 @@ final class HybridSession: TranscriptionSession {
         guard !transcripts.isEmpty else { throw parakeetError }
         return LanguagePicker.pick(transcripts, fallback: fallbackLanguage)
     }
+}
+
+/// Stamps the engine on a session's transcripts, so History doesn't fall back to the
+/// hybrid's own label (Parakeet) when only Apple ran.
+@MainActor
+final class LabeledSession: TranscriptionSession {
+    private let inner: any TranscriptionSession
+    private let engine: SpeechEngine
+
+    init(_ inner: any TranscriptionSession, engine: SpeechEngine) {
+        self.inner = inner
+        self.engine = engine
+    }
+
+    func append(_ chunk: AudioChunk) { inner.append(chunk) }
+
+    func finish() async throws -> Transcript {
+        var transcript = try await inner.finish()
+        transcript.engine = transcript.engine ?? engine
+        return transcript
+    }
+
+    func cancel() { inner.cancel() }
 }

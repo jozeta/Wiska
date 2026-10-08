@@ -129,9 +129,11 @@ struct HybridTranscriberTests {
 
     @Test func parakeetThatCannotStartUsesAppleAutoDetect() async throws {
         parakeet.failToStart = ["auto"]
-        _ = try await hybrid().makeSession(language: .automatic)
+        let session = try await hybrid().makeSession(language: .automatic)
         #expect(apple.sessions["auto"] != nil)
         #expect(apple.sessions["swedish"] == nil)
+        // History must say Apple, not the hybrid's own (Parakeet) label.
+        #expect(try await session.finish().engine == .apple)
     }
 
     @Test func cancelCancelsEverySession() async throws {
