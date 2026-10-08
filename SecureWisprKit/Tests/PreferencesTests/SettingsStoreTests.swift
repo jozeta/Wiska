@@ -39,4 +39,11 @@ struct SettingsStoreTests {
         #expect(store.engine == .apple)
         #expect(store.languageMode == .autoDetect)
     }
+
+    @Test func cleanupLevelDefaultsToPolishedAndPersists() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.cleanupLevel == .polished)
+        store.cleanupLevel = .light
+        #expect(SettingsStore(defaults: defaults).cleanupLevel == .light)
+    }
 }

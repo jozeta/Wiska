@@ -253,4 +253,12 @@ struct DictationControllerTests {
         #expect(injector.injected == ["cleaned: hello world"])
         #expect(controller.state == .idle)
     }
+
+    @Test func startPrewarmsTheCleaner() async {
+        let controller = makeController()
+        controller.handle(en)
+        #expect(cleaner.prewarmCount == 1)
+        controller.handle(.cancel)
+        await controller.currentTask?.value
+    }
 }
