@@ -33,7 +33,7 @@ public protocol Transcriber: AnyObject {
 }
 
 @MainActor
-public protocol TranscriptionSession: AnyObject {
+public protocol TranscriptionSession: AnyObject, Sendable {
     func append(_ chunk: AudioChunk)
     func finish() async throws -> Transcript
     func cancel()
