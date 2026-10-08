@@ -114,4 +114,14 @@ struct AppleTranscriberTests {
         #expect(transcript.language == .english)
         #expect(!transcriber.isReady)   // "ready" still means both languages
     }
+
+    @Test(.timeLimit(.minutes(2)))
+    func swedishUsesTheDictionaryAsHints() async throws {
+        let samples = try spokenSamples("Skicka rapporten om Kvarnholmen till Ylva Zetterström och Jozeta",
+                                        voice: "Alva")
+        let transcriber = AppleTranscriber(vocabulary: { ["Kvarnholmen", "Ylva Zetterström", "Jozeta"] })
+        let transcript = try await transcribe(samples, .fixed(.swedish), transcriber: transcriber)
+        #expect(transcript.text.contains("Jozeta"), "\(transcript.text)")
+        #expect(transcriber.engine == .apple)
+    }
 }

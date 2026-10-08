@@ -16,6 +16,7 @@ public final class ParakeetTranscriber: Transcriber {
     private var loadFailure: Error?
 
     public var isReady: Bool { backend != nil && store.isInstalled }
+    public var engine: SpeechEngine { .parakeet }
 
     public convenience init(store: ParakeetModelStore) {
         self.init(store: store, loader: { try await FluidAudioBackend.load(from: $0) })

@@ -32,9 +32,15 @@ public protocol AudioSource: AnyObject {
 public protocol Transcriber: AnyObject {
     /// True once models/assets are installed and a session can start without downloading.
     var isReady: Bool { get }
+    /// Which engine this is (for history).
+    var engine: SpeechEngine { get }
     /// Idempotent warm-up: installs assets if needed.
     func prepare() async throws
     func makeSession(language: LanguageChoice) async throws -> any TranscriptionSession
+}
+
+public extension Transcriber {
+    var engine: SpeechEngine { .apple }
 }
 
 @MainActor
