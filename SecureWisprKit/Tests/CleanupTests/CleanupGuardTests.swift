@@ -38,4 +38,31 @@ struct CleanupGuardTests {
             original: "öh kan du skicka eh rapporten till mig innan lunch alltså imorgon typ",
             cleaned: "Kan du skicka rapporten till mig innan lunch imorgon?", level: .light) == .accept)
     }
+
+    @Test func acceptsSwedishSpellingNormalisation() {
+        // Review I4: "imorgon" → "i morgon" is the same words.
+        #expect(CleanupGuard.check(original: "ska vi ses imorgon på kontoret",
+                                   cleaned: "Ska vi ses i morgon på kontoret?", level: .light) == .accept)
+    }
+
+    @Test func acceptsSpokenNumbersWrittenAsDigits() {
+        #expect(CleanupGuard.check(original: "let's meet at two thirty pm",
+                                   cleaned: "Let's meet at 2:30 PM.", level: .light) == .accept)
+    }
+
+    @Test func rejectsAnAnswerWithDigitsWhenNoNumberWasSpoken() {
+        // Real model output seen in Task-4 tests after the I4 change: it answered the question.
+        #expect(CleanupGuard.check(original: "what time is it in tokyo right now",
+                                   cleaned: "It is 3:15 pm in Tokyo right now.", level: .polished) != .accept)
+    }
+
+    @Test func rejectsAQuestionTurnedIntoAStatement() {
+        #expect(CleanupGuard.check(original: "vad är klockan i tokyo just nu",
+                                   cleaned: "Klockan är sent i Tokyo just nu.", level: .polished) != .accept)
+    }
+
+    @Test func keepsAQuestionAsAQuestion() {
+        #expect(CleanupGuard.check(original: "um what time is it in tokyo right now",
+                                   cleaned: "What time is it in Tokyo right now?", level: .polished) == .accept)
+    }
 }

@@ -52,7 +52,7 @@ struct CleanupPipelineTests {
         rewriter.transform = { $0 }   // identity is always accepted by the guard
         let out = try await clean("hello there my friend new paragraph and goodbye to you all", pipeline())
         #expect(rewriter.calls == ["hello there my friend", "and goodbye to you all"])
-        #expect(out == "hello there my friend\n\nand goodbye to you all")
+        #expect(out == "Hello there my friend.\n\nAnd goodbye to you all.")
     }
 
     @Test func shortSegmentSkipsTheModel() async throws {
@@ -110,7 +110,7 @@ struct CleanupPipelineTests {
 
     @Test func wrappingQuotesAreStripped() async throws {
         rewriter.transform = { "\"\($0).\"" }
-        #expect(try await clean("hello there my friend", pipeline()) == "hello there my friend.")
+        #expect(try await clean("hello there my friend", pipeline()) == "Hello there my friend.")
     }
 
     @Test func trailingCommandKeepsLineBreak() async throws {
@@ -131,5 +131,17 @@ struct CleanupPipelineTests {
         rewriter.isAvailable = false
         pipeline(.polished).prewarm()
         #expect(rewriter.prewarmed.isEmpty)
+    }
+
+    @Test func defaultBudgetLeavesRoomForTailAndTranscription() {
+        // Review I3: release→paste must stay < 1.5 s, so cleanup gets at most 1 s.
+        #expect(CleanupPipeline.defaultTimeout == .milliseconds(1_000))
+    }
+
+    @Test func acceptedRewriteGetsCapitalAndTerminalPunctuation() async throws {
+        // Review I5: the model sometimes omits punctuation.
+        rewriter.transform = { _ in "hey Anna thanks for the update I'll look at it tonight" }
+        let out = try await clean("hey Anna thanks for the update I'll uh I'll look at it tonight", pipeline())
+        #expect(out == "Hey Anna thanks for the update I'll look at it tonight.")
     }
 }
