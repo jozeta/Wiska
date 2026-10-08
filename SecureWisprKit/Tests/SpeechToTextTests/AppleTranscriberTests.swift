@@ -8,12 +8,12 @@ import Testing
 @MainActor
 struct AppleTranscriberTests {
     /// Speaks `text` with the system voice into a temp AIFF and returns 16 kHz mono samples.
-    private func spokenSamples(_ text: String) throws -> [Float] {
+    private func spokenSamples(_ text: String, voice: String = "Samantha") throws -> [Float] {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("securewispr-\(UUID().uuidString).aiff")
         let say = Process()
         say.executableURL = URL(fileURLWithPath: "/usr/bin/say")
-        say.arguments = ["-o", url.path, text]
+        say.arguments = ["-v", voice, "-o", url.path, text]
         try say.run()
         say.waitUntilExit()
         defer { try? FileManager.default.removeItem(at: url) }
@@ -49,5 +49,39 @@ struct AppleTranscriberTests {
         session.append(AudioChunk(samples: Array(repeating: 0, count: 16_000)))
         let transcript = try await session.finish()
         #expect(transcript.text.isEmpty)
+    }
+
+    private func transcribe(_ samples: [Float], _ choice: LanguageChoice,
+                            transcriber: AppleTranscriber = AppleTranscriber()) async throws -> Transcript {
+        let session = try await transcriber.makeSession(language: choice)
+        for start in stride(from: 0, to: samples.count, by: 1_600) {
+            session.append(AudioChunk(samples: Array(samples[start..<min(start + 1_600, samples.count)])))
+        }
+        return try await session.finish()
+    }
+
+    @Test(.timeLimit(.minutes(2)))
+    func transcribesSpokenSwedish() async throws {
+        let samples = try spokenSamples("Kan du skicka rapporten till mig innan lunch imorgon", voice: "Alva")
+        let transcript = try await transcribe(samples, .fixed(.swedish))
+        #expect(transcript.text.lowercased().contains("rapporten"))
+        #expect(transcript.language == .swedish)
+        #expect(transcript.locale.identifier == "sv_SE")
+        #expect((transcript.confidence ?? 0) > 0.5)
+    }
+
+    @Test(.timeLimit(.minutes(2)))
+    func englishTranscriptCarriesConfidenceAndLanguage() async throws {
+        let samples = try spokenSamples("Can you send me the quarterly report before lunch tomorrow")
+        let transcript = try await transcribe(samples, .fixed(.english))
+        #expect(transcript.language == .english)
+        #expect((transcript.confidence ?? 0) > 0.5)
+    }
+
+    @Test func transcriberIsReadyOnlyAfterBothLanguagesPrepared() async throws {
+        let transcriber = AppleTranscriber()
+        #expect(!transcriber.isReady)
+        try await transcriber.prepare()
+        #expect(transcriber.isReady)
     }
 }

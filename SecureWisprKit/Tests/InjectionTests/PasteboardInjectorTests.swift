@@ -87,4 +87,12 @@ struct PasteboardInjectorTests {
         try await injector(RecordingKeySender(pasteboard: pasteboard)).inject("text")
         #expect(pasteboard.string(forType: .string) == nil)
     }
+
+    @Test func pastesSwedishCharactersExactly() async throws {
+        pasteboard.clearContents()
+        let sender = RecordingKeySender(pasteboard: pasteboard)
+        let text = "Hej! Kan du skicka rapporten – på fredag? Åsa, Ärla & Örjan."
+        try await injector(sender).inject(text)
+        #expect(sender.seenAtPaste == [text])
+    }
 }
