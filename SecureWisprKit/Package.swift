@@ -5,7 +5,10 @@ let package = Package(
     name: "SecureWisprKit",
     platforms: [.macOS("26.0")],
     products: [
-        .library(name: "SecureWisprKit", targets: ["Core", "Hotkey", "Audio", "SpeechToText", "Cleanup", "Injection", "Dictation", "HUD", "Preferences"]),
+        .library(name: "SecureWisprKit", targets: ["Core", "Hotkey", "Audio", "SpeechToText", "Cleanup", "Injection", "Dictation", "HUD", "Preferences", "Parakeet"]),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/FluidInference/FluidAudio", exact: "0.17.7"),
     ],
     targets: [
         .target(name: "Core"),
@@ -17,6 +20,9 @@ let package = Package(
         .target(name: "Dictation", dependencies: ["Core"]),
         .target(name: "HUD", dependencies: ["Core"]),
         .target(name: "Preferences", dependencies: ["Core"]),
+        .target(name: "Parakeet", dependencies: [
+            "Core", .product(name: "FluidAudio", package: "FluidAudio"),
+        ]),
         .testTarget(name: "CoreTests", dependencies: ["Core"]),
         .testTarget(name: "HotkeyTests", dependencies: ["Hotkey"]),
         .testTarget(name: "AudioTests", dependencies: ["Audio"]),
@@ -25,5 +31,6 @@ let package = Package(
         .testTarget(name: "InjectionTests", dependencies: ["Injection"]),
         .testTarget(name: "DictationTests", dependencies: ["Dictation"]),
         .testTarget(name: "PreferencesTests", dependencies: ["Preferences"]),
+        .testTarget(name: "ParakeetTests", dependencies: ["Parakeet"]),
     ]
 )
