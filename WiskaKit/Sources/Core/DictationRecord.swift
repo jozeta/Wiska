@@ -40,9 +40,11 @@ public struct DictationRecord: Sendable, Equatable {
     public var finalText: String
     /// False when pasting failed — kept so the text can be rescued.
     public var pasted: Bool
+    /// Seconds of audio captured for this dictation.
+    public var duration: TimeInterval
 
     public init(date: Date, appBundleID: String?, language: Language?, engine: SpeechEngine,
-                rawText: String, finalText: String, pasted: Bool) {
+                rawText: String, finalText: String, pasted: Bool, duration: TimeInterval = 0) {
         self.date = date
         self.appBundleID = appBundleID
         self.language = language
@@ -50,5 +52,6 @@ public struct DictationRecord: Sendable, Equatable {
         self.rawText = rawText
         self.finalText = finalText
         self.pasted = pasted
+        self.duration = duration
     }
 }

@@ -39,6 +39,7 @@ public final class DictationController {
 
     private var activeTranscriber: (any Transcriber)?
     private var context = DictationContext()
+    private var capturedSamples = 0
     private var sessionTask: Task<any TranscriptionSession, Error>?
     private var levelTask: Task<Void, Never>?
     private var timeoutTask: Task<Void, Never>?
@@ -103,6 +104,7 @@ public final class DictationController {
         let transcriber = transcriberProvider()
         activeTranscriber = transcriber
         state = .listening
+        capturedSamples = 0
         // Load the cleanup model while the user is still talking.
         cleaner.prewarm()
 
@@ -110,7 +112,10 @@ public final class DictationController {
         // captured before the transcriber is ready is still delivered, in order.
         sessionTask = Task { [weak self] in
             let session = try await transcriber.makeSession(language: choice)
-            for await chunk in capture.chunks { session.append(chunk) }
+            for await chunk in capture.chunks {
+                session.append(chunk)
+                self?.capturedSamples += chunk.samples.count
+            }
             // Stream ended while still listening: the recorder stopped on its own
             // (e.g. audio device change). Transcribe what we have.
             if self?.state == .listening {
@@ -187,7 +192,8 @@ public final class DictationController {
         onDictationFinished?(DictationRecord(
             date: Date(), appBundleID: context.appBundleID, language: transcript.language,
             engine: activeTranscriber?.engine ?? .apple, rawText: transcript.text,
-            finalText: finalText, pasted: pasted))
+            finalText: finalText, pasted: pasted,
+            duration: Double(capturedSamples) / AudioChunk.sampleRate))
     }
 
     private func cancelListening() {

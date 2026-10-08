@@ -11,6 +11,7 @@ final class HistoryEntry {
     var rawText: String
     var finalText: String
     var pasted: Bool
+    var duration: Double = 0
 
     init(_ record: DictationRecord) {
         date = record.date
@@ -20,12 +21,13 @@ final class HistoryEntry {
         rawText = record.rawText
         finalText = record.finalText
         pasted = record.pasted
+        duration = record.duration
     }
 
     var record: DictationRecord {
         DictationRecord(date: date, appBundleID: appBundleID,
                         language: languageRaw.flatMap(Language.init(rawValue:)),
                         engine: SpeechEngine(rawValue: engineRaw) ?? .apple,
-                        rawText: rawText, finalText: finalText, pasted: pasted)
+                        rawText: rawText, finalText: finalText, pasted: pasted, duration: duration)
     }
 }
