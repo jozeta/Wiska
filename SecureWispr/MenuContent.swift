@@ -4,6 +4,7 @@ import SwiftUI
 struct MenuContent: View {
     let model: AppModel
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Text(model.statusLine)
@@ -42,6 +43,11 @@ struct MenuContent: View {
         }
         Divider()
         Text("Tip: Keyboard settings ▸ “Press 🌐 key to” ▸ Do Nothing")
+        Button("History…") {
+            NSApp.activate()
+            openWindow(id: "history")
+        }
+        .keyboardShortcut("y")
         Button("Settings…") {
             // A menu-bar-only app isn't active, so SettingsLink would open the window
             // *behind* the frontmost app. Activate first, then raise the window.
