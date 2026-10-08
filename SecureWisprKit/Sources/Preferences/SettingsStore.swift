@@ -11,6 +11,7 @@ public final class SettingsStore {
         static let primaryLanguage = "primaryLanguage"
         static let toggleLanguage = "toggleLanguage"
         static let lastDetectedLanguage = "lastDetectedLanguage"
+        static let cleanupLevel = "cleanupLevel"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -23,6 +24,8 @@ public final class SettingsStore {
         didSet { defaults.set(lastDetectedLanguage.rawValue, forKey: Key.lastDetectedLanguage) }
     }
 
+    public var cleanupLevel: CleanupLevel { didSet { defaults.set(cleanupLevel.rawValue, forKey: Key.cleanupLevel) } }
+
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         engine = Self.read(defaults, Key.engine, SpeechEngine.apple)
@@ -30,6 +33,7 @@ public final class SettingsStore {
         primaryLanguage = Self.read(defaults, Key.primaryLanguage, Language.english)
         toggleLanguage = Self.read(defaults, Key.toggleLanguage, Language.english)
         lastDetectedLanguage = Self.read(defaults, Key.lastDetectedLanguage, Language.english)
+        cleanupLevel = Self.read(defaults, Key.cleanupLevel, CleanupLevel.polished)
     }
 
     private static func read<T: RawRepresentable>(

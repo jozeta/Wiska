@@ -82,6 +82,8 @@ final class FakeTranscriber: Transcriber {
 @MainActor
 final class FakeCleaner: TextCleaner {
     private(set) var contexts: [DictationContext] = []
+    private(set) var prewarmCount = 0
+    func prewarm() { prewarmCount += 1 }
 
     func clean(_ text: String, context: DictationContext) async throws -> String {
         contexts.append(context)

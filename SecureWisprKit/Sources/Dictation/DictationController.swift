@@ -101,6 +101,8 @@ public final class DictationController {
         let transcriber = transcriberProvider()
         activeTranscriber = transcriber
         state = .listening
+        // Load the cleanup model while the user is still talking.
+        cleaner.prewarm()
 
         // The chunk stream buffers while the session is being created, so audio
         // captured before the transcriber is ready is still delivered, in order.
