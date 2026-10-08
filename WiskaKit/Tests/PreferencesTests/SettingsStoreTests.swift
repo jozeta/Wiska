@@ -53,4 +53,14 @@ struct SettingsStoreTests {
         store.historyRetention = .month
         #expect(SettingsStore(defaults: defaults).historyRetention == .month)
     }
+
+    @Test func onboardingFlagsDefaultFalseAndPersist() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(!store.onboardingCompleted && !store.fnKeyConfirmed && !store.firstDictationDone)
+        store.onboardingCompleted = true
+        store.fnKeyConfirmed = true
+        store.firstDictationDone = true
+        let reloaded = SettingsStore(defaults: defaults)
+        #expect(reloaded.onboardingCompleted && reloaded.fnKeyConfirmed && reloaded.firstDictationDone)
+    }
 }
