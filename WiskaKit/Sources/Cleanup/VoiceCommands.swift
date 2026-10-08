@@ -1,32 +1,22 @@
+import Core
 import Foundation
 
 /// Spoken formatting commands, applied deterministically before any model sees the text.
 public enum VoiceCommands {
-    static let scratch = ["scratch that", "stryk det"]
-    static let paragraph = ["new paragraph", "nytt stycke"]
-    static let line = ["new line", "ny rad"]
-
-    /// A determiner right before the phrase means it's prose: "a new line of products",
-    /// "en ny rad i tabellen", "ett nytt stycke musik" (review I2).
-    static let determiners: Set<String> = [
-        "a", "an", "the", "this", "that", "these", "my", "our", "your", "their", "his", "her", "its",
-        "en", "ett", "den", "det", "denna", "detta", "min", "mitt", "din", "ditt", "vår", "vårt",
-        "er", "ert", "hans", "hennes", "deras", "sin", "sitt",
-    ]
-    /// "need to scratch that itch", "att stryka det" — an infinitive marker means prose.
-    static let infinitiveMarkers: Set<String> = ["to", "att"]
-
     /// Trailing punctuation/space the transcriber puts around a spoken command.
     private static let trailing = "[\\s,.;:!?]*"
 
-    public static func apply(_ text: String) -> String {
+    /// A determiner right before a phrase means prose ("a new line of products", "en ny rad i
+    /// tabellen"), and an infinitive marker before "scratch that" too ("need to scratch that itch").
+    public static func apply(_ text: String, rules: LanguageRules = .default) -> String {
         var result = text
-        if let cut = commandMatches(scratch, in: result, blockedAfter: determiners.union(infinitiveMarkers))
+        if let cut = commandMatches(rules.scratchThat, in: result,
+                                    blockedAfter: rules.determiners.union(rules.infinitiveMarkers))
             .last?.upperBound {
             result = String(result[cut...])
         }
-        result = replace(paragraph, in: result, with: "\n\n")
-        result = replace(line, in: result, with: "\n")
+        result = replace(rules.newParagraph, in: result, with: "\n\n", blockedAfter: rules.determiners)
+        result = replace(rules.newLine, in: result, with: "\n", blockedAfter: rules.determiners)
         // Trim spaces only: a trailing "\n" from a final "new line" is intentional.
         return result.trimmingCharacters(in: .whitespaces)
     }
@@ -59,10 +49,11 @@ public enum VoiceCommands {
         }
     }
 
-    private static func replace(_ phrases: [String], in text: String, with replacement: String) -> String {
+    private static func replace(_ phrases: [String], in text: String, with replacement: String,
+                                blockedAfter blocked: Set<String>) -> String {
         var result = text
         // Replace back to front so earlier ranges stay valid.
-        for range in commandMatches(phrases, in: text, blockedAfter: determiners).reversed() {
+        for range in commandMatches(phrases, in: text, blockedAfter: blocked).reversed() {
             result.replaceSubrange(range, with: replacement)
         }
         return result
