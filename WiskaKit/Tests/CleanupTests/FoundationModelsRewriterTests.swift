@@ -53,7 +53,7 @@ struct FoundationModelsRewriterTests {
         let rewriter = FoundationModelsRewriter()
         let long = String(repeating: "um so I think we should uh talk about the quarterly report ", count: 12)
         let start = ContinuousClock.now
-        let task = Task { try await rewriter.rewrite(long, level: .polished) }
+        let task = Task { try await rewriter.rewrite(long, level: .polished, language: .english) }
         try await Task.sleep(for: .milliseconds(150))
         task.cancel()
         _ = try? await task.value
@@ -66,6 +66,12 @@ struct FoundationModelsRewriterTests {
         rewriter.prewarm(level: .light)
         rewriter.prewarm(level: .polished)
         #expect(rewriter.warmLevels == [.polished])
+    }
+
+    @Test func instructionsNameTheLanguageAndItsFillers() {
+        let text = FoundationModelsRewriter.instructions(for: .light, language: .german)
+        #expect(text.contains("Deutsch"))
+        #expect(text.contains("ähm"))
     }
 
     @Test func reportsAvailability() {

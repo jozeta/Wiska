@@ -35,7 +35,7 @@ struct DictationControllerTests {
 
         #expect(transcriber.session.appended == [[0.1, 0.2], [0.3]])
         #expect(transcriber.languages == [.fixed(.english)])
-        #expect(cleaner.contexts == [DictationContext(appBundleID: "com.apple.TextEdit")])
+        #expect(cleaner.contexts == [DictationContext(appBundleID: "com.apple.TextEdit", language: .english)])
         #expect(injector.injected == ["cleaned: hello world"])
         #expect(recorder.states == [.listening, .transcribing, .cleaning, .injecting, .idle])
         #expect(controller.lastLatency != nil)
@@ -171,6 +171,15 @@ struct DictationControllerTests {
         controller.handle(.finish)
         await controller.currentTask?.value
         #expect(records.value.first?.engine == .parakeet)
+    }
+
+    @Test func cleanerReceivesTheTranscriptLanguage() async {
+        transcriber.session.language = .danish
+        let controller = makeController()
+        controller.handle(en)
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        #expect(cleaner.contexts.first?.language == .danish)
     }
 
     @Test func emptyTranscriptFailsWithNoSpeech() async {

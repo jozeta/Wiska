@@ -13,11 +13,13 @@ final class FakeRewriter: TextRewriter {
     var transform: (String) -> String = { $0.uppercased() + "." }
     private(set) var calls: [String] = []
     private(set) var prewarmed: [CleanupLevel] = []
+    private(set) var languages: [Language?] = []
 
     func prewarm(level: CleanupLevel) { prewarmed.append(level) }
 
-    func rewrite(_ text: String, level: CleanupLevel) async throws -> String {
+    func rewrite(_ text: String, level: CleanupLevel, language: Language?) async throws -> String {
         calls.append(text)
+        languages.append(language)
         if delay > .zero {
             if ignoresCancellation {
                 let end = ContinuousClock.now + delay
@@ -39,8 +41,27 @@ struct CleanupPipelineTests {
         CleanupPipeline(level: { level }, rewriter: rewriter, timeout: timeout)
     }
 
-    func clean(_ text: String, _ p: CleanupPipeline) async throws -> String {
-        try await p.clean(text, context: DictationContext())
+    func clean(_ text: String, _ p: CleanupPipeline,
+               context: DictationContext = DictationContext()) async throws -> String {
+        try await p.clean(text, context: context)
+    }
+
+    @Test func rulesFollowTheSpokenLanguage() async throws {
+        rewriter.isAvailable = false   // rule cleanup only
+        let german = DictationContext(language: .german, enabledLanguages: [.german, .english])
+        #expect(try await pipeline().clean("äh das passt neue Zeile gut", context: german) == "Das passt.\nGut.")
+    }
+
+    @Test func unknownLanguageUsesTheTickedLanguagesRules() async throws {
+        rewriter.isAvailable = false
+        let context = DictationContext(language: nil, enabledLanguages: [.dutch])
+        #expect(try await pipeline().clean("uh dat klopt", context: context) == "Dat klopt.")
+    }
+
+    @Test func rewriterIsToldTheLanguage() async throws {
+        _ = try await clean("bonjour je pense que ça marche bien", pipeline(),
+                            context: DictationContext(language: .french, enabledLanguages: [.french]))
+        #expect(rewriter.languages == [.french])
     }
 
     @Test func offOnlyAppliesCommands() async throws {

@@ -168,6 +168,8 @@ public final class DictationController {
         var finalText = ""
         do {
             state = .cleaning
+            var context = self.context
+            context.language = transcript.language
             finalText = try await cleaner.clean(transcript.text, context: context)
             // Voice commands can remove everything ("scratch that" alone): nothing to paste.
             guard !finalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
