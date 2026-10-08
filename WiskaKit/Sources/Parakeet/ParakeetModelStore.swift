@@ -50,6 +50,8 @@ public final class ParakeetModelStore {
     public let directory: URL
     @ObservationIgnored private let downloader: any ModelDownloader
     @ObservationIgnored private var task: Task<Void, Never>?
+    /// Called after `remove()`, so whoever loaded the model (~1 GB in memory) can let it go.
+    @ObservationIgnored var onRemove: (@MainActor () -> Void)?
 
     public var isInstalled: Bool { status == .ready }
 
@@ -83,7 +85,8 @@ public final class ParakeetModelStore {
         // Built outside the task: FluidAudio calls this on an arbitrary queue.
         let report: @Sendable (Double) -> Void = { [weak self] fraction in
             Task { @MainActor in
-                guard let self, case .downloading = self.status else { return }
+                // Hops from FluidAudio's queue can arrive out of order: never move backwards.
+                guard let self, case .downloading(let current) = self.status, fraction > current else { return }
                 self.status = .downloading(fraction)
             }
         }
@@ -115,5 +118,6 @@ public final class ParakeetModelStore {
         task?.cancel()
         try? FileManager.default.removeItem(at: directory)
         status = .notDownloaded
+        onRemove?()
     }
 }

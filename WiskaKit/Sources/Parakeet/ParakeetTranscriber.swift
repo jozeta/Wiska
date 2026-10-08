@@ -1,5 +1,6 @@
 import Core
 import Foundation
+import Observation
 
 public enum ParakeetError: Error, Equatable {
     case modelNotInstalled
@@ -7,13 +8,14 @@ public enum ParakeetError: Error, Equatable {
 
 /// Parakeet TDT 0.6B v3. Detects the language itself, so the LanguageChoice is ignored.
 /// Never downloads: `prepare()` only loads an installed model.
-@MainActor
+/// Observable so Settings and the menu notice when the model finishes loading.
+@MainActor @Observable
 public final class ParakeetTranscriber: Transcriber {
-    private let store: ParakeetModelStore
-    private let loader: @MainActor (URL) async throws -> any SpeechRecognizerBackend
+    @ObservationIgnored private let store: ParakeetModelStore
+    @ObservationIgnored private let loader: @MainActor (URL) async throws -> any SpeechRecognizerBackend
     private var backend: (any SpeechRecognizerBackend)?
-    private var loading: Task<any SpeechRecognizerBackend, Error>?
-    private var loadFailure: Error?
+    @ObservationIgnored private var loading: Task<any SpeechRecognizerBackend, Error>?
+    @ObservationIgnored private var loadFailure: Error?
 
     public var isReady: Bool { backend != nil && store.isInstalled }
     public var engine: SpeechEngine { .parakeet }
@@ -25,6 +27,14 @@ public final class ParakeetTranscriber: Transcriber {
     init(store: ParakeetModelStore, loader: @escaping @MainActor (URL) async throws -> any SpeechRecognizerBackend) {
         self.store = store
         self.loader = loader
+        store.onRemove = { [weak self] in self?.unload() }
+    }
+
+    /// Drops the loaded model. Sessions already running keep their own reference.
+    func unload() {
+        loading?.cancel()
+        loading = nil
+        backend = nil
     }
 
     /// Allow another load attempt after a failure (e.g. the model was re-downloaded).
@@ -51,7 +61,10 @@ public final class ParakeetTranscriber: Transcriber {
         loading = task
         defer { loading = nil }
         do {
-            backend = try await task.value
+            let loaded = try await task.value
+            // Removed while loading: don't hold on to a model that's no longer installed.
+            guard store.isInstalled else { throw ParakeetError.modelNotInstalled }
+            backend = loaded
         } catch {
             loadFailure = error
             throw error

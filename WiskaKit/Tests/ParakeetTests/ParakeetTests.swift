@@ -131,6 +131,20 @@ struct ParakeetTests {
         #expect(!transcriber.isReady)
     }
 
+    @Test func removingModelReleasesTheLoadedModel() async throws {
+        let store = try installedStore()
+        weak var loaded: FakeBackend?
+        let transcriber = ParakeetTranscriber(store: store, loader: { _ in
+            let backend = FakeBackend()
+            loaded = backend
+            return backend
+        })
+        try await transcriber.prepare()
+        #expect(loaded != nil)
+        store.remove()
+        #expect(loaded == nil)
+    }
+
     /// Only run against a *completed* install made by the app: constructing a store on an
     /// unmarked folder deletes it as a partial download, and tests must never touch user data.
     nonisolated static var completedInstallPresent: Bool {

@@ -83,7 +83,7 @@ private struct ParakeetCard: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Parakeet TDT 0.6B v3")
-                Text("On-device, 25 languages. Downloaded from Hugging Face only when you click Download.")
+                Text("On-device, 25 languages. About 470 MB, downloaded from Hugging Face only when you click Download.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()

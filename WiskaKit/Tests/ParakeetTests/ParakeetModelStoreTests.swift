@@ -10,12 +10,13 @@ final class FakeDownloader: ModelDownloader, @unchecked Sendable {
     var installed: Bool
     var fail = false
     var delay: Duration = .zero
+    var progressSteps: [Double] = [0.5]
     init(installed: Bool) { self.installed = installed }
 
     func download(to directory: URL, progress: @escaping @Sendable (Double) -> Void) async throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try Data("partial".utf8).write(to: directory.appendingPathComponent("part.bin"))
-        progress(0.5)
+        progressSteps.forEach(progress)
         if delay > .zero { try await Task.sleep(for: delay) }
         if fail { throw DownloadFailed() }
         installed = true
@@ -115,6 +116,18 @@ struct ParakeetModelStoreTests {
         try await waitWhileDownloading(store)
         #expect(store.status == .notDownloaded)
         #expect(!FileManager.default.fileExists(atPath: dir.path))
+    }
+
+    @Test func progressNeverGoesBackwards() async throws {
+        let downloader = FakeDownloader(installed: false)
+        downloader.progressSteps = [0.6, 0.3]
+        downloader.delay = .milliseconds(100)
+        let store = ParakeetModelStore(directory: dir, downloader: downloader)
+        store.download()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(store.status == .downloading(0.6))
+        store.cancelDownload()
+        try await waitWhileDownloading(store)
     }
 
     @Test func removeDeletesTheModel() throws {
