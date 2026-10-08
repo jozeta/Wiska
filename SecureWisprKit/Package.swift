@@ -5,7 +5,7 @@ let package = Package(
     name: "SecureWisprKit",
     platforms: [.macOS("26.0")],
     products: [
-        .library(name: "SecureWisprKit", targets: ["Core", "Hotkey", "Audio", "SpeechToText", "Cleanup", "Injection", "Dictation"]),
+        .library(name: "SecureWisprKit", targets: ["Core", "Hotkey", "Audio", "SpeechToText", "Cleanup", "Injection", "Dictation", "HUD"]),
     ],
     targets: [
         .target(name: "Core"),
@@ -15,6 +15,7 @@ let package = Package(
         .target(name: "Cleanup", dependencies: ["Core"]),
         .target(name: "Injection", dependencies: ["Core"]),
         .target(name: "Dictation", dependencies: ["Core"]),
+        .target(name: "HUD", dependencies: ["Core"]),
         .testTarget(name: "CoreTests", dependencies: ["Core"]),
         .testTarget(name: "HotkeyTests", dependencies: ["Hotkey"]),
         .testTarget(name: "AudioTests", dependencies: ["Audio"]),
