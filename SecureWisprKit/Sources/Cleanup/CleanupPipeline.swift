@@ -16,11 +16,14 @@ public final class CleanupPipeline: TextCleaner {
     private let level: @MainActor () -> CleanupLevel
     private let rewriter: any TextRewriter
     private let timeout: Duration
+    private let dictionary: @MainActor () -> PersonalDictionary
 
     public init(level: @escaping @MainActor () -> CleanupLevel, rewriter: any TextRewriter,
+                dictionary: @escaping @MainActor () -> PersonalDictionary = { PersonalDictionary() },
                 timeout: Duration = CleanupPipeline.defaultTimeout) {
         self.level = level
         self.rewriter = rewriter
+        self.dictionary = dictionary
         self.timeout = timeout
     }
 
@@ -32,17 +35,20 @@ public final class CleanupPipeline: TextCleaner {
 
     public func clean(_ text: String, context: DictationContext) async throws -> String {
         let level = level()
-        let commanded = VoiceCommands.apply(text)
-        guard level != .off else { return commanded }
+        let dictionary = dictionary()
+        // The dictionary is spelling, not cleanup: it applies at every level.
+        let corrected = DictionaryCorrector.apply(VoiceCommands.apply(text), dictionary: dictionary)
+        guard level != .off else { return corrected }
         let deadline = ContinuousClock.now + timeout
         var cleaned: [String] = []
-        for segment in commanded.components(separatedBy: "\n") {
-            cleaned.append(await cleanSegment(segment, level: level, deadline: deadline))
+        for segment in corrected.components(separatedBy: "\n") {
+            cleaned.append(await cleanSegment(segment, level: level, dictionary: dictionary, deadline: deadline))
         }
         return cleaned.joined(separator: "\n")
     }
 
-    private func cleanSegment(_ raw: String, level: CleanupLevel, deadline: ContinuousClock.Instant) async -> String {
+    private func cleanSegment(_ raw: String, level: CleanupLevel, dictionary: PersonalDictionary,
+                              deadline: ContinuousClock.Instant) async -> String {
         let segment = raw.trimmingCharacters(in: .whitespaces)
         guard !segment.isEmpty else { return "" }
         let wordCount = segment.split(whereSeparator: \.isWhitespace).count
@@ -53,7 +59,8 @@ public final class CleanupPipeline: TextCleaner {
             let output = Self.stripWrappingQuotes(try await rewrite(segment, level: level, deadline: deadline))
             switch CleanupGuard.check(original: segment, cleaned: output, level: level) {
             case .accept:
-                return Self.finishSentence(output)
+                // The model never sees the dictionary; re-apply so it can't undo the user's spellings.
+                return Self.finishSentence(DictionaryCorrector.apply(output, dictionary: dictionary))
             case .reject(let reason):
                 Self.log.notice("model output rejected: \(reason, privacy: .public)")
                 return RuleCleaner.clean(segment)

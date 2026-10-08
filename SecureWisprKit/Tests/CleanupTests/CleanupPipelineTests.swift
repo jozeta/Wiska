@@ -144,4 +144,27 @@ struct CleanupPipelineTests {
         let out = try await clean("hey Anna thanks for the update I'll uh I'll look at it tonight", pipeline())
         #expect(out == "Hey Anna thanks for the update I'll look at it tonight.")
     }
+    func pipeline(_ level: CleanupLevel, dictionary: PersonalDictionary) -> CleanupPipeline {
+        CleanupPipeline(level: { level }, rewriter: rewriter, dictionary: { dictionary }, timeout: .seconds(5))
+    }
+
+    let memory = PersonalDictionary(words: ["Kvarnholmen"],
+                                    replacements: [Replacement(heard: "secure whisper", written: "SecureWispr")])
+
+    @Test func dictionaryAppliesEvenWhenCleanupIsOff() async throws {
+        let out = try await clean("um the Kvarnholman launch of secure whisper", pipeline(.off, dictionary: memory))
+        #expect(out == "um the Kvarnholmen launch of SecureWispr")
+    }
+
+    @Test func modelSeesCorrectedText() async throws {
+        rewriter.transform = { $0 }
+        _ = try await clean("the Kvarnholman launch of secure whisper", pipeline(.polished, dictionary: memory))
+        #expect(rewriter.calls == ["the Kvarnholmen launch of SecureWispr"])
+    }
+
+    @Test func dictionaryIsReappliedAfterTheModel() async throws {
+        rewriter.transform = { _ in "The Kvarnholman launch of SecureWispr." }   // model "undid" a spelling
+        let out = try await clean("the kvarnholmen launch of secure whisper", pipeline(.polished, dictionary: memory))
+        #expect(out == "The Kvarnholmen launch of SecureWispr.")
+    }
 }
