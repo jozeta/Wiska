@@ -122,8 +122,9 @@ public final class DictationController {
                 self?.capturedSamples += chunk.samples.count
             }
             // Stream ended while still listening: the recorder stopped on its own
-            // (e.g. audio device change). Transcribe what we have.
-            if self?.state == .listening {
+            // (e.g. audio device change). Transcribe what we have. A cancelled task's
+            // stream ended because we stopped it, and .listening may be a newer recording.
+            if !Task.isCancelled, self?.state == .listening {
                 Self.log.notice("audio capture ended unexpectedly; finishing dictation")
                 self?.handle(.finish)
             }

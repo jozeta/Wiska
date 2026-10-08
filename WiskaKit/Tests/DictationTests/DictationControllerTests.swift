@@ -130,6 +130,8 @@ struct DictationControllerTests {
         controller.handle(en)
         audio.emit([0.1])
         controller.handle(.switchLanguage(.fixed(.swedish)))
+        // Let the first recording's task notice its stream ended: it must not finish the new one.
+        try? await Task.sleep(for: .milliseconds(50))
         #expect(!recorder.states.contains(.idle))
         #expect(controller.state == .listening)
         #expect(controller.currentChoice == .fixed(.swedish))
