@@ -1,3 +1,4 @@
+import CoreGraphics
 import Observation
 
 public enum HUDContent: Equatable, Sendable {
@@ -10,4 +11,8 @@ public enum HUDContent: Equatable, Sendable {
 @MainActor @Observable
 final class HUDModel {
     var content: HUDContent = .hidden
+    var insetTop: CGFloat = 0
+    var hasNotch = false
+    /// Messages that are failures render in the danger colour.
+    var isError = false
 }
