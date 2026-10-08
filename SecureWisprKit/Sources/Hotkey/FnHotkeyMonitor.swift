@@ -43,14 +43,16 @@ public final class FnHotkeyMonitor {
         Self.log.info("fn event tap started")
     }
 
-    fileprivate func receive(type: CGEventType, keyCode: Int64, fnFlag: Bool, time: TimeInterval) {
+    fileprivate func receive(type: CGEventType, keyCode: Int64, fnFlag: Bool, shiftFlag: Bool, time: TimeInterval) {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
-            Self.log.notice("event tap was disabled by the system; re-enabled")
+            // Events were lost while disabled; a missed fn-up would leave us stuck.
+            if machine.reset() { continuation.yield(.cancelled) }
+            Self.log.notice("event tap was disabled by the system; re-enabled and reset")
         case .flagsChanged:
             guard keyCode == Self.fnKeyCode else { return }
-            feed(.flagsChanged(fnDown: fnFlag, time: time))
+            feed(.flagsChanged(fnDown: fnFlag, shift: shiftFlag, time: time))
         case .keyDown:
             feed(.keyDown(time: time))
         default:
@@ -72,9 +74,10 @@ private func fnTapCallback(
         // Copy out plain values: CGEvent is not Sendable, so it can't cross into main-actor code.
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let fnFlag = event.flags.contains(.maskSecondaryFn)
+        let shiftFlag = event.flags.contains(.maskShift)
         let time = TimeInterval(event.timestamp) / 1_000_000_000
         MainActor.assumeIsolated {
-            monitor.receive(type: type, keyCode: keyCode, fnFlag: fnFlag, time: time)
+            monitor.receive(type: type, keyCode: keyCode, fnFlag: fnFlag, shiftFlag: shiftFlag, time: time)
         }
     }
     return Unmanaged.passUnretained(event)

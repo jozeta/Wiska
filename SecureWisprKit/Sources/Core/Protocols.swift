@@ -1,8 +1,13 @@
 import Foundation
 
 public enum HotkeyEvent: Sendable, Equatable {
-    case pressed
+    /// fn went down; `shifted` = ⇧ was held at that moment.
+    case pressed(shifted: Bool)
+    /// fn went up after the minimum hold, uninterrupted.
     case released
+    /// fn went up before the minimum hold (accidental tap, or a deliberate quick tap).
+    case tapped(shifted: Bool)
+    /// Another key went down while fn was held (fn+arrow etc.).
     case cancelled
 }
 

@@ -67,7 +67,7 @@ public final class DictationController {
             // the pipeline runs can't cancel or restart it.
             state = transcriber.isReady ? .transcribing : .preparingModel
             currentTask = Task { await finishDictation() }
-        case .cancelled:
+        case .cancelled, .tapped:
             guard state == .listening else { return }
             cancelListening()
         }
