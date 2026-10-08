@@ -1,0 +1,106 @@
+import Core
+import Foundation
+@testable import Dictation
+
+/// Records distinct consecutive states (a class, so @MainActor closures can mutate it under Swift 6).
+@MainActor
+final class StateRecorder {
+    private(set) var states: [DictationController.State] = []
+    func record(_ state: DictationController.State) {
+        if states.last != state { states.append(state) }
+    }
+}
+
+@MainActor
+final class FakeAudio: AudioSource {
+    var startCount = 0
+    var failOnStart = false
+    private var chunks: AsyncStream<AudioChunk>.Continuation?
+    private var levels: AsyncStream<Float>.Continuation?
+
+    func start() throws -> AudioCapture {
+        startCount += 1
+        if failOnStart { throw AudioError.noInputDevice }
+        let (c, cc) = AsyncStream.makeStream(of: AudioChunk.self)
+        let (l, lc) = AsyncStream.makeStream(of: Float.self)
+        chunks = cc
+        levels = lc
+        return AudioCapture(chunks: c, levels: l)
+    }
+
+    func emit(_ samples: [Float]) { chunks?.yield(AudioChunk(samples: samples)) }
+    func emitLevel(_ level: Float) { levels?.yield(level) }
+
+    func stop() {
+        chunks?.finish()
+        levels?.finish()
+    }
+}
+
+struct FakeError: Error {}
+
+@MainActor
+final class FakeSession: TranscriptionSession {
+    var result: Result<String, FakeError> = .success("hello world")
+    var language: Language? = .english
+    var finishDelay: Duration = .zero
+    private(set) var appended: [[Float]] = []
+    private(set) var cancelled = false
+
+    func append(_ chunk: AudioChunk) { appended.append(chunk.samples) }
+
+    func finish() async throws -> Transcript {
+        if finishDelay > .zero { try await Task.sleep(for: finishDelay) }
+        return Transcript(text: try result.get(), locale: Locale(identifier: "en_US"), language: language)
+    }
+
+    func cancel() { cancelled = true }
+}
+
+@MainActor
+final class Box<Value> {
+    var value: Value
+    init(_ value: Value) { self.value = value }
+}
+
+@MainActor
+final class FakeTranscriber: Transcriber {
+    let session = FakeSession()
+    var isReady = true
+    var makeDelay: Duration = .zero
+    private(set) var languages: [LanguageChoice] = []
+
+    func prepare() async throws {}
+
+    func makeSession(language: LanguageChoice) async throws -> any TranscriptionSession {
+        languages.append(language)
+        if makeDelay > .zero { try await Task.sleep(for: makeDelay) }
+        return session
+    }
+}
+
+@MainActor
+final class FakeCleaner: TextCleaner {
+    private(set) var contexts: [DictationContext] = []
+    private(set) var prewarmCount = 0
+    func prewarm() { prewarmCount += 1 }
+
+    var output: String?
+
+    func clean(_ text: String, context: DictationContext) async throws -> String {
+        contexts.append(context)
+        if let output { return output }
+        return "cleaned: \(text)"
+    }
+}
+
+@MainActor
+final class FakeInjector: TextInjector {
+    var error: InjectionError?
+    private(set) var injected: [String] = []
+
+    func inject(_ text: String) async throws {
+        if let error { throw error }
+        injected.append(text)
+    }
+}

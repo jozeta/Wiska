@@ -6,3 +6,4 @@ DerivedData/
 .remember/
 build/
 Local.xcconfig
+.superpowers/
