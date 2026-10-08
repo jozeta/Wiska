@@ -46,4 +46,11 @@ struct SettingsStoreTests {
         store.cleanupLevel = .light
         #expect(SettingsStore(defaults: defaults).cleanupLevel == .light)
     }
+
+    @Test func historyRetentionDefaultsToAWeekAndPersists() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.historyRetention == .week)
+        store.historyRetention = .month
+        #expect(SettingsStore(defaults: defaults).historyRetention == .month)
+    }
 }
