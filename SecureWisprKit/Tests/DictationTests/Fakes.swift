@@ -42,6 +42,7 @@ struct FakeError: Error {}
 @MainActor
 final class FakeSession: TranscriptionSession {
     var result: Result<String, FakeError> = .success("hello world")
+    var language: Language? = .english
     var finishDelay: Duration = .zero
     private(set) var appended: [[Float]] = []
     private(set) var cancelled = false
@@ -50,10 +51,16 @@ final class FakeSession: TranscriptionSession {
 
     func finish() async throws -> Transcript {
         if finishDelay > .zero { try await Task.sleep(for: finishDelay) }
-        return Transcript(text: try result.get(), locale: Locale(identifier: "en_US"))
+        return Transcript(text: try result.get(), locale: Locale(identifier: "en_US"), language: language)
     }
 
     func cancel() { cancelled = true }
+}
+
+@MainActor
+final class Box<Value> {
+    var value: Value
+    init(_ value: Value) { self.value = value }
 }
 
 @MainActor
