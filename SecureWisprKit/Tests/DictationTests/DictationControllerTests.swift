@@ -272,4 +272,62 @@ struct DictationControllerTests {
         #expect(controller.state == .failed(.noSpeech))
         #expect(injector.injected.isEmpty)
     }
+
+    func recording(_ controller: DictationController) -> Box<[DictationRecord]> {
+        let records = Box<[DictationRecord]>([])
+        controller.onDictationFinished = { records.value.append($0) }
+        return records
+    }
+
+    @Test func successfulDictationIsRecorded() async {
+        let controller = makeController()
+        let records = recording(controller)
+        controller.handle(en)
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        #expect(records.value.count == 1)
+        let record = records.value[0]
+        #expect(record.rawText == "hello world")
+        #expect(record.finalText == "cleaned: hello world")
+        #expect(record.pasted)
+        #expect(record.appBundleID == "com.apple.TextEdit")
+        #expect(record.language == .english)
+        #expect(record.engine == .apple)
+    }
+
+    @Test func failedPasteIsRecordedForRescue() async {
+        injector.error = .eventCreationFailed
+        let controller = makeController()
+        let records = recording(controller)
+        controller.handle(en)
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        #expect(records.value.map(\.pasted) == [false])
+        #expect(records.value.first?.finalText == "cleaned: hello world")
+    }
+
+    @Test func secureInputNoSpeechAndCancelAreNotRecorded() async {
+        let controller = makeController()
+        let records = recording(controller)
+
+        injector.error = .secureInputActive
+        controller.handle(en); controller.handle(.finish); await controller.currentTask?.value
+
+        injector.error = nil
+        transcriber.session.result = .success("")
+        controller.handle(en); controller.handle(.finish); await controller.currentTask?.value
+
+        controller.handle(en); controller.handle(.cancel); await controller.currentTask?.value
+        #expect(records.value.isEmpty)
+    }
+
+    @Test func recordCallbackDoesNotAffectState() async {
+        let controller = makeController()
+        controller.onDictationFinished = { _ in }
+        controller.handle(en)
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        #expect(controller.state == .idle)
+        #expect(injector.injected == ["cleaned: hello world"])
+    }
 }

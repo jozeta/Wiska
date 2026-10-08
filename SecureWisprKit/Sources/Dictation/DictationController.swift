@@ -25,6 +25,8 @@ public final class DictationController {
     public private(set) var currentChoice: LanguageChoice?
     public var onChange: (@MainActor (State, [Float]) -> Void)?
     public var onLanguageDetected: (@MainActor (Language) -> Void)?
+    /// A finished dictation (pasted, or paste failed) for history. Never for secure input.
+    public var onDictationFinished: (@MainActor (DictationRecord) -> Void)?
 
     private let audio: any AudioSource
     private let transcriberProvider: @MainActor () -> any Transcriber
@@ -152,23 +154,26 @@ public final class DictationController {
         }
         Self.log.debug("transcript: \(transcript.text, privacy: .private)")
 
+        var finalText = ""
         do {
             state = .cleaning
-            let cleaned = try await cleaner.clean(transcript.text, context: context)
+            finalText = try await cleaner.clean(transcript.text, context: context)
             // Voice commands can remove everything ("scratch that" alone): nothing to paste.
-            guard !cleaned.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            guard !finalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 fail(.noSpeech)
                 return
             }
             state = .injecting
-            try await injector.inject(cleaned)
+            try await injector.inject(finalText)
         } catch InjectionError.secureInputActive {
             fail(.secureInput)
             return
         } catch {
+            if !finalText.isEmpty { record(transcript, finalText, pasted: false) }
             fail(.injection(String(describing: error)))
             return
         }
+        record(transcript, finalText, pasted: true)
         let latency = ContinuousClock.now - releasedAt
         lastLatency = latency
         Self.log.info("release→inject \(latency.formatted(.units(allowed: [.milliseconds])), privacy: .public)")
@@ -176,6 +181,13 @@ public final class DictationController {
         if currentChoice == .automatic, let language = transcript.language {
             onLanguageDetected?(language)
         }
+    }
+
+    private func record(_ transcript: Transcript, _ finalText: String, pasted: Bool) {
+        onDictationFinished?(DictationRecord(
+            date: Date(), appBundleID: context.appBundleID, language: transcript.language,
+            engine: activeTranscriber?.engine ?? .apple, rawText: transcript.text,
+            finalText: finalText, pasted: pasted))
     }
 
     private func cancelListening() {
