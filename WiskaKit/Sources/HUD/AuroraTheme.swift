@@ -1,3 +1,4 @@
+import Core
 import SwiftUI
 
 /// Wiska's Midnight Aurora palette.
@@ -9,6 +10,12 @@ public enum AuroraTheme {
     public static let danger = Color(hex: 0xFF9A9A)
     public static let textPrimary = Color(hex: 0xE8ECF2)
     public static let textSecondary = Color(hex: 0x8A93A3)
+
+    public static func start(_ highlight: Highlight) -> Color { Color(hex: highlight.start) }
+    public static func end(_ highlight: Highlight) -> Color { Color(hex: highlight.end) }
+    public static func gradient(_ highlight: Highlight) -> LinearGradient {
+        LinearGradient(colors: [start(highlight), end(highlight)], startPoint: .leading, endPoint: .trailing)
+    }
 
     public static var gradient: LinearGradient {
         LinearGradient(colors: [teal, violet], startPoint: .leading, endPoint: .trailing)

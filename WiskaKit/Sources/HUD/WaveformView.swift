@@ -1,9 +1,11 @@
+import Core
 import SwiftUI
 
-/// Bars for the most recent loudness samples; newest on the right, coloured teal → violet.
+/// Bars for the most recent loudness samples; newest on the right, coloured along the highlight.
 struct WaveformView: View {
     static let barCount = 20
     let levels: [Float]
+    let highlight: Highlight
 
     var body: some View {
         HStack(alignment: .center, spacing: 3) {
@@ -24,8 +26,10 @@ struct WaveformView: View {
 
     private func color(at index: Int) -> Color {
         let t = Double(index) / Double(Self.barCount - 1)
-        return Color(red: (0x3E + (0x8B - 0x3E) * t) / 255,
-                     green: (0xE6 + (0x6C - 0xE6) * t) / 255,
-                     blue: (0xC1 + (0xFF - 0xC1) * t) / 255)
+        func channel(_ shift: UInt32) -> Double {
+            let a = Double((highlight.start >> shift) & 0xFF), b = Double((highlight.end >> shift) & 0xFF)
+            return (a + (b - a) * t) / 255
+        }
+        return Color(.sRGB, red: channel(16), green: channel(8), blue: channel(0))
     }
 }

@@ -1,3 +1,4 @@
+import Core
 import CoreGraphics
 import Observation
 
@@ -15,4 +16,7 @@ final class HUDModel {
     var content: HUDContent = .hidden
     var insetTop: CGFloat = 0
     var hasNotch = false
+    var highlight: Highlight = .aurora
+    /// 0 = tucked into the notch, 1 = fully down. Animated by the panel controller.
+    var reveal: CGFloat = 0
 }

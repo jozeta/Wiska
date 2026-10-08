@@ -1,17 +1,18 @@
 import AppKit
+import Core
 import SwiftUI
 
 /// The notch capsule: a click-through panel above the menu bar that never takes focus.
+/// The panel keeps a fixed frame while shown; the capsule glides inside it (`HUDModel.reveal`).
 @MainActor
 public final class HUDPanelController {
-    static let contentSize = CGSize(width: 260, height: 44)
-    static let animation: TimeInterval = 0.18
+    static let contentSize = CGSize(width: NotchLayout.fallbackWidth, height: HUDView.contentHeight)
 
     private let model = HUDModel()
     private let panel: NSPanel
-    private var placement: NotchLayout.Placement?
-    /// Bumped by every expand and collapse, so a finished collapse animation only hides the
-    /// panel if nothing has happened since (a quick hide → show → hide must not cut short).
+    private var requested: HUDContent = .hidden
+    /// Bumped by every show and hide, so a finished hide animation only orders the panel out
+    /// if nothing has happened since (a quick hide → show must not cut short).
     private var generation = 0
 
     public init() {
@@ -28,55 +29,69 @@ public final class HUDPanelController {
         panel.contentView = NSHostingView(rootView: HUDView(model: model))
     }
 
-    public func show(_ content: HUDContent) {
-        guard model.content != content else { return }
-        let wasHidden = model.content == .hidden
-        if content == .hidden {
-            collapse()
-            return
-        }
-        model.content = content
-        if wasHidden { expand() }
+    public var highlight: Highlight {
+        get { model.highlight }
+        set { model.highlight = newValue }
     }
 
-    private func expand() {
+    public func show(_ content: HUDContent) {
+        guard content != requested else { return }
+        requested = content
         generation += 1
+        guard content != .hidden else { return hide() }
+        if !panel.isVisible { place() }
+        // Waveform levels update ~10×/s: only a change of kind (listening → transcribing) cross-fades.
+        if Self.kind(model.content) == Self.kind(content) {
+            model.content = content
+        } else {
+            withAnimation(.easeInOut(duration: 0.12)) { model.content = content }
+        }
+        if model.reveal < 1 {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) { model.reveal = 1 }
+        }
+    }
+
+    private func place() {
         guard let screen = activeScreen() else { return }
-        let placement = NotchLayout.placement(on: NotchLayout.Screen(
-            frame: screen.frame, visibleFrame: screen.visibleFrame, safeTop: screen.safeAreaInsets.top,
-            auxLeft: screen.auxiliaryTopLeftArea, auxRight: screen.auxiliaryTopRightArea),
-            referenceWidth: NotchLayout.fallbackWidth, contentHeight: Self.contentSize.height)
-        self.placement = placement
+        let placement = NotchLayout.placement(on: Self.layoutScreen(screen), referenceWidth: Self.referenceWidth,
+                                              contentHeight: HUDView.contentHeight)
         model.insetTop = placement.contentInsetTop
         model.hasNotch = placement.hasNotch
+        model.reveal = 0
         panel.setFrame(placement.frame, display: false)
         panel.orderFrontRegardless()
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = Self.animation
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            panel.animator().setFrame(placement.frame, display: true)
+    }
+
+    private func hide() {
+        let token = generation
+        withAnimation(.easeIn(duration: 0.2)) {
+            model.reveal = 0
+        } completion: { [weak self] in
+            guard let self, self.generation == token else { return }   // shown again meanwhile
+            self.model.content = .hidden
+            self.panel.orderOut(nil)
         }
     }
 
-    private func collapse() {
-        guard let placement else {
-            model.content = .hidden
-            panel.orderOut(nil)
-            return
+    private static func kind(_ content: HUDContent) -> Int {
+        switch content {
+        case .hidden: 0
+        case .listening: 1
+        case .working: 2
+        case .message: 3
+        case .error: 4
         }
-        generation += 1
-        let collapse = generation
-        let end = placement.frame
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = Self.animation
-            panel.animator().setFrame(end, display: true)
-        }, completionHandler: { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self, self.generation == collapse else { return }
-                self.panel.orderOut(nil)
-            }
-        })
-        model.content = .hidden
+    }
+
+    /// The built-in notch width, so capsules on other screens match it.
+    private static var referenceWidth: CGFloat {
+        NSScreen.screens.lazy.compactMap { NotchLayout.notchWidth(layoutScreen($0)) }.first
+            ?? NotchLayout.fallbackWidth
+    }
+
+    private static func layoutScreen(_ screen: NSScreen) -> NotchLayout.Screen {
+        NotchLayout.Screen(frame: screen.frame, visibleFrame: screen.visibleFrame, safeTop: screen.safeAreaInsets.top,
+                           auxLeft: screen.auxiliaryTopLeftArea, auxRight: screen.auxiliaryTopRightArea)
     }
 
     private func activeScreen() -> NSScreen? {
