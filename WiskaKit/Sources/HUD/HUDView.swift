@@ -35,7 +35,9 @@ struct HUDView: View {
                 Text(text)
             }
         case .message(let text):
-            Text(text).foregroundStyle(model.isError ? AuroraTheme.danger : AuroraTheme.textPrimary)
+            Text(text)
+        case .error(let text):
+            Text(text).foregroundStyle(AuroraTheme.danger)
         }
     }
 }

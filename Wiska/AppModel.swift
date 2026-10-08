@@ -120,8 +120,14 @@ final class AppModel {
                         firstDictationDone: settings.firstDictationDone)
     }
 
-    var shouldShowOnboardingAtLaunch: Bool {
-        onboarding.shouldOpenAtLaunch(completed: settings.onboardingCompleted)
+    @ObservationIgnored private var onboardingOffered = false
+
+    /// True at most once per launch: SwiftUI may rebuild the menu-bar label (and re-run its
+    /// onAppear) at any time, and the checklist must not pop up again each time.
+    func takeOnboardingLaunchOffer() -> Bool {
+        guard !onboardingOffered else { return false }
+        onboardingOffered = true
+        return onboarding.shouldOpenAtLaunch(completed: settings.onboardingCompleted)
     }
 
     /// "This week: … words · … saved", nil when there's nothing to show.
@@ -272,7 +278,7 @@ final class AppModel {
         case .listening: .listening(levels: levels, badge: badge)
         case .preparingModel: .working("Downloading speech model…")
         case .transcribing, .cleaning, .injecting: .working("Transcribing…")
-        case .failed(let failure): .message(failure.message)
+        case .failed(let failure): .error(failure.message)
         }
     }
 }

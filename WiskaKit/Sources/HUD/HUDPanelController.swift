@@ -6,15 +6,13 @@ import SwiftUI
 public final class HUDPanelController {
     static let contentSize = CGSize(width: 260, height: 44)
     static let animation: TimeInterval = 0.18
-    /// Failure texts shown in the danger colour (matches DictationFailure messages).
-    static let errorMessages: Set<String> = [
-        "No speech detected", "Can't type here", "Microphone unavailable",
-        "Couldn't transcribe", "Couldn't insert text",
-    ]
 
     private let model = HUDModel()
     private let panel: NSPanel
     private var placement: NotchLayout.Placement?
+    /// Bumped by every expand and collapse, so a finished collapse animation only hides the
+    /// panel if nothing has happened since (a quick hide → show → hide must not cut short).
+    private var generation = 0
 
     public init() {
         panel = NSPanel(contentRect: NSRect(origin: .zero, size: Self.contentSize),
@@ -37,13 +35,12 @@ public final class HUDPanelController {
             collapse()
             return
         }
-        if case .message(let text) = content { model.isError = Self.errorMessages.contains(text) }
-        else { model.isError = false }
         model.content = content
         if wasHidden { expand() }
     }
 
     private func expand() {
+        generation += 1
         guard let screen = activeScreen() else { return }
         let placement = NotchLayout.placement(on: NotchLayout.Screen(
             frame: screen.frame, visibleFrame: screen.visibleFrame, safeTop: screen.safeAreaInsets.top,
@@ -69,13 +66,15 @@ public final class HUDPanelController {
             panel.orderOut(nil)
             return
         }
+        generation += 1
+        let collapse = generation
         let end = HUDTransition.collapsedFrame(placement)
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = Self.animation
             panel.animator().setFrame(end, display: true)
         }, completionHandler: { [weak self] in
             MainActor.assumeIsolated {
-                guard let self, self.model.content == .hidden else { return }
+                guard let self, self.generation == collapse else { return }
                 self.panel.orderOut(nil)
             }
         })
