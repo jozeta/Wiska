@@ -156,6 +156,15 @@ struct ParakeetTests {
         #expect(!t.hasLoadFailure)
     }
 
+    @Test func languageGuessIsLimitedToTickedLanguages() async throws {
+        let backend = FakeBackend()
+        backend.text = "Kan du skicka rapporten till mig innan lunch imorgon?"
+        let session = ParakeetSession(backend: backend, languages: [.english, .danish])
+        session.append(AudioChunk(samples: Array(repeating: 0.1, count: 16_000)))
+        let language = try await session.finish().language
+        #expect(language == .danish || language == .english)
+    }
+
     /// Only run against a *completed* install made by the app: constructing a store on an
     /// unmarked folder deletes it as a partial download, and tests must never touch user data.
     nonisolated static var completedInstallPresent: Bool {

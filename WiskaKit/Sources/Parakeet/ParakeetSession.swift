@@ -8,11 +8,14 @@ final class ParakeetSession: TranscriptionSession {
     static let minimumSamples = Int(AudioChunk.sampleRate)
 
     private let backend: any SpeechRecognizerBackend
+    /// The ticked languages: the language guess chooses among these only.
+    private let languages: [Language]
     private var samples: [Float] = []
     private var cancelled = false
 
-    init(backend: any SpeechRecognizerBackend) {
+    init(backend: any SpeechRecognizerBackend, languages: [Language] = Language.allCases) {
         self.backend = backend
+        self.languages = languages
     }
 
     func append(_ chunk: AudioChunk) {
@@ -29,7 +32,7 @@ final class ParakeetSession: TranscriptionSession {
             audio += Array(repeating: 0, count: Self.minimumSamples - audio.count)
         }
         let text = try await backend.transcribe(audio).trimmingCharacters(in: .whitespacesAndNewlines)
-        let language = LanguageGuess.detect(text)
+        let language = LanguageGuess.detect(text, among: languages)
         return Transcript(text: text, locale: language?.locale ?? Locale(identifier: "und"),
                           confidence: nil, language: language)
     }

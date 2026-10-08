@@ -53,9 +53,10 @@ final class AppModel {
         }
         self.settings = settings
         parakeetStore = store
-        apple = AppleTranscriber(fallbackLanguage: { settings.lastDetectedLanguage },
+        apple = AppleTranscriber(languages: { settings.enabledLanguages },
+                                 fallbackLanguage: { settings.lastDetectedLanguage },
                                  vocabulary: { dictionaryStore.dictionary.words })
-        parakeet = ParakeetTranscriber(store: store)
+        parakeet = ParakeetTranscriber(store: store, languages: { settings.enabledLanguages })
         let rewriter = FoundationModelsRewriter()
         self.rewriter = rewriter
         controller = DictationController(
@@ -175,6 +176,16 @@ final class AppModel {
         case .hybrid(let appleLanguages):
             return HybridTranscriber(parakeet: parakeet, apple: apple, appleLanguages: appleLanguages,
                                      fallbackLanguage: { [settings] in settings.lastDetectedLanguage })
+        }
+    }
+
+    /// The ticked set changed: give back Apple's slots for unticked languages, then fetch
+    /// assets for newly ticked ones in the background.
+    func tickedLanguagesChanged() {
+        warmUpParakeetIfSelected()
+        Task { [apple] in
+            await apple.releaseUnticked()
+            try? await apple.prepare()
         }
     }
 

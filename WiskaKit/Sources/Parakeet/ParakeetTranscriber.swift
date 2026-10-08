@@ -13,6 +13,8 @@ public enum ParakeetError: Error, Equatable {
 public final class ParakeetTranscriber: Transcriber {
     @ObservationIgnored private let store: ParakeetModelStore
     @ObservationIgnored private let loader: @MainActor (URL) async throws -> any SpeechRecognizerBackend
+    /// The ticked languages, for guessing which one Parakeet heard.
+    @ObservationIgnored private let languages: @MainActor () -> [Language]
     private var backend: (any SpeechRecognizerBackend)?
     @ObservationIgnored private var loading: Task<any SpeechRecognizerBackend, Error>?
     @ObservationIgnored private var loadFailure: Error?
@@ -20,13 +22,16 @@ public final class ParakeetTranscriber: Transcriber {
     public var isReady: Bool { backend != nil && store.isInstalled }
     public var engine: SpeechEngine { .parakeet }
 
-    public convenience init(store: ParakeetModelStore) {
-        self.init(store: store, loader: { try await FluidAudioBackend.load(from: $0) })
+    public convenience init(store: ParakeetModelStore,
+                            languages: @escaping @MainActor () -> [Language] = { Language.allCases }) {
+        self.init(store: store, loader: { try await FluidAudioBackend.load(from: $0) }, languages: languages)
     }
 
-    init(store: ParakeetModelStore, loader: @escaping @MainActor (URL) async throws -> any SpeechRecognizerBackend) {
+    init(store: ParakeetModelStore, loader: @escaping @MainActor (URL) async throws -> any SpeechRecognizerBackend,
+         languages: @escaping @MainActor () -> [Language] = { Language.allCases }) {
         self.store = store
         self.loader = loader
+        self.languages = languages
         store.onRemove = { [weak self] in self?.unload() }
     }
 
@@ -77,6 +82,6 @@ public final class ParakeetTranscriber: Transcriber {
     public func makeSession(language: LanguageChoice) async throws -> any TranscriptionSession {
         try await prepare()
         guard let backend else { throw ParakeetError.modelNotInstalled }
-        return ParakeetSession(backend: backend)
+        return ParakeetSession(backend: backend, languages: languages())
     }
 }

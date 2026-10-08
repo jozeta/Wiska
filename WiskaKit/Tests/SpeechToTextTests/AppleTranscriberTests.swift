@@ -7,23 +7,8 @@ import Testing
 
 @MainActor
 struct AppleTranscriberTests {
-    /// Speaks `text` with the system voice into a temp AIFF and returns 16 kHz mono samples.
     private func spokenSamples(_ text: String, voice: String = "Samantha") throws -> [Float] {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("securewispr-\(UUID().uuidString).aiff")
-        let say = Process()
-        say.executableURL = URL(fileURLWithPath: "/usr/bin/say")
-        say.arguments = ["-v", voice, "-o", url.path, text]
-        try say.run()
-        say.waitUntilExit()
-        defer { try? FileManager.default.removeItem(at: url) }
-
-        let file = try AVAudioFile(forReading: url)
-        let buffer = try #require(AVAudioPCMBuffer(
-            pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)
-        ))
-        try file.read(into: buffer)
-        return try PCMConverter(from: file.processingFormat, to: .speech16kMono).convert(buffer).floatSamples
+        try SpeechSamples.spoken(text, voice: voice)
     }
 
     @Test(.enabled(if: SpeechTranscriber.isAvailable), .timeLimit(.minutes(2)))
@@ -143,5 +128,20 @@ struct AppleTranscriberTests {
         let transcript = try await transcribe(samples, .fixed(.swedish), transcriber: transcriber)
         #expect(transcript.text.contains("Jozeta"), "\(transcript.text)")
         #expect(transcriber.engine == .apple)
+    }
+
+    @Test func prepareInstallsOnlyTickedLanguages() async throws {
+        var installed: [Language] = []
+        let transcriber = AppleTranscriber(languages: { [.english, .german] }, installer: { installed.append($0) })
+        try await transcriber.prepare()
+        #expect(installed == [.english, .german])
+        #expect(transcriber.isReady)
+    }
+
+    @Test func automaticWithOneLanguageStartsOneSession() async throws {
+        let transcriber = AppleTranscriber(languages: { [.english] })
+        let session = try await transcriber.makeSession(language: .automatic)
+        #expect(!(session is AutoDetectSession))
+        session.cancel()
     }
 }
