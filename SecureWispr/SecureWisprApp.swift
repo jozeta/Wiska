@@ -17,7 +17,7 @@ struct SecureWisprApp: App {
             Image(systemName: model.menuBarSymbol)
         }
         Settings {
-            SettingsView()
+            SettingsView(model: model)
         }
     }
 }

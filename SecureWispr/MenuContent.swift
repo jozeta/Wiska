@@ -5,6 +5,15 @@ struct MenuContent: View {
 
     var body: some View {
         Text(model.statusLine)
+        Text(model.languageStatus)
+        if model.settings.languageMode == .toggle && !model.parakeetUnavailable {
+            Button("Switch to \(model.settings.toggleLanguage.other.displayName)") {
+                model.switchToggleLanguage()
+            }
+        }
+        if model.parakeetUnavailable {
+            Text("Parakeet unavailable — using Apple")
+        }
         if !model.missingPermissions.isEmpty {
             Divider()
             ForEach(model.missingPermissions) { permission in
