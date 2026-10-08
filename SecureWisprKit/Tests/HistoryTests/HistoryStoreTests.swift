@@ -1,0 +1,74 @@
+import Core
+import Foundation
+import Testing
+@testable import History
+
+@MainActor
+struct HistoryStoreTests {
+    let store = try! HistoryStore(inMemory: true)
+    let now = Date()
+
+    func record(_ text: String, ageDays: Double = 0, pasted: Bool = true) -> DictationRecord {
+        DictationRecord(date: now.addingTimeInterval(-ageDays * 86_400), appBundleID: "com.apple.TextEdit",
+                        language: .swedish, engine: .apple, rawText: "öh \(text)", finalText: text, pasted: pasted)
+    }
+
+    @Test func addsAndListsNewestFirst() {
+        store.add(record("first", ageDays: 2), retention: .forever)
+        store.add(record("second", ageDays: 1), retention: .forever)
+        #expect(store.items(matching: "").map(\.record.finalText) == ["second", "first"])
+    }
+
+    @Test func searchMatchesRawOrFinalTextCaseInsensitively() {
+        store.add(record("Skicka rapporten"), retention: .forever)
+        store.add(record("Something else"), retention: .forever)
+        #expect(store.items(matching: "RAPPORT").map(\.record.finalText) == ["Skicka rapporten"])
+        #expect(store.items(matching: "öh").count == 2)
+    }
+
+    @Test func roundTripsAllFields() {
+        let original = record("hej", pasted: false)
+        store.add(original, retention: .forever)
+        let stored = store.items(matching: "").first?.record
+        #expect(stored?.language == .swedish)
+        #expect(stored?.engine == .apple)
+        #expect(stored?.pasted == false)
+        #expect(stored?.appBundleID == "com.apple.TextEdit")
+        #expect(stored?.rawText == "öh hej")
+    }
+
+    @Test func recordIsIgnoredWhenRetentionIsOff() {
+        store.add(record("secret"), retention: .off)
+        #expect(store.items(matching: "").isEmpty)
+    }
+
+    @Test func applyingShorterRetentionPurgesImmediately() {
+        store.add(record("old", ageDays: 10), retention: .forever)
+        store.add(record("recent", ageDays: 0.5), retention: .forever)
+        store.apply(retention: .day, now: now)
+        #expect(store.items(matching: "").map(\.record.finalText) == ["recent"])
+    }
+
+    @Test func retentionOffDeletesEverything() {
+        store.add(record("a"), retention: .forever)
+        store.apply(retention: .off, now: now)
+        #expect(store.items(matching: "").isEmpty)
+    }
+
+    @Test func deleteOneAndDeleteAll() {
+        store.add(record("a"), retention: .forever)
+        store.add(record("b"), retention: .forever)
+        let first = store.items(matching: "")[0]
+        store.delete(first.id)
+        #expect(store.items(matching: "").count == 1)
+        store.deleteAll()
+        #expect(store.items(matching: "").isEmpty)
+    }
+
+    @Test func revisionChangesOnEveryMutation() {
+        let start = store.revision
+        store.add(record("a"), retention: .forever)
+        store.deleteAll()
+        #expect(store.revision == start + 2)
+    }
+}
