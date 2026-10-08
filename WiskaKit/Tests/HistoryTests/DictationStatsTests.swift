@@ -28,12 +28,6 @@ struct DictationStatsTests {
         #expect(DictationStats.compute([r(40, nil)], now: now).timeSaved == 60)
     }
 
-    @Test func languageShares() {
-        let stats = DictationStats.compute([r(60, .swedish), r(40, .english), r(50, nil)], now: now)
-        #expect(stats.swedishShare == 0.6)
-        #expect(stats.englishShare == 0.4)
-    }
-
     @Test func onlyLastSevenDaysAndPastedCount() {
         let stats = DictationStats.compute([r(10, .english), r(20, .english, ageDays: 8),
                                             r(30, .english, pasted: false)], now: now)
@@ -41,25 +35,40 @@ struct DictationStatsTests {
     }
 
     @Test func menuLineFormatting() {
-        let stats = DictationStats(words: 2_340, timeSaved: 48 * 60 + 10, swedishShare: 0.6, englishShare: 0.4)
+        let stats = DictationStats(words: 2_340, timeSaved: 48 * 60 + 10, shares: [.swedish: 0.6, .english: 0.4])
         #expect(StatsFormatter.menuLine(stats, locale: Locale(identifier: "en_US"))
                 == "This week: 2,340 words · 48 min saved")
         #expect(StatsFormatter.savedText(30) == "< 1 min")
     }
 
     @Test func menuLineHiddenWhenNoWords() {
-        #expect(StatsFormatter.menuLine(DictationStats(words: 0, timeSaved: 0, swedishShare: 0, englishShare: 0)) == nil)
+        #expect(StatsFormatter.menuLine(DictationStats(words: 0, timeSaved: 0, shares: [:])) == nil)
     }
 
-    @Test func languagePercentsAlwaysAddUpTo100() {
-        let stats = DictationStats(words: 3, timeSaved: 0, swedishShare: 0.335, englishShare: 0.665)
+    @Test func sharesPerLanguage() {
+        let stats = DictationStats.compute([r(30, .swedish), r(10, .english), r(20, .german), r(50, nil)], now: now)
+        #expect(stats.shares[.swedish] == 0.5)
+        #expect(stats.shares[.german] == 20.0 / 60)
+        #expect(stats.shares[.french] == nil)
+    }
+
+    @Test func percentsAddUpTo100LargestFirst() {
+        let stats = DictationStats(words: 3, timeSaved: 0,
+                                   shares: [.english: 1.0 / 3, .swedish: 1.0 / 3, .german: 1.0 / 3])
         let split = StatsFormatter.languagePercents(stats)
-        #expect(split?.swedish == 34)
-        #expect(split?.english == 66)
+        #expect(split.map(\.percent).reduce(0, +) == 100)
+        #expect(split.count == 3)
+        #expect(split.map(\.percent) == split.map(\.percent).sorted(by: >))
     }
 
-    @Test func noLanguagePercentsWhenNoLanguageIsKnown() {
-        #expect(StatsFormatter.languagePercents(DictationStats(words: 5, timeSaved: 0,
-                                                               swedishShare: 0, englishShare: 0)) == nil)
+    @Test func tinySharesNeverShowAsZero() {
+        let stats = DictationStats(words: 1000, timeSaved: 0, shares: [.english: 0.998, .dutch: 0.002])
+        let split = StatsFormatter.languagePercents(stats)
+        #expect(split.map(\.language) == [.english])
+        #expect(split.first?.percent == 100)
+    }
+
+    @Test func noPercentsWhenNoLanguageIsKnown() {
+        #expect(StatsFormatter.languagePercents(DictationStats(words: 5, timeSaved: 0, shares: [:])).isEmpty)
     }
 }

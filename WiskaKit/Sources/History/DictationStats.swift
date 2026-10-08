@@ -8,14 +8,13 @@ public struct DictationStats: Equatable, Sendable {
 
     public var words: Int
     public var timeSaved: TimeInterval
-    public var swedishShare: Double
-    public var englishShare: Double
+    /// Each language's share of the words whose language is known (0…1). Absent = none.
+    public var shares: [Language: Double]
 
-    public init(words: Int, timeSaved: TimeInterval, swedishShare: Double, englishShare: Double) {
+    public init(words: Int, timeSaved: TimeInterval, shares: [Language: Double]) {
         self.words = words
         self.timeSaved = timeSaved
-        self.swedishShare = swedishShare
-        self.englishShare = englishShare
+        self.shares = shares
     }
 
     public static func compute(_ records: [DictationRecord], now: Date,
@@ -25,12 +24,13 @@ public struct DictationStats: Equatable, Sendable {
         let words = recent.reduce(0) { $0 + count($1) }
         let spoken = recent.reduce(0) { $0 + $1.duration }
         let typing = Double(words) / typingWordsPerMinute * 60
-        let swedish = recent.filter { $0.language == .swedish }.reduce(0) { $0 + count($1) }
-        let english = recent.filter { $0.language == .english }.reduce(0) { $0 + count($1) }
-        let known = swedish + english
-        return DictationStats(words: words, timeSaved: max(0, typing - spoken),
-                              swedishShare: known == 0 ? 0 : Double(swedish) / Double(known),
-                              englishShare: known == 0 ? 0 : Double(english) / Double(known))
+        var perLanguage: [Language: Int] = [:]
+        for record in recent {
+            if let language = record.language { perLanguage[language, default: 0] += count(record) }
+        }
+        let known = perLanguage.values.reduce(0, +)
+        let shares = known == 0 ? [:] : perLanguage.filter { $0.value > 0 }.mapValues { Double($0) / Double(known) }
+        return DictationStats(words: words, timeSaved: max(0, typing - spoken), shares: shares)
     }
 }
 
@@ -45,11 +45,22 @@ public enum StatsFormatter {
         return "This week: \(words) words · \(savedText(stats.timeSaved)) saved"
     }
 
-    /// Whole percentages that add up to 100, or nil when no dictation had a known language.
-    public static func languagePercents(_ stats: DictationStats) -> (swedish: Int, english: Int)? {
-        guard stats.swedishShare + stats.englishShare > 0 else { return nil }
-        let swedish = Int((stats.swedishShare * 100).rounded())
-        return (swedish, 100 - swedish)
+    /// Whole percentages that add up to 100 (largest remainders get the leftover points), largest
+    /// first, without languages that round to 0%. Empty when no dictation had a known language.
+    public static func languagePercents(_ stats: DictationStats) -> [(language: Language, percent: Int)] {
+        let entries = Language.allCases.compactMap { language in stats.shares[language].map { (language, $0 * 100) } }
+        guard !entries.isEmpty else { return [] }
+        var percents = entries.map { (language: $0.0, percent: Int($0.1.rounded(.down)), remainder: $0.1 - $0.1.rounded(.down)) }
+        var leftover = 100 - percents.reduce(0) { $0 + $1.percent }
+        for index in percents.indices.sorted(by: { percents[$0].remainder > percents[$1].remainder }) where leftover > 0 {
+            percents[index].percent += 1
+            leftover -= 1
+        }
+        // Ties keep display order (`percents` is built in `Language.allCases` order).
+        return percents.enumerated().filter { $0.element.percent > 0 }
+            .sorted { $0.element.percent != $1.element.percent ? $0.element.percent > $1.element.percent
+                                                               : $0.offset < $1.offset }
+            .map { (language: $0.element.language, percent: $0.element.percent) }
     }
 
     public static func savedText(_ seconds: TimeInterval) -> String {

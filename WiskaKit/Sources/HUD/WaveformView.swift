@@ -25,11 +25,6 @@ struct WaveformView: View {
     }
 
     private func color(at index: Int) -> Color {
-        let t = Double(index) / Double(Self.barCount - 1)
-        func channel(_ shift: UInt32) -> Double {
-            let a = Double((highlight.start >> shift) & 0xFF), b = Double((highlight.end >> shift) & 0xFF)
-            return (a + (b - a) * t) / 255
-        }
-        return Color(.sRGB, red: channel(16), green: channel(8), blue: channel(0))
+        AuroraTheme.color(highlight, at: Double(index) / Double(Self.barCount - 1))
     }
 }

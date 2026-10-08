@@ -11,6 +11,15 @@ public enum AuroraTheme {
 
     public static func start(_ highlight: Highlight) -> Color { Color(hex: highlight.start) }
     public static func end(_ highlight: Highlight) -> Color { Color(hex: highlight.end) }
+    /// A colour along the highlight gradient: 0 = start, 1 = end.
+    public static func color(_ highlight: Highlight, at t: Double) -> Color {
+        func channel(_ shift: UInt32) -> Double {
+            let a = Double((highlight.start >> shift) & 0xFF), b = Double((highlight.end >> shift) & 0xFF)
+            return (a + (b - a) * t) / 255
+        }
+        return Color(.sRGB, red: channel(16), green: channel(8), blue: channel(0))
+    }
+
     public static func gradient(_ highlight: Highlight) -> LinearGradient {
         LinearGradient(colors: [start(highlight), end(highlight)], startPoint: .leading, endPoint: .trailing)
     }

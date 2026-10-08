@@ -93,19 +93,22 @@ private struct StatsHeader: View {
             tile(stats.words.formatted(), "words this week")
             tile(StatsFormatter.savedText(stats.timeSaved), "time saved")
             VStack(alignment: .leading, spacing: 6) {
-                if let split = StatsFormatter.languagePercents(stats) {
-                    Text("🇸🇪 \(split.swedish)%  ·  🇬🇧 \(split.english)%")
+                let split = StatsFormatter.languagePercents(stats)
+                if !split.isEmpty {
+                    Text(split.map { "\($0.language.flag) \($0.percent)%" }.joined(separator: "  ·  "))
                         .font(.headline)
                     GeometryReader { proxy in
                         HStack(spacing: 0) {
-                            AuroraTheme.start(highlight).frame(width: proxy.size.width * Double(split.swedish) / 100)
-                            AuroraTheme.end(highlight).frame(width: proxy.size.width * Double(split.english) / 100)
+                            ForEach(Array(split.enumerated()), id: \.offset) { index, entry in
+                                AuroraTheme.color(highlight, at: split.count == 1 ? 0 : Double(index) / Double(split.count - 1))
+                                    .frame(width: proxy.size.width * Double(entry.percent) / 100)
+                            }
                         }
                     }
                     .frame(height: 6)
                     .clipShape(Capsule())
                 } else {
-                    Text("🇸🇪 · 🇬🇧").font(.headline)
+                    Text(Language.allCases.prefix(2).map(\.flag).joined(separator: " · ")).font(.headline)
                     Text("no language yet").font(.caption).foregroundStyle(.secondary)
                 }
             }
