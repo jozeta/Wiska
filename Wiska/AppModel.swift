@@ -85,6 +85,12 @@ final class AppModel {
             if record.pasted && !settings.firstDictationDone { settings.firstDictationDone = true }
             history?.add(record, retention: settings.historyRetention)
         }
+        applyHighlight()
+    }
+
+    /// Pushes the chosen colour to the capsule; called at launch and when Settings changes it.
+    func applyHighlight() {
+        hud.highlight = settings.highlight
     }
 
     func start() {

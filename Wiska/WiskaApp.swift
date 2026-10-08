@@ -17,7 +17,7 @@ struct WiskaApp: App {
             MenuBarLabel(model: model)
         }
         Window(HistoryWindow.title, id: HistoryWindow.id) {
-            HistoryView(store: model.history)
+            HistoryView(store: model.history, highlight: model.settings.highlight)
         }
         Window(OnboardingWindow.title, id: OnboardingWindow.id) {
             OnboardingView(model: model)

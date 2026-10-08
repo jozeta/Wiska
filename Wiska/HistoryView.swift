@@ -6,6 +6,7 @@ import SwiftUI
 
 struct HistoryView: View {
     let store: HistoryStore?
+    let highlight: Highlight
     @State private var query = ""
     @State private var confirmClear = false
 
@@ -27,7 +28,7 @@ struct HistoryView: View {
         let stats = store.stats()
         return VStack(spacing: 0) {
             if stats.words > 0 {
-                StatsHeader(stats: stats).padding([.horizontal, .top], 12)
+                StatsHeader(stats: stats, highlight: highlight).padding([.horizontal, .top], 12)
             }
             List(items) { item in
             HStack(alignment: .top, spacing: 10) {
@@ -83,6 +84,7 @@ struct HistoryView: View {
 
 private struct StatsHeader: View {
     let stats: DictationStats
+    let highlight: Highlight
 
     var body: some View {
         HStack(spacing: 10) {
@@ -94,8 +96,8 @@ private struct StatsHeader: View {
                         .font(.headline)
                     GeometryReader { proxy in
                         HStack(spacing: 0) {
-                            AuroraTheme.teal.frame(width: proxy.size.width * Double(split.swedish) / 100)
-                            AuroraTheme.violet.frame(width: proxy.size.width * Double(split.english) / 100)
+                            AuroraTheme.start(highlight).frame(width: proxy.size.width * Double(split.swedish) / 100)
+                            AuroraTheme.end(highlight).frame(width: proxy.size.width * Double(split.english) / 100)
                         }
                     }
                     .frame(height: 6)
@@ -113,7 +115,7 @@ private struct StatsHeader: View {
 
     private func tile(_ value: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(.title2.bold()).foregroundStyle(AuroraTheme.gradient)
+            Text(value).font(.title2.bold()).foregroundStyle(AuroraTheme.gradient(highlight))
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
         .padding(10)

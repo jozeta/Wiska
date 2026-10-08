@@ -12,7 +12,7 @@ struct OnboardingView: View {
         let state = model.onboarding
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 6) {
-                Text("Wiska").foregroundStyle(AuroraTheme.gradient)
+                Text("Wiska").foregroundStyle(AuroraTheme.gradient(model.settings.highlight))
                 Text("setup")
             }
             .font(.system(size: 26, weight: .bold))
@@ -23,7 +23,7 @@ struct OnboardingView: View {
                 HStack(spacing: 12) {
                     Image(systemName: state.isDone(step) ? "checkmark.circle.fill" : "circle")
                         .font(.title3)
-                        .foregroundStyle(state.isDone(step) ? AuroraTheme.teal : Color.secondary)
+                        .foregroundStyle(state.isDone(step) ? AuroraTheme.start(model.settings.highlight) : Color.secondary)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(step.title).fontWeight(.semibold)
                         Text(step.reason).font(.caption).foregroundStyle(.secondary)
