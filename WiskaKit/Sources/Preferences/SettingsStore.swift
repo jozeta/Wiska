@@ -13,6 +13,9 @@ public final class SettingsStore {
         static let lastDetectedLanguage = "lastDetectedLanguage"
         static let cleanupLevel = "cleanupLevel"
         static let historyRetention = "historyRetention"
+        static let onboardingCompleted = "onboardingCompleted"
+        static let fnKeyConfirmed = "fnKeyConfirmed"
+        static let firstDictationDone = "firstDictationDone"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -31,6 +34,10 @@ public final class SettingsStore {
         didSet { defaults.set(historyRetention.rawValue, forKey: Key.historyRetention) }
     }
 
+    public var onboardingCompleted: Bool { didSet { defaults.set(onboardingCompleted, forKey: Key.onboardingCompleted) } }
+    public var fnKeyConfirmed: Bool { didSet { defaults.set(fnKeyConfirmed, forKey: Key.fnKeyConfirmed) } }
+    public var firstDictationDone: Bool { didSet { defaults.set(firstDictationDone, forKey: Key.firstDictationDone) } }
+
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         engine = Self.read(defaults, Key.engine, SpeechEngine.apple)
@@ -40,6 +47,9 @@ public final class SettingsStore {
         lastDetectedLanguage = Self.read(defaults, Key.lastDetectedLanguage, Language.english)
         cleanupLevel = Self.read(defaults, Key.cleanupLevel, CleanupLevel.polished)
         historyRetention = Self.read(defaults, Key.historyRetention, HistoryRetention.week)
+        onboardingCompleted = defaults.bool(forKey: Key.onboardingCompleted)
+        fnKeyConfirmed = defaults.bool(forKey: Key.fnKeyConfirmed)
+        firstDictationDone = defaults.bool(forKey: Key.firstDictationDone)
     }
 
     private static func read<T: RawRepresentable>(
