@@ -11,6 +11,8 @@ public enum HotkeyError: Error {
 @MainActor
 public final class FnHotkeyMonitor {
     static let fnKeyCode: Int64 = 63
+    /// Left and right ⇧: needed to notice ⇧ pressed just after fn (`.shiftAdded`).
+    static let shiftKeyCodes: Set<Int64> = [56, 60]
     private static let log = Log.logger("Hotkey")
 
     public let events: AsyncStream<HotkeyEvent>
@@ -43,7 +45,7 @@ public final class FnHotkeyMonitor {
         Self.log.info("fn event tap started")
     }
 
-    fileprivate func receive(type: CGEventType, keyCode: Int64, fnFlag: Bool, shiftFlag: Bool, time: TimeInterval) {
+    func receive(type: CGEventType, keyCode: Int64, fnFlag: Bool, shiftFlag: Bool, time: TimeInterval) {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
@@ -51,7 +53,7 @@ public final class FnHotkeyMonitor {
             if machine.reset() { continuation.yield(.cancelled) }
             Self.log.notice("event tap was disabled by the system; re-enabled and reset")
         case .flagsChanged:
-            guard keyCode == Self.fnKeyCode else { return }
+            guard keyCode == Self.fnKeyCode || Self.shiftKeyCodes.contains(keyCode) else { return }
             feed(.flagsChanged(fnDown: fnFlag, shift: shiftFlag, time: time))
         case .keyDown:
             feed(.keyDown(time: time))
