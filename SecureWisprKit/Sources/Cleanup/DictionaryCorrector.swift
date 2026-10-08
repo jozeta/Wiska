@@ -4,16 +4,16 @@ import Foundation
 /// Applies the user's dictionary to text: explicit replacements, then conservative
 /// near-miss correction of dictionary words. Pure and idempotent.
 public enum DictionaryCorrector {
-    public static func apply(_ text: String, dictionary: PersonalDictionary) -> String {
+    /// - Parameter isKnownWord: true for real Swedish/English words (the app backs it with the
+    ///   system spell checker). Windows made only of known words are never corrected, so
+    ///   "hann" never becomes "Hanna" and "klara" never becomes "Klara" (review C1).
+    public static func apply(_ text: String, dictionary: PersonalDictionary,
+                             isKnownWord: (String) -> Bool = { _ in false }) -> String {
         var result = text
         for replacement in dictionary.replacements {
             result = replace(replacement, in: result)
         }
-        // Longest entries first so "Ylva Zetterström" wins over a shorter overlapping entry.
-        for entry in dictionary.words.sorted(by: { $0.count > $1.count }) {
-            result = correctNearMisses(of: entry, in: result)
-        }
-        return result
+        return correctNearMisses(in: result, words: dictionary.words, isKnownWord: isKnownWord)
     }
 
     // MARK: Replacements
@@ -28,11 +28,12 @@ public enum DictionaryCorrector {
     private static func replace(_ replacement: Replacement, in text: String) -> String {
         guard let heard = try? NSRegularExpression(pattern: phrasePattern(replacement.heard),
                                                    options: [.caseInsensitive]),
+              // Case-sensitive: "github" → "GitHub" must still fire on "github" (review I1).
               let written = try? NSRegularExpression(
-                pattern: NSRegularExpression.escapedPattern(for: replacement.written), options: [.caseInsensitive])
+                pattern: NSRegularExpression.escapedPattern(for: replacement.written))
         else { return text }
         let full = NSRange(text.startIndex..., in: text)
-        // Matches that sit inside an existing occurrence of the written form are left alone,
+        // Matches inside an existing occurrence of the written form are left alone,
         // so applying twice never yields "Secure Secure Wispr".
         let protected = written.matches(in: text, range: full).map(\.range)
         var result = text
@@ -55,56 +56,99 @@ public enum DictionaryCorrector {
         }
     }
 
-    private static func correctNearMisses(of entry: String, in text: String) -> String {
-        guard let limit = maxDistance(for: entry) else { return text }
-        let entryWords = entry.split(whereSeparator: \.isWhitespace).count
-        let entryLower = entry.lowercased()
-        guard let tokenRegex = try? NSRegularExpression(pattern: "\\S+") else { return text }
-        let tokens = tokenRegex.matches(in: text, range: NSRange(text.startIndex..., in: text))
-            .compactMap { Range($0.range, in: text) }
-        guard tokens.count >= entryWords else { return text }
+    private struct Token {
+        let range: Range<String.Index>
+        let leading: String
+        let trailing: String
+        let core: String
+        let lower: String
+        let known: Bool
+    }
 
+    private struct Entry {
+        let text: String
+        let lower: String
+        let words: Int
+        let limit: Int
+    }
+
+    private static func correctNearMisses(in text: String, words: [String],
+                                          isKnownWord: (String) -> Bool) -> String {
+        // Longest entries first so "Ylva Zetterström" wins over a shorter overlapping entry.
+        let entries = words.compactMap { word -> Entry? in
+            guard let limit = maxDistance(for: word) else { return nil }
+            return Entry(text: word, lower: word.lowercased(),
+                         words: word.split(whereSeparator: \.isWhitespace).count, limit: limit)
+        }.sorted { $0.text.count > $1.text.count }
+        guard !entries.isEmpty else { return text }
+
+        // Tokenise once (review I2).
+        var tokens: [Token] = []
+        var index = text.startIndex
+        while index < text.endIndex {
+            guard let start = text[index...].firstIndex(where: { !$0.isWhitespace }) else { break }
+            let end = text[start...].firstIndex(where: \.isWhitespace) ?? text.endIndex
+            let raw = text[start..<end]
+            let leading = String(raw.prefix(while: \.isPunctuation))
+            let trailing = String(raw.reversed().prefix(while: \.isPunctuation).reversed())
+            let core = leading.count + trailing.count >= raw.count
+                ? "" : String(raw.dropFirst(leading.count).dropLast(trailing.count))
+            tokens.append(Token(range: start..<end, leading: leading, trailing: trailing, core: core,
+                                lower: core.lowercased(), known: !core.isEmpty && isKnownWord(core)))
+            index = end
+        }
+
+        var consumed = Array(repeating: false, count: tokens.count)
         var edits: [(Range<String.Index>, String)] = []
-        var index = 0
-        while index + entryWords <= tokens.count {
-            let window = tokens[index..<(index + entryWords)]
-            let span = window.first!.lowerBound..<window.last!.upperBound
-            let raw = String(text[span])
-            let leading = String(raw.prefix(while: { $0.isPunctuation }))
-            let trailing = String(raw.reversed().prefix(while: { $0.isPunctuation }).reversed())
-            let core = String(raw.dropFirst(leading.count).dropLast(trailing.count))
-            let coreLower = core.split(whereSeparator: \.isWhitespace).joined(separator: " ").lowercased()
-
-            if !core.isEmpty, core != entry,
-               coreLower.first == entryLower.first,
-               !(coreLower.hasPrefix(entryLower) && coreLower != entryLower),   // inflection: "Kvarnholmens"
-               editDistance(coreLower, entryLower) <= limit {
-                edits.append((span, leading + entry + trailing))
-                index += entryWords
-            } else {
-                index += 1
+        for entry in entries where tokens.count >= entry.words {
+            var i = 0
+            while i + entry.words <= tokens.count {
+                let window = i..<(i + entry.words)
+                defer { i += 1 }
+                guard !window.contains(where: { consumed[$0] }) else { continue }
+                let first = tokens[window.lowerBound], last = tokens[window.upperBound - 1]
+                guard !first.lower.isEmpty, first.lower.first == entry.lower.first else { continue }
+                // Inner tokens must not carry punctuation other than commas (no joining across ".").
+                if entry.words > 1, window.dropLast().contains(where: {
+                    !tokens[$0].trailing.isEmpty && tokens[$0].trailing != ","
+                }) { continue }
+                let lower = window.map { tokens[$0].lower }.joined(separator: " ")
+                let core = window.map { tokens[$0].core }.joined(separator: " ")
+                guard core != entry.text,
+                      abs(lower.count - entry.lower.count) <= entry.limit,
+                      !(lower.hasPrefix(entry.lower) && lower != entry.lower),      // "Kvarnholmens"
+                      !window.allSatisfy({ tokens[$0].known }),                     // real words stay
+                      editDistance(lower, entry.lower, limit: entry.limit) <= entry.limit
+                else { continue }
+                edits.append((first.range.lowerBound..<last.range.upperBound,
+                              first.leading + entry.text + last.trailing))
+                for t in window { consumed[t] = true }
             }
         }
         var result = text
-        for (range, replacement) in edits.reversed() {
+        for (range, replacement) in edits.sorted(by: { $0.0.lowerBound > $1.0.lowerBound }) {
             result.replaceSubrange(range, with: replacement)
         }
         return result
     }
 
-    /// Levenshtein distance over characters.
-    static func editDistance(_ a: String, _ b: String) -> Int {
+    /// Levenshtein distance with two rolling rows; stops early once every value exceeds `limit`.
+    static func editDistance(_ a: String, _ b: String, limit: Int = .max) -> Int {
         let a = Array(a), b = Array(b)
         if a.isEmpty { return b.count }
         if b.isEmpty { return a.count }
         var previous = Array(0...b.count)
+        var current = Array(repeating: 0, count: b.count + 1)
         for i in 1...a.count {
-            var current = [i] + Array(repeating: 0, count: b.count)
+            current[0] = i
+            var rowMin = current[0]
             for j in 1...b.count {
                 let cost = a[i - 1] == b[j - 1] ? 0 : 1
                 current[j] = min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost)
+                rowMin = min(rowMin, current[j])
             }
-            previous = current
+            if rowMin > limit { return rowMin }
+            swap(&previous, &current)
         }
         return previous[b.count]
     }

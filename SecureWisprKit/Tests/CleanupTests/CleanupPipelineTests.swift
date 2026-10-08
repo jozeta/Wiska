@@ -167,4 +167,12 @@ struct CleanupPipelineTests {
         let out = try await clean("the kvarnholmen launch of secure whisper", pipeline(.polished, dictionary: memory))
         #expect(out == "The Kvarnholmen launch of SecureWispr.")
     }
+
+    @Test func pipelinePassesTheLexiconToTheCorrector() async throws {
+        let p = CleanupPipeline(level: { .off }, rewriter: rewriter,
+                                dictionary: { PersonalDictionary(words: ["Klara", "Kvarnholmen"]) },
+                                isKnownWord: { ["klara", "det", "kan", "vi"].contains($0.lowercased()) },
+                                timeout: .seconds(5))
+        #expect(try await clean("vi kan klara det på Kvarnholman", p) == "vi kan klara det på Kvarnholmen")
+    }
 }

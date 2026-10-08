@@ -41,6 +41,7 @@ final class AppModel {
         // property is initialized is a compile error.
         let settings = SettingsStore()
         let store = ParakeetModelStore()
+        let lexicon = SpellCheckerLexicon()
         let dictionaryStore = DictionaryStore()
         self.dictionaryStore = dictionaryStore
         do {
@@ -60,7 +61,8 @@ final class AppModel {
             audio: MicrophoneRecorder(),
             transcriber: { [weak self] in self?.activeTranscriber() ?? AppleTranscriber() },
             cleaner: CleanupPipeline(level: { settings.cleanupLevel }, rewriter: rewriter,
-                                     dictionary: { dictionaryStore.dictionary }),
+                                     dictionary: { dictionaryStore.dictionary },
+                                     isKnownWord: { lexicon.isKnown($0) }),
             injector: PasteboardInjector(),
             contextProvider: {
                 DictationContext(appBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
