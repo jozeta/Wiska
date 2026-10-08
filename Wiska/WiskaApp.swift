@@ -14,7 +14,11 @@ struct WiskaApp: App {
         MenuBarExtra {
             MenuContent(model: model)
         } label: {
-            Image(systemName: model.menuBarSymbol)
+            if model.menuBarSymbol == "waveform" {
+                Image("MenuBarIcon")
+            } else {
+                Image(systemName: model.menuBarSymbol)
+            }
         }
         Window(HistoryWindow.title, id: HistoryWindow.id) {
             HistoryView(store: model.history)
