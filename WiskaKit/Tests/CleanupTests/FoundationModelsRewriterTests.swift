@@ -47,6 +47,27 @@ struct FoundationModelsRewriterTests {
         #expect(output.lowercased().contains("maybe"))
     }
 
+    /// The pipeline's timeout relies on this: a cancelled call must stop, not keep the model busy.
+    @Test(.enabled(if: modelAvailable), .timeLimit(.minutes(1)))
+    func cancelledRewriteStopsPromptly() async throws {
+        let rewriter = FoundationModelsRewriter()
+        let long = String(repeating: "um so I think we should uh talk about the quarterly report ", count: 12)
+        let start = ContinuousClock.now
+        let task = Task { try await rewriter.rewrite(long, level: .polished) }
+        try await Task.sleep(for: .milliseconds(150))
+        task.cancel()
+        _ = try? await task.value
+        #expect(ContinuousClock.now - start < .milliseconds(500))
+    }
+
+    @Test func prewarmKeepsOnlyTheCurrentLevel() {
+        let rewriter = FoundationModelsRewriter()
+        guard rewriter.isAvailable else { return }
+        rewriter.prewarm(level: .light)
+        rewriter.prewarm(level: .polished)
+        #expect(rewriter.warmLevels == [.polished])
+    }
+
     @Test func reportsAvailability() {
         #expect(FoundationModelsRewriter().isAvailable == Self.modelAvailable)
     }

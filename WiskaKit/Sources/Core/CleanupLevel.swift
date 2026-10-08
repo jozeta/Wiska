@@ -14,7 +14,7 @@ public enum CleanupLevel: String, Sendable, CaseIterable, Codable {
 
     public var summary: String {
         switch self {
-        case .off: "Paste exactly what was heard."
+        case .off: "Paste what was heard, uncleaned. Voice commands like “new line” still work."
         case .light: "Remove fillers and stutters, fix punctuation. Never drops other words."
         case .polished: "Light, plus resolve self-corrections (“Tuesday — no, Wednesday” → “Wednesday”)."
         }

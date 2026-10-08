@@ -60,7 +60,10 @@ public final class CleanupPipeline: TextCleaner {
             return RuleCleaner.clean(segment)
         }
         do {
+            // The segment is one line; line breaks only come from voice commands, not the model.
             let output = Self.stripWrappingQuotes(try await rewrite(segment, level: level, deadline: deadline))
+                .split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+                .joined(separator: " ")
             switch CleanupGuard.check(original: segment, cleaned: output, level: level) {
             case .accept:
                 // The model never sees the dictionary; re-apply so it can't undo the user's spellings.
@@ -71,7 +74,8 @@ public final class CleanupPipeline: TextCleaner {
                 return RuleCleaner.clean(segment)
             }
         } catch {
-            Self.log.notice("model cleanup skipped: \(String(describing: error), privacy: .public)")
+            // The type is enough to diagnose; the description may quote the dictated text.
+            Self.log.notice("model cleanup skipped: \(String(describing: type(of: error)), privacy: .public) \(String(describing: error), privacy: .private)")
             return RuleCleaner.clean(segment)
         }
     }
@@ -99,15 +103,21 @@ public final class CleanupPipeline: TextCleaner {
     static func finishSentence(_ text: String) -> String {
         guard let first = text.first else { return text }
         var result = first.uppercased() + text.dropFirst()
-        if let last = result.last, !".?!…:".contains(last) { result += "." }
+        // Look past closing quotes and brackets: `"see you soon."` already ends a sentence.
+        let closers: Set<Character> = ["\"", "”", "'", "’", ")"]
+        if let last = result.last(where: { !closers.contains($0) }), !".?!…:".contains(last) { result += "." }
         return result
     }
 
+    /// Removes quotes the model wrapped its whole answer in, but not real quotations:
+    /// if the inside has quote marks of its own, the outer ones belong to the text.
     static func stripWrappingQuotes(_ text: String) -> String {
         var result = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let quotes: [(Character, Character)] = [("\"", "\""), ("“", "”"), ("”", "”"), ("'", "'")]
         for (open, close) in quotes where result.count >= 2 && result.first == open && result.last == close {
-            result = String(result.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+            let inner = result.dropFirst().dropLast()
+            guard !inner.contains(open), !inner.contains(close) else { continue }
+            result = String(inner).trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return result
     }

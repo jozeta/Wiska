@@ -10,8 +10,10 @@ public enum CleanupGuard {
 
     /// Words the model may legitimately drop as fillers; not required to be kept.
     static let ambiguousFillers: Set<String> = [
-        "like", "you", "know", "typ", "liksom", "alltså", "asså", "basically", "actually", "well",
+        "like", "typ", "liksom", "alltså", "asså", "basically", "actually", "well",
     ]
+    /// Fillers only as a phrase: on its own, "you" is a real word.
+    static let fillerPhrases: [[String]] = [["you", "know"]]
     static let maxNewWordShare = 0.2
     static let questionWords: Set<String> = [
         "what", "who", "when", "where", "why", "how", "which", "is", "are", "can", "could", "do", "does",
@@ -40,13 +42,32 @@ public enum CleanupGuard {
             return .reject("question answered")
         }
 
-        let required = input.filter { !ambiguousFillers.contains($0) }
+        let required = requiredWords(input)
         guard !required.isEmpty else { return .accept }
         let outputSet = Set(output)
-        let kept = required.filter { outputSet.contains($0) }.count
-        let minimumKept = level == .light ? 0.7 : 0.4
+        let outputHasDigits = output.contains { $0.allSatisfy(\.isNumber) }
+        let joinedPairs = Set(zip(output, output.dropFirst()).map { $0 + $1 })
+        let kept = required.filter { word in
+            outputSet.contains(word) || joinedPairs.contains(word)   // "imorgon" → "i morgon"
+                || (outputHasDigits && numberWords.contains(word))   // "two thirty" → "2:30"
+        }.count
+        // Light must not remove any word besides fillers; Polished may drop false starts.
+        let minimumKept = level == .light ? 1.0 : 0.4
         if Double(kept) / Double(required.count) < minimumKept { return .reject("dropped words") }
         return .accept
+    }
+
+    /// Input words that must survive cleanup: everything but fillers and filler phrases.
+    static func requiredWords(_ input: [String]) -> [String] {
+        var droppable = Set<Int>()
+        for phrase in fillerPhrases where phrase.count <= input.count {
+            for start in 0...(input.count - phrase.count) where Array(input[start..<start + phrase.count]) == phrase {
+                droppable.formUnion(start..<start + phrase.count)
+            }
+        }
+        return input.enumerated()
+            .filter { !droppable.contains($0.offset) && !ambiguousFillers.contains($0.element) }
+            .map(\.element)
     }
 
     /// Output words not present in the input. Not counted as new (review I4): words that only

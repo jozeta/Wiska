@@ -113,6 +113,17 @@ struct CleanupPipelineTests {
         #expect(try await clean("hello there my friend", pipeline()) == "Hello there my friend.")
     }
 
+    @Test func realQuotationsAreKept() async throws {
+        rewriter.transform = { _ in "\"Hi,\" she said, \"see you soon.\"" }
+        #expect(try await clean("hi she said see you soon", pipeline()) == "\"Hi,\" she said, \"see you soon.\"")
+    }
+
+    @Test func modelLineBreaksBecomeSpaces() async throws {
+        rewriter.transform = { _ in "Thanks for the update.\nI'll look tonight." }
+        #expect(try await clean("thanks for the update I'll look tonight", pipeline())
+                == "Thanks for the update. I'll look tonight.")
+    }
+
     @Test func trailingCommandKeepsLineBreak() async throws {
         #expect(try await clean("thanks a lot new line", pipeline()) == "Thanks a lot.\n")
     }

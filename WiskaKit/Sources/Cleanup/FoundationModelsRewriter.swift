@@ -9,12 +9,16 @@ public final class FoundationModelsRewriter: TextRewriter {
 
     public init() {}
 
+    var warmLevels: Set<CleanupLevel> { Set(warm.keys) }
+
     public var isAvailable: Bool {
         if case .available = SystemLanguageModel.default.availability { return true }
         return false
     }
 
     public func prewarm(level: CleanupLevel) {
+        // A session warmed for another level would never be used: let it go.
+        warm = warm.filter { $0.key == level }
         guard level != .off, isAvailable, warm[level] == nil else { return }
         let session = LanguageModelSession(instructions: Self.instructions(for: level))
         session.prewarm()

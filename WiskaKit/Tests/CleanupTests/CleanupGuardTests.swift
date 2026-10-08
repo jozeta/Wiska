@@ -29,6 +29,14 @@ struct CleanupGuardTests {
         #expect(CleanupGuard.check(original: original, cleaned: cleaned, level: .polished) == .accept)
     }
 
+    @Test func lightMustKeepWordsOnlyPolishedMayTreatAsFillers() {
+        let original = "can you tell me where the keys are"
+        let cleaned = "Can tell me where the keys are?"
+        #expect(CleanupGuard.check(original: original, cleaned: cleaned, level: .light) != .accept)
+        #expect(CleanupGuard.check(original: "so like you know we should go",
+                                   cleaned: "So we should go.", level: .polished) == .accept)
+    }
+
     @Test func rejectsEmpty() {
         #expect(CleanupGuard.check(original: "hello there", cleaned: "  ", level: .polished) != .accept)
     }

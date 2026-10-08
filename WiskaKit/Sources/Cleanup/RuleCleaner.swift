@@ -8,6 +8,8 @@ public enum RuleCleaner {
         "um", "umm", "uh", "uhm", "erm", "ehm", "hmm",   // English
         "öh", "eh", "äh", "ehh",                          // Swedish
     ]
+    /// Doubled words that are real English ("I had had enough", "said that that was").
+    static let legitimateRepeats: Set<String> = ["had", "that"]
     private static let terminal: Set<Character> = [".", "?", "!", "…", ":"]
 
     public static func clean(_ text: String) -> String {
@@ -15,7 +17,8 @@ public enum RuleCleaner {
         for token in text.split(whereSeparator: \.isWhitespace).map(String.init) {
             let core = normalized(token)
             if fillers.contains(core) { continue }
-            if let previous = words.last, !core.isEmpty, normalized(previous) == core { continue }
+            if let previous = words.last, !core.isEmpty, normalized(previous) == core,
+               !legitimateRepeats.contains(core) { continue }
             words.append(token)
         }
         guard var result = words.isEmpty ? nil : words.joined(separator: " ") else { return "" }
