@@ -51,6 +51,10 @@ public final class HistoryStore {
             .map { HistoryItem(id: $0.persistentModelID, record: $0.record) }
     }
 
+    public func stats(now: Date = Date()) -> DictationStats {
+        DictationStats.compute(items(matching: "").map(\.record), now: now)
+    }
+
     public func delete(_ id: PersistentIdentifier) {
         guard let entry = context.model(for: id) as? HistoryEntry else { return }
         context.delete(entry)
