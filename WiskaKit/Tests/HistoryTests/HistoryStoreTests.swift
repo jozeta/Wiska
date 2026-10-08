@@ -83,4 +83,11 @@ struct HistoryStoreTests {
         store.add(record("old"), retention: .forever)          // record() leaves duration at default
         #expect(store.items(matching: "").first?.record.duration == 0)
     }
+
+    @Test func storeComputesStats() {
+        var r = record("ett två tre fyra")
+        r.duration = 1
+        store.add(r, retention: .forever)
+        #expect(store.stats(now: now).words == 4)
+    }
 }
