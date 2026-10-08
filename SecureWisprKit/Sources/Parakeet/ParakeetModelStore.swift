@@ -8,11 +8,14 @@ public protocol ModelDownloader: Sendable {
     func exists(at directory: URL) -> Bool
 }
 
-/// Downloads Parakeet TDT v3 from Hugging Face via FluidAudio. The only network access in the app.
+/// Downloads Parakeet TDT v3 from Hugging Face via FluidAudio. The only network access in the app:
+/// FluidAudio is kept in offline mode except for the duration of this call (review C2).
 public struct FluidAudioDownloader: ModelDownloader {
     public init() {}
 
     public func download(to directory: URL, progress: @escaping @Sendable (Double) -> Void) async throws {
+        ModelHub.offlineMode = false
+        defer { ModelHub.offlineMode = true }
         _ = try await AsrModels.download(to: directory, version: .v3,
                                          progressHandler: { progress($0.fractionCompleted) })
     }
@@ -32,10 +35,14 @@ public final class ParakeetModelStore {
     }
 
     private static let log = Log.logger("Parakeet")
+    /// Written after a download fully succeeds; files without it are a partial download (review I1).
+    public nonisolated static let completionMarker = ".securewispr-complete"
 
+    /// FluidAudio stores models in `<parent>/<repo folder>`, so pointing it at the repo folder
+    /// itself makes the directory we delete the directory it writes (review C1).
     public nonisolated static var defaultDirectory: URL {
         URL.applicationSupportDirectory
-            .appendingPathComponent("SecureWispr/Models/parakeet-tdt-0.6b-v3", isDirectory: true)
+            .appendingPathComponent("SecureWispr/Models/parakeet-tdt-0.6b-v3-coreml", isDirectory: true)
     }
 
     public private(set) var status: Status
@@ -47,9 +54,20 @@ public final class ParakeetModelStore {
 
     public init(directory: URL = ParakeetModelStore.defaultDirectory,
                 downloader: any ModelDownloader = FluidAudioDownloader()) {
+        // Loading must never fall back to downloading (review C2).
+        ModelHub.offlineMode = true
         self.directory = directory
         self.downloader = downloader
-        status = downloader.exists(at: directory) ? .ready : .notDownloaded
+        let marker = directory.appendingPathComponent(Self.completionMarker)
+        if downloader.exists(at: directory) && FileManager.default.fileExists(atPath: marker.path) {
+            status = .ready
+        } else {
+            if FileManager.default.fileExists(atPath: directory.path) {
+                Self.log.notice("removing partial parakeet download")
+                try? FileManager.default.removeItem(at: directory)
+            }
+            status = .notDownloaded
+        }
     }
 
     /// Starts a download. Only ever called from the Settings "Download" button.
@@ -73,6 +91,7 @@ public final class ParakeetModelStore {
                 try await downloader.download(to: directory, progress: report)
                 try Task.checkCancellation()
                 guard downloader.exists(at: directory) else { throw CocoaError(.fileReadCorruptFile) }
+                try Data().write(to: directory.appendingPathComponent(Self.completionMarker))
                 self?.status = .ready
                 Self.log.info("parakeet model downloaded")
             } catch {

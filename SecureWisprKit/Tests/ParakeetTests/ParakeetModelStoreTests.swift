@@ -1,4 +1,5 @@
 import Core
+import FluidAudio
 import Foundation
 import Testing
 @testable import Parakeet
@@ -34,8 +35,43 @@ struct ParakeetModelStoreTests {
         }
     }
 
-    @Test func startsReadyWhenModelExists() {
+    private func markComplete() throws {
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data().write(to: dir.appendingPathComponent(ParakeetModelStore.completionMarker))
+    }
+
+    @Test func startsReadyWhenModelExists() throws {
+        try markComplete()
         #expect(ParakeetModelStore(directory: dir, downloader: FakeDownloader(installed: true)).status == .ready)
+    }
+
+    @Test func defaultDirectoryIsWhereFluidAudioActuallyStoresTheModel() {
+        // Review C1: FluidAudio writes to <parent>/<repo folder>, not to the directory passed in,
+        // unless that directory already *is* the repo folder.
+        #expect(ParakeetModelStore.defaultDirectory.lastPathComponent == "parakeet-tdt-0.6b-v3-coreml")
+    }
+
+    @Test func storeLocksFluidAudioOffline() {
+        // Review C2: loading must never fall back to downloading.
+        ModelHub.offlineMode = false
+        _ = ParakeetModelStore(directory: dir, downloader: FakeDownloader(installed: false))
+        #expect(ModelHub.offlineMode == true)
+    }
+
+    @Test func filesWithoutCompletionMarkerAreTreatedAsPartialAndDeleted() throws {
+        // Review I1: app quit mid-download can leave files that FluidAudio considers present.
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let store = ParakeetModelStore(directory: dir, downloader: FakeDownloader(installed: true))
+        #expect(store.status == .notDownloaded)
+        #expect(!FileManager.default.fileExists(atPath: dir.path))
+    }
+
+    @Test func successfulDownloadWritesCompletionMarker() async throws {
+        let store = ParakeetModelStore(directory: dir, downloader: FakeDownloader(installed: false))
+        store.download()
+        try await waitWhileDownloading(store)
+        #expect(FileManager.default.fileExists(
+            atPath: dir.appendingPathComponent(ParakeetModelStore.completionMarker).path))
     }
 
     @Test func partialFilesAreNotInstalled() throws {
@@ -80,7 +116,7 @@ struct ParakeetModelStoreTests {
     }
 
     @Test func removeDeletesTheModel() throws {
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try markComplete()
         let store = ParakeetModelStore(directory: dir, downloader: FakeDownloader(installed: true))
         store.remove()
         #expect(store.status == .notDownloaded)

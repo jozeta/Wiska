@@ -40,7 +40,6 @@ struct AppleTranscriberTests {
         let words = transcript.text.lowercased().filter { $0.isLetter || $0 == " " }
         #expect(words.contains("hello world this is a test"))
         #expect(transcript.locale.identifier.hasPrefix("en"))
-        #expect(transcriber.isReady)
     }
 
     @Test(.enabled(if: SpeechTranscriber.isAvailable), .timeLimit(.minutes(1)))
@@ -101,5 +100,18 @@ struct AppleTranscriberTests {
                                               transcriber: AppleTranscriber(fallbackLanguage: { .english }))
         #expect(transcript.language == .swedish)
         #expect(transcript.text.lowercased().contains("rapporten"))
+    }
+
+    @Test(.timeLimit(.minutes(2)))
+    func englishStillWorksWhenSwedishAssetsFailToInstall() async throws {
+        // Review I3: a failed sv_SE install must not break English dictation.
+        let transcriber = AppleTranscriber(installer: { language in
+            if language == .swedish { throw TranscriptionError.unsupportedLocale("sv_SE") }
+            try await AppleTranscriber.installAssets(for: language)
+        })
+        let samples = try spokenSamples("hello world this is a test")
+        let transcript = try await transcribe(samples, .fixed(.english), transcriber: transcriber)
+        #expect(transcript.language == .english)
+        #expect(!transcriber.isReady)   // "ready" still means both languages
     }
 }

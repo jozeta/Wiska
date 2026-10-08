@@ -91,6 +91,12 @@ final class AppModel {
         return apple
     }
 
+    /// A fresh download replaces whatever failed to load before.
+    func parakeetModelBecameReady() {
+        parakeet.forgetLoadFailure()
+        warmUpParakeetIfSelected()
+    }
+
     func warmUpParakeetIfSelected() {
         guard settings.engine == .parakeet, parakeetStore.isInstalled, !parakeet.isReady else { return }
         Task { [parakeet] in

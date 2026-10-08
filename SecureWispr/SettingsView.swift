@@ -14,7 +14,7 @@ struct SettingsView: View {
                     ForEach(SpeechEngine.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 .onChange(of: settings.engine) { model.warmUpParakeetIfSelected() }
-                ParakeetCard(store: model.parakeetStore) { model.warmUpParakeetIfSelected() }
+                ParakeetCard(store: model.parakeetStore) { model.parakeetModelBecameReady() }
                 if model.parakeetUnavailable {
                     Text("Parakeet is selected but not ready — Apple is used until it is.")
                         .font(.caption).foregroundStyle(.secondary)
