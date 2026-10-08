@@ -1,0 +1,135 @@
+import Core
+import Testing
+@testable import Cleanup
+
+struct RewriteError: Error {}
+
+@MainActor
+final class FakeRewriter: TextRewriter {
+    var isAvailable = true
+    var delay: Duration = .zero
+    var ignoresCancellation = false
+    var error: Error?
+    var transform: (String) -> String = { $0.uppercased() + "." }
+    private(set) var calls: [String] = []
+    private(set) var prewarmed: [CleanupLevel] = []
+
+    func prewarm(level: CleanupLevel) { prewarmed.append(level) }
+
+    func rewrite(_ text: String, level: CleanupLevel) async throws -> String {
+        calls.append(text)
+        if delay > .zero {
+            if ignoresCancellation {
+                let end = ContinuousClock.now + delay
+                while ContinuousClock.now < end { try? await Task.sleep(for: .milliseconds(10)) }
+            } else {
+                try await Task.sleep(for: delay)
+            }
+        }
+        if let error { throw error }
+        return transform(text)
+    }
+}
+
+@MainActor
+struct CleanupPipelineTests {
+    let rewriter = FakeRewriter()
+
+    func pipeline(_ level: CleanupLevel = .polished, timeout: Duration = .seconds(5)) -> CleanupPipeline {
+        CleanupPipeline(level: { level }, rewriter: rewriter, timeout: timeout)
+    }
+
+    func clean(_ text: String, _ p: CleanupPipeline) async throws -> String {
+        try await p.clean(text, context: DictationContext())
+    }
+
+    @Test func offOnlyAppliesCommands() async throws {
+        #expect(try await clean("hello um world new line bye", pipeline(.off)) == "hello um world\nbye")
+        #expect(rewriter.calls.isEmpty)
+    }
+
+    @Test func segmentsAreCleanedSeparatelyAndBreaksKept() async throws {
+        rewriter.transform = { $0 }   // identity is always accepted by the guard
+        let out = try await clean("hello there my friend new paragraph and goodbye to you all", pipeline())
+        #expect(rewriter.calls == ["hello there my friend", "and goodbye to you all"])
+        #expect(out == "hello there my friend\n\nand goodbye to you all")
+    }
+
+    @Test func shortSegmentSkipsTheModel() async throws {
+        #expect(try await clean("ok um thanks", pipeline()) == "Ok thanks.")
+        #expect(rewriter.calls.isEmpty)
+    }
+
+    @Test func unavailableModelFallsBackToRules() async throws {
+        rewriter.isAvailable = false
+        #expect(try await clean("um so we should ship it today", pipeline()) == "So we should ship it today.")
+        #expect(rewriter.calls.isEmpty)
+    }
+
+    @Test func modelErrorFallsBackToRules() async throws {
+        rewriter.error = RewriteError()
+        #expect(try await clean("um so we should ship it today", pipeline()) == "So we should ship it today.")
+    }
+
+    @Test func guardRejectionFallsBackToRules() async throws {
+        rewriter.transform = { _ in "It is currently 3 PM in Tokyo." }
+        #expect(try await clean("what time is it in tokyo now", pipeline()) == "What time is it in tokyo now.")
+    }
+
+    @Test func acceptedRewriteIsUsed() async throws {
+        rewriter.transform = { _ in "Kan du skicka rapporten?" }
+        #expect(try await clean("öh kan du skicka rapporten", pipeline()) == "Kan du skicka rapporten?")
+    }
+
+    @Test func timeoutFallsBackToRules() async throws {
+        rewriter.delay = .milliseconds(300)
+        let start = ContinuousClock.now
+        let out = try await clean("um so we should ship it today", pipeline(timeout: .milliseconds(50)))
+        #expect(out == "So we should ship it today.")
+        #expect(ContinuousClock.now - start < .milliseconds(250))
+    }
+
+    @Test func timeoutHoldsEvenIfRewriterIgnoresCancellation() async throws {
+        rewriter.delay = .milliseconds(400)
+        rewriter.ignoresCancellation = true
+        let start = ContinuousClock.now
+        let out = try await clean("um so we should ship it today", pipeline(timeout: .milliseconds(50)))
+        #expect(out == "So we should ship it today.")
+        #expect(ContinuousClock.now - start < .milliseconds(250))
+    }
+
+    @Test func segmentsAfterDeadlineUseRules() async throws {
+        rewriter.transform = { $0 }
+        rewriter.delay = .milliseconds(60)
+        let out = try await clean(
+            "first part of it here new line second part of it here new line third part of it here",
+            pipeline(timeout: .milliseconds(90)))
+        #expect(rewriter.calls.count <= 2)
+        #expect(out.components(separatedBy: "\n").count == 3)
+    }
+
+    @Test func wrappingQuotesAreStripped() async throws {
+        rewriter.transform = { "\"\($0).\"" }
+        #expect(try await clean("hello there my friend", pipeline()) == "hello there my friend.")
+    }
+
+    @Test func trailingCommandKeepsLineBreak() async throws {
+        #expect(try await clean("thanks a lot new line", pipeline()) == "Thanks a lot.\n")
+    }
+
+    @Test func onlyScratchThatGivesEmptyText() async throws {
+        #expect(try await clean("scratch that", pipeline()) == "")
+    }
+
+    @Test func prewarmPassesTheLevel() {
+        pipeline(.light).prewarm()
+        #expect(rewriter.prewarmed == [.light])
+    }
+
+    @Test func prewarmSkippedWhenOffOrUnavailable() {
+        pipeline(.off).prewarm()
+        rewriter.isAvailable = false
+        pipeline(.polished).prewarm()
+        #expect(rewriter.prewarmed.isEmpty)
+    }
+}
