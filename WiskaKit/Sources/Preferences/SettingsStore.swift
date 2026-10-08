@@ -7,6 +7,9 @@ import Observation
 public final class SettingsStore {
     private enum Key {
         static let engine = "engine"
+        static let engineMode = "engineMode"
+        static let englishEngine = "englishEngine"
+        static let swedishEngine = "swedishEngine"
         static let languageMode = "languageMode"
         static let primaryLanguage = "primaryLanguage"
         static let toggleLanguage = "toggleLanguage"
@@ -21,6 +24,23 @@ public final class SettingsStore {
     @ObservationIgnored private let defaults: UserDefaults
 
     public var engine: SpeechEngine { didSet { defaults.set(engine.rawValue, forKey: Key.engine) } }
+    public var engineMode: EngineMode { didSet { defaults.set(engineMode.rawValue, forKey: Key.engineMode) } }
+    public var englishEngine: SpeechEngine { didSet { defaults.set(englishEngine.rawValue, forKey: Key.englishEngine) } }
+    public var swedishEngine: SpeechEngine { didSet { defaults.set(swedishEngine.rawValue, forKey: Key.swedishEngine) } }
+
+    /// The engine a language uses in the current mode.
+    public func engine(for language: Language) -> SpeechEngine {
+        guard engineMode == .perLanguage else { return engine }
+        return switch language {
+        case .english: englishEngine
+        case .swedish: swedishEngine
+        }
+    }
+
+    /// True when any language is set to Parakeet (so it should be loaded).
+    public var usesParakeet: Bool {
+        Language.allCases.contains { engine(for: $0) == .parakeet }
+    }
     public var languageMode: LanguageMode { didSet { defaults.set(languageMode.rawValue, forKey: Key.languageMode) } }
     public var primaryLanguage: Language { didSet { defaults.set(primaryLanguage.rawValue, forKey: Key.primaryLanguage) } }
     public var toggleLanguage: Language { didSet { defaults.set(toggleLanguage.rawValue, forKey: Key.toggleLanguage) } }
@@ -40,7 +60,12 @@ public final class SettingsStore {
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        engine = Self.read(defaults, Key.engine, SpeechEngine.apple)
+        let engine = Self.read(defaults, Key.engine, SpeechEngine.apple)
+        self.engine = engine
+        engineMode = Self.read(defaults, Key.engineMode, EngineMode.same)
+        // Unset per-language engines start from the engine the user already has.
+        englishEngine = Self.read(defaults, Key.englishEngine, engine)
+        swedishEngine = Self.read(defaults, Key.swedishEngine, engine)
         languageMode = Self.read(defaults, Key.languageMode, LanguageMode.autoDetect)
         primaryLanguage = Self.read(defaults, Key.primaryLanguage, Language.english)
         toggleLanguage = Self.read(defaults, Key.toggleLanguage, Language.english)

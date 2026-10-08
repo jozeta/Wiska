@@ -67,4 +67,42 @@ final class SettingsStoreTests {
         let reloaded = SettingsStore(defaults: defaults)
         #expect(reloaded.onboardingCompleted && reloaded.fnKeyConfirmed && reloaded.firstDictationDone)
     }
+
+    @Test func perLanguageEnginesStartFromTheCurrentEngine() {
+        defaults.set("parakeet", forKey: "engine")
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.engineMode == .same)
+        #expect(store.englishEngine == .parakeet)
+        #expect(store.swedishEngine == .parakeet)
+    }
+
+    @Test func engineForLanguageFollowsTheMode() {
+        let store = SettingsStore(defaults: defaults)
+        store.engine = .parakeet
+        store.englishEngine = .parakeet
+        store.swedishEngine = .apple
+        #expect(store.engine(for: .swedish) == .parakeet)   // same for all
+        store.engineMode = .perLanguage
+        #expect(store.engine(for: .english) == .parakeet)
+        #expect(store.engine(for: .swedish) == .apple)
+    }
+
+    @Test func usesParakeetWhenAnyLanguageDoes() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(!store.usesParakeet)
+        store.engineMode = .perLanguage
+        store.swedishEngine = .parakeet
+        #expect(store.usesParakeet)
+    }
+
+    @Test func engineSettingsPersist() {
+        let store = SettingsStore(defaults: defaults)
+        store.engineMode = .perLanguage
+        store.englishEngine = .parakeet
+        store.swedishEngine = .apple
+        let reloaded = SettingsStore(defaults: defaults)
+        #expect(reloaded.engineMode == .perLanguage)
+        #expect(reloaded.englishEngine == .parakeet)
+        #expect(reloaded.swedishEngine == .apple)
+    }
 }
