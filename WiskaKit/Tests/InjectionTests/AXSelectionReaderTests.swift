@@ -7,7 +7,7 @@ struct AXSelectionReaderTests {
     let pasteboard = NSPasteboard(name: .init("WiskaSelectionTests-\(UUID().uuidString)"))
 
     func reader(ax: String?, copies: String?) -> AXSelectionReader {
-        AXSelectionReader(pasteboard: pasteboard, accessibilitySelection: { ax }, sendCopy: { [pasteboard] in
+        AXSelectionReader(pasteboard: pasteboard, accessibilitySelection: { ax }, selectionIsEmpty: { false }, sendCopy: { [pasteboard] in
             guard let copies else { return }
             pasteboard.clearContents()
             pasteboard.setString(copies, forType: .string)
@@ -44,7 +44,7 @@ struct AXSelectionReaderTests {
     @Test func lateCopyIsUndone() async throws {
         pasteboard.clearContents()
         pasteboard.setString("clipboard", forType: .string)
-        let reader = AXSelectionReader(pasteboard: pasteboard, accessibilitySelection: { nil }, sendCopy: { [pasteboard] in
+        let reader = AXSelectionReader(pasteboard: pasteboard, accessibilitySelection: { nil }, selectionIsEmpty: { false }, sendCopy: { [pasteboard] in
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(200))
                 pasteboard.clearContents()
@@ -71,7 +71,7 @@ struct AXSelectionReaderTests {
         pasteboard.clearContents()
         pasteboard.setString("clipboard", forType: .string)
         let marker = #"vscode-editor-data{"version":1,"isFromEmptySelection":true,"mode":"swift"}"#
-        let reader = AXSelectionReader(pasteboard: pasteboard, accessibilitySelection: { "" }, sendCopy: { [pasteboard] in
+        let reader = AXSelectionReader(pasteboard: pasteboard, accessibilitySelection: { "" }, selectionIsEmpty: { false }, sendCopy: { [pasteboard] in
             pasteboard.clearContents()
             let item = NSPasteboardItem()
             item.setString("let x = 1\n", forType: .string)
@@ -106,4 +106,16 @@ struct AXSelectionReaderTests {
                                       accessibilityContext: { ("  ", 1) }, sendCopy: {})
         #expect(await blank.surroundingText() == nil)
     }
+
+    /// A text field that reports an empty selection range has nothing selected: no ⌘C (which
+    /// beeps in native apps, and copies the whole line in JetBrains IDEs and Sublime Text).
+    @Test func reportedEmptySelectionSkipsTheCopy() async {
+        let copies = Box(0)
+        let reader = AXSelectionReader(pasteboard: pasteboard, accessibilitySelection: { "" }, selectionIsEmpty: { true },
+                                       sendCopy: { copies.value += 1 }, copyTimeout: .milliseconds(100))
+        #expect(await reader.selectedText() == nil)
+        #expect(copies.value == 0)
+    }
 }
+
+@MainActor final class Box<Value> { var value: Value; init(_ value: Value) { self.value = value } }

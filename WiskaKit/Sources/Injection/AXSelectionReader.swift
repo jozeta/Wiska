@@ -9,23 +9,28 @@ public final class AXSelectionReader: SelectionReader {
     private let pasteboard: NSPasteboard
     private let accessibilitySelection: @MainActor () -> String?
     private let accessibilityContext: @MainActor () -> (text: String, cursor: Int)?
+    private let selectionIsEmpty: @MainActor () -> Bool
     private let sendCopy: @MainActor () throws -> Void
     private let copyTimeout: Duration
 
     public init(pasteboard: NSPasteboard = .general,
                 accessibilitySelection: @escaping @MainActor () -> String? = AXSelectionReader.focusedSelection,
                 accessibilityContext: @escaping @MainActor () -> (text: String, cursor: Int)? = AXSelectionReader.focusedTextAroundCursor,
+                selectionIsEmpty: @escaping @MainActor () -> Bool = AXSelectionReader.focusedSelectionIsEmpty,
                 sendCopy: @escaping @MainActor () throws -> Void = { try CGEventKeySender().sendCopy() },
                 copyTimeout: Duration = .milliseconds(300)) {
         self.pasteboard = pasteboard
         self.accessibilitySelection = accessibilitySelection
         self.accessibilityContext = accessibilityContext
+        self.selectionIsEmpty = selectionIsEmpty
         self.sendCopy = sendCopy
         self.copyTimeout = copyTimeout
     }
 
     public func selectedText() async -> String? {
         if let text = Self.nonBlank(accessibilitySelection()) { return text }
+        // The field says nothing is selected: ⌘C would only beep, or copy the whole line.
+        if selectionIsEmpty() { return nil }
         let snapshot = PasteboardSnapshot.capture(pasteboard)
         let before = pasteboard.changeCount
         do { try sendCopy() } catch { return nil }
@@ -80,6 +85,22 @@ public final class AXSelectionReader: SelectionReader {
     private static func nonBlank(_ text: String?) -> String? {
         guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return text
+    }
+
+    /// The focused element reports a selected range of length 0 (a cursor, nothing selected).
+    /// False when it doesn't report a range (Electron apps, some web views): then ⌘C decides.
+    public static func focusedSelectionIsEmpty() -> Bool {
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString,
+                                            &focused) == .success, let focused,
+              CFGetTypeID(focused) == AXUIElementGetTypeID() else { return false }
+        var rangeValue: CFTypeRef?
+        var range = CFRange(location: 0, length: -1)
+        guard AXUIElementCopyAttributeValue(focused as! AXUIElement, kAXSelectedTextRangeAttribute as CFString,
+                                            &rangeValue) == .success, let rangeValue,
+              CFGetTypeID(rangeValue) == AXValueGetTypeID(),
+              AXValueGetValue(rangeValue as! AXValue, .cfRange, &range) else { return false }
+        return range.length == 0
     }
 
     /// The focused element's selected text, via Accessibility; nil when the app doesn't say.
