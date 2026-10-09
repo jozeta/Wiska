@@ -68,7 +68,14 @@ public struct LanguageRules: Sendable, Equatable {
 }
 
 extension Language {
+    /// The language's cleanup words; spoken ordinals and "percent" may become digits too.
     public var rules: LanguageRules {
+        var rules = baseRules
+        rules.numberWords.formUnion(formatRules.numberExtras)
+        return rules
+    }
+
+    private var baseRules: LanguageRules {
         switch self {
         case .english:
             LanguageRules(

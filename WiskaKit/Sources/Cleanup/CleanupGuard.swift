@@ -17,7 +17,7 @@ public enum CleanupGuard {
 
         let input = words(original).filter { !rules.fillerSounds.contains($0) }
         let inputSet = Set(input)
-        let spokeNumbers = input.contains { rules.numberWords.contains($0) || $0.allSatisfy(\.isNumber) }
+        let spokeNumbers = input.contains { rules.numberWords.contains($0) || isNumeric($0) }
         let newWords = newWordCount(output, known: inputSet, digitsAllowed: spokeNumbers)
         if Double(newWords) > max(1, maxNewWordShare * Double(output.count)) {
             return .reject("new words")
@@ -30,7 +30,7 @@ public enum CleanupGuard {
         let required = requiredWords(input, rules: rules)
         guard !required.isEmpty else { return .accept }
         let outputSet = Set(output)
-        let outputHasDigits = output.contains { $0.allSatisfy(\.isNumber) }
+        let outputHasDigits = output.contains { isNumeric($0) }
         let joinedPairs = Set(zip(output, output.dropFirst()).map { $0 + $1 })
         let kept = required.filter { word in
             outputSet.contains(word) || joinedPairs.contains(word)   // "imorgon" → "i morgon"
@@ -63,7 +63,7 @@ public enum CleanupGuard {
         var index = 0
         while index < output.count {
             let word = output[index]
-            if known.contains(word) || (digitsAllowed && word.allSatisfy(\.isNumber)) {
+            if known.contains(word) || (digitsAllowed && isNumeric(word)) {
                 index += 1
             } else if index + 1 < output.count, known.contains(word + output[index + 1]) {
                 index += 2
@@ -73,6 +73,13 @@ public enum CleanupGuard {
             }
         }
         return count
+    }
+
+    /// "5", "30", and ordinal digits like "5th", "1st", "3rd".
+    static func isNumeric(_ word: String) -> Bool {
+        let digits = word.prefix { $0.isNumber }
+        return !digits.isEmpty && word.count - digits.count <= 2
+            && word.dropFirst(digits.count).allSatisfy(\.isLetter)
     }
 
     static func words(_ text: String) -> [String] {

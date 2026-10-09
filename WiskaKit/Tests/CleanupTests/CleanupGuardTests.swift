@@ -73,4 +73,26 @@ struct CleanupGuardTests {
         #expect(CleanupGuard.check(original: "um what time is it in tokyo right now",
                                    cleaned: "What time is it in Tokyo right now?", level: .polished) == .accept)
     }
+
+    @Test func acceptsDatesAsDigits() {
+        #expect(CleanupGuard.check(original: "we meet on the fifth of may", cleaned: "We meet on 5 May.",
+                                   level: .polished, rules: Language.english.rules) == .accept)
+        #expect(CleanupGuard.check(original: "vi ses den femte maj", cleaned: "Vi ses den 5 maj.",
+                                   level: .polished, rules: Language.swedish.rules) == .accept)
+        #expect(CleanupGuard.check(original: "we meet on the fifth of may", cleaned: "We meet on the 5th of May.",
+                                   level: .light, rules: Language.english.rules) == .accept)
+    }
+
+    @Test func acceptsPercentAndTimeAtLight() {
+        #expect(CleanupGuard.check(original: "it went up twenty five percent", cleaned: "It went up 25%.",
+                                   level: .polished, rules: Language.english.rules) == .accept)
+        #expect(CleanupGuard.check(original: "see you at three thirty", cleaned: "See you at 3:30.",
+                                   level: .light, rules: Language.english.rules) == .accept)
+    }
+
+    @Test func digitsWithoutSpokenNumbersStillRejected() {
+        #expect(CleanupGuard.check(original: "you may want to check the clock in tokyo",
+                                   cleaned: "It is 3:15 pm in Tokyo.", level: .polished,
+                                   rules: Language.english.rules) != .accept)
+    }
 }
