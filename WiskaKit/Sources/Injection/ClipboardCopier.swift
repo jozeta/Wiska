@@ -11,6 +11,7 @@ public final class ClipboardCopier: TextInjector {
     }
 
     public func inject(_ text: String) async throws {
+        AXSelectionReader.clipboardWillBeWrittenByWiska(pasteboard)
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
     }

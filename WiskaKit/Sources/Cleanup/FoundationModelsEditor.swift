@@ -48,10 +48,12 @@ public final class FoundationModelsEditor: TextEditor {
     /// The model's answer, without wrapping quotes, inside the original's leading and trailing
     /// whitespace — a triple-clicked paragraph keeps its newline, an indented line its indent.
     static func rewrap(original: String, edited: String) -> String {
-        // A model that echoes the fence: drop the markers.
+        // A model that echoes the fence: drop the markers — unless the selection itself starts or
+        // ends with them (a git conflict block).
+        let own = original.trimmingCharacters(in: .whitespacesAndNewlines)
         var edited = edited.trimmingCharacters(in: .whitespacesAndNewlines)
-        if edited.hasPrefix("<<<") { edited.removeFirst(3) }
-        if edited.hasSuffix(">>>") { edited.removeLast(3) }
+        if edited.hasPrefix("<<<"), !own.hasPrefix("<<<") { edited.removeFirst(3) }
+        if edited.hasSuffix(">>>"), !own.hasSuffix(">>>") { edited.removeLast(3) }
         let leading = original.prefix { $0.isWhitespace }
         let trailing = String(original.reversed().prefix { $0.isWhitespace }.reversed())
         // Strip quotes the model wrapped its answer in — unless the selection was itself quoted.

@@ -175,4 +175,38 @@ struct ModelUpdateCheckerTests {
         #expect(store.installedRevision == expected)
         #expect(checker.state != .updateAvailable(source.revision))
     }
+
+    /// After a relaunch the result of the last check is unknown: never claim "Up to date".
+    @Test func statusTextIsHonestAfterARelaunch() {
+        let checked = Date(timeIntervalSince1970: 1_000)
+        let now = checked.addingTimeInterval(3 * 3_600)
+        #expect(ModelUpdateChecker.statusText(.idle, lastCheck: checked, now: now).hasPrefix("Last checked"))
+        #expect(ModelUpdateChecker.statusText(.idle, lastCheck: nil, now: now) == "Not checked yet")
+        #expect(ModelUpdateChecker.statusText(.upToDate(checked), lastCheck: checked, now: now).hasPrefix("Up to date"))
+        #expect(ModelUpdateChecker.statusText(.checking, lastCheck: nil, now: now) == "Checking…")
+        #expect(ModelUpdateChecker.statusText(.updateAvailable(source.revision), lastCheck: nil, now: now) == "Update available")
+        #expect(ModelUpdateChecker.statusText(.failed("offline"), lastCheck: nil, now: now) == "Couldn't check: offline")
+    }
+
+    /// The re-check after a finished update is quiet: offline, the card doesn't say "Couldn't check".
+    @Test func recheckAfterAnUpdateIsQuietWhenOffline() async throws {
+        let store = try installedStore(marker: Self.oldFiles.fingerprint(of: ["Encoder.mlmodelc"]))
+        let checker = checker(store)
+        await checker.checkNow()
+        source.fail = true
+        checker.downloadUpdate()
+        for _ in 0..<100 where store.status != .ready { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(store.status == .ready)
+        #expect(checker.state == .idle)
+    }
+
+    /// The same model files are announced once, even if the repo sha changes again (a README edit).
+    @Test func sameFilesAreAnnouncedOnce() async throws {
+        let checker = checker(try installedStore(marker: Self.oldFiles.fingerprint(of: ["Encoder.mlmodelc"])))
+        #expect(await checker.checkIfDue() == true)
+        lastCheck.value = nil
+        source.revision = ModelRevision(sha: "repo9", lastModified: .now, files: source.revision.files)
+        #expect(await checker.checkIfDue() == false)
+    }
 }

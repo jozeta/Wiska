@@ -44,10 +44,12 @@ public final class AXSelectionReader: SelectionReader {
     /// replace the user's clipboard with the selection.
     private func undoLateCopy(after changeCount: Int, restoring snapshot: PasteboardSnapshot) {
         let pasteboard = pasteboard
-        Task { @MainActor in
+        Self.lateCopyWatches[pasteboard.name]?.cancel()
+        Self.lateCopyWatches[pasteboard.name] = Task { @MainActor in
             let end = ContinuousClock.now + Self.lateCopyWindow
             while ContinuousClock.now < end {
                 try? await Task.sleep(for: .milliseconds(50))
+                guard !Task.isCancelled else { return }
                 if pasteboard.changeCount != changeCount {
                     snapshot.restore(to: pasteboard)
                     return
@@ -57,6 +59,12 @@ public final class AXSelectionReader: SelectionReader {
     }
 
     static let lateCopyWindow: Duration = .seconds(1)
+    private static var lateCopyWatches: [NSPasteboard.Name: Task<Void, Never>] = [:]
+
+    /// Wiska is about to write this clipboard itself (a paste or a copy): that's not a late ⌘C.
+    public static func clipboardWillBeWrittenByWiska(_ pasteboard: NSPasteboard) {
+        lateCopyWatches.removeValue(forKey: pasteboard.name)?.cancel()
+    }
 
     /// VS Code (and Cursor) copy the whole line when nothing is selected, and say so inside Chromium's
     /// custom clipboard data (UTF-16): `"isFromEmptySelection":true`.

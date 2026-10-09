@@ -357,7 +357,11 @@ private enum AppInfo {
         return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
     }
 
+    /// The app icon at menu size (16 pt): NSWorkspace hands out 32 pt images, too tall for a menu row.
     static func icon(_ bundleID: String) -> NSImage? {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID).map { NSWorkspace.shared.icon(forFile: $0.path) }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
+              let icon = NSWorkspace.shared.icon(forFile: url.path).copy() as? NSImage else { return nil }
+        icon.size = NSSize(width: 16, height: 16)
+        return icon
     }
 }

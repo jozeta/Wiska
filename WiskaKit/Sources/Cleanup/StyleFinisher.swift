@@ -49,7 +49,11 @@ enum StyleFinisher {
         }.joined(separator: " ")
         // Multi-word entries ("New York") span tokens: put their spelling back afterwards.
         for entry in dictionary.words where entry.contains(" ") {
-            result = result.replacingOccurrences(of: entry, with: entry, options: .caseInsensitive)
+            // Whole words only: "renew york" is not "New York".
+            let pattern = "\\b" + NSRegularExpression.escapedPattern(for: entry) + "\\b"
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { continue }
+            result = regex.stringByReplacingMatches(in: result, range: NSRange(result.startIndex..., in: result),
+                                                    withTemplate: NSRegularExpression.escapedTemplate(for: entry))
         }
         return result
     }

@@ -29,6 +29,7 @@ public final class PasteboardInjector: TextInjector {
     public func inject(_ text: String) async throws {
         guard !isSecureInputActive() else { throw InjectionError.secureInputActive }
 
+        AXSelectionReader.clipboardWillBeWrittenByWiska(pasteboard)
         let snapshot = PasteboardSnapshot.capture(pasteboard)
         let item = NSPasteboardItem()
         item.setString(text, forType: .string)

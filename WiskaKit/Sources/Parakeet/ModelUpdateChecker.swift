@@ -83,8 +83,11 @@ public final class ModelUpdateChecker {
             Self.log.notice("model update check failed: \(String(describing: error), privacy: .public)")
             return false
         }
-        guard case .updateAvailable(let latest) = state, latest.sha != announcedSha else { return false }
-        announcedSha = latest.sha
+        // Announce each set of model files once (a README edit changes the sha, not the files).
+        guard case .updateAvailable(let latest) = state else { return false }
+        let fingerprint = latest.fingerprint(of: store.installedComponents)
+        guard fingerprint != announcedSha else { return false }
+        announcedSha = fingerprint
         return true
     }
 
@@ -98,7 +101,11 @@ public final class ModelUpdateChecker {
         Task { [weak self] in
             guard let self else { return }
             while case .downloading = store.status { try? await Task.sleep(for: .milliseconds(200)) }
-            if store.isInstalled { await checkNow() }
+            // Quietly: offline right after a successful download isn't worth an error on the card.
+            guard store.isInstalled else { return }
+            do { try await check(now: Date()) } catch {
+                Self.log.notice("re-check after the update failed: \(String(describing: error), privacy: .public)")
+            }
         }
     }
 

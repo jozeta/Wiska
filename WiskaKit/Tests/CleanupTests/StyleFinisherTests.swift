@@ -44,4 +44,12 @@ struct StyleFinisherTests {
                                           dictionary: dictionary)
         #expect(output == "flying to New York with NASA and the EU team")
     }
+
+    /// A multi-word entry is restored only as whole words.
+    @Test func multiWordEntriesMatchWholeWords() {
+        let dictionary = PersonalDictionary(words: ["New York", "Ice T"])
+        let output = StyleFinisher.finish("Renew York plans, a nice tea in New York.", style: .veryCasual,
+                                          dictionary: dictionary)
+        #expect(output == "renew york plans, a nice tea in New York")
+    }
 }

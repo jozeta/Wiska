@@ -81,4 +81,14 @@ struct AXSelectionReaderTests {
         #expect(await reader.selectedText() == nil)
         #expect(pasteboard.string(forType: .string) == "clipboard")
     }
+
+    /// Wiska's own paste right after a failed command must not be undone by the late-copy watch.
+    @Test func wiskasOwnWriteStopsTheLateCopyWatch() async throws {
+        pasteboard.clearContents()
+        pasteboard.setString("clipboard", forType: .string)
+        #expect(await reader(ax: nil, copies: nil).selectedText() == nil)   // starts the watch
+        try await ClipboardCopier(pasteboard: pasteboard).inject("dictated text")
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(pasteboard.string(forType: .string) == "dictated text")
+    }
 }

@@ -87,4 +87,11 @@ struct FoundationModelsEditorTests {
         }, timeout: { _ in .seconds(5) })
         await #expect(throws: EditError.tooLong) { try await overflow.edit("x", instruction: "y", language: nil) }
     }
+
+    /// The user's own <<< / >>> (a git conflict block) survive; only an echoed fence is removed.
+    @Test func ownMarkersSurvive() {
+        let conflict = "<<<<<<< HEAD\nlet x = 1\n=======\nlet x = 2\n>>>>>>> branch"
+        let fixed = "<<<<<<< HEAD\nlet x = 1\n=======\nlet x = 3\n>>>>>>> branch"
+        #expect(FoundationModelsEditor.rewrap(original: conflict, edited: fixed) == fixed)
+    }
 }
