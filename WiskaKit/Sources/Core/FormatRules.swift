@@ -8,7 +8,9 @@ public struct FormatRules: Sendable, Equatable {
     public var greetings: [[String]]
     /// Phrases that close an email ("best regards", "mvh").
     public var signOffs: [[String]]
-    /// Ordinals and the percent word: spoken numbers that may legitimately become digits.
+    /// Ordinals and the percent word: spoken numbers that may legitimately become digits. Ordinals
+    /// that are also everyday words (Swedish "andra" = others, Italian "secondo" = according to)
+    /// are left out, so they never excuse digits.
     public var numberExtras: Set<String>
     /// Words that, right after a one-word marker, show it is an ordinary word ("second place",
     /// Italian "secondo me" = "in my opinion", Portuguese "segundo o João" = "according to João").
@@ -73,7 +75,7 @@ extension Language {
                 greetings: phrases(["hej", "hejsan", "hallå", "kära", "tjena"]),
                 signOffs: phrases(["med vänliga hälsningar", "vänliga hälsningar", "hälsningar", "mvh", "tack",
                                    "hej då", "ha det bra"]),
-                numberExtras: ["första", "andra", "tredje", "fjärde", "femte", "sjätte", "sjunde", "åttonde",
+                numberExtras: ["första", "tredje", "fjärde", "femte", "sjätte", "sjunde", "åttonde",
                                "nionde", "tionde", "elfte", "tolfte", "procent"])
         case .german:
             FormatRules(
@@ -127,7 +129,7 @@ extension Language {
                 conjunctions: ["e", "poi"],
                 greetings: phrases(["ciao", "salve", "caro", "cara", "gentile", "buongiorno"]),
                 signOffs: phrases(["cordiali saluti", "un saluto", "saluti", "grazie", "a presto"]),
-                numberExtras: ["primo", "secondo", "terzo", "quarto", "quinto", "sesto", "settimo", "ottavo", "nono",
+                numberExtras: ["primo", "terzo", "quarto", "quinto", "sesto", "settimo", "ottavo", "nono",
                                "decimo"],
                 markerBlockers: ["me", "te", "lui", "lei", "noi", "voi", "loro", "il", "la", "lo", "i", "gli", "le",
                                  "piatto", "posto", "tempo"])
@@ -142,7 +144,7 @@ extension Language {
                 conjunctions: ["e", "depois"],
                 greetings: phrases(["olá", "oi", "caro", "cara", "prezado", "prezada", "bom dia"]),
                 signOffs: phrases(["atenciosamente", "cumprimentos", "obrigado", "obrigada", "um abraço", "abraços"]),
-                numberExtras: ["primeiro", "primeira", "segundo", "terceiro", "quarto", "quinto", "sexto", "sétimo",
+                numberExtras: ["primeiro", "primeira", "terceiro", "quarto", "quinto", "sexto", "sétimo",
                                "oitavo", "nono", "décimo"],
                 markerBlockers: ["o", "a", "os", "as", "ele", "ela", "eles", "elas", "lugar"])
         case .danish:
@@ -155,7 +157,7 @@ extension Language {
                 conjunctions: ["og", "så"],
                 greetings: phrases(["hej", "hejsa", "kære", "hallo"]),
                 signOffs: phrases(["med venlig hilsen", "venlig hilsen", "de bedste hilsner", "hilsen", "mvh", "tak"]),
-                numberExtras: ["første", "anden", "tredje", "fjerde", "femte", "sjette", "syvende", "ottende",
+                numberExtras: ["første", "tredje", "fjerde", "femte", "sjette", "syvende", "ottende",
                                "niende", "tiende", "ellevte", "tolvte", "procent"])
         case .dutch:
             FormatRules(

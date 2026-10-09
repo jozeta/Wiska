@@ -95,4 +95,15 @@ struct CleanupGuardTests {
                                    cleaned: "It is 3:15 pm in Tokyo.", level: .polished,
                                    rules: Language.english.rules) != .accept)
     }
+
+    /// Ordinals that are everyday words ("andra" = others, "secondo" = according to) don't allow digits.
+    @Test func everydayOrdinalsDontAllowDigits() {
+        // Light must keep every word: "andra" turned into a digit is a dropped word, not a number.
+        #expect(CleanupGuard.check(original: "de andra kommer sent idag", cleaned: "De 2 kommer sent idag.",
+                                   level: .light, rules: Language.swedish.rules) != .accept)
+        let everyday: [(Language, String)] = [(.swedish, "andra"), (.danish, "anden"), (.italian, "secondo"),
+                                              (.portuguese, "segundo"), (.portuguese, "segunda")]
+        let stillNumbers = everyday.filter { $0.0.rules.numberWords.contains($0.1) }.map(\.1)
+        #expect(stillNumbers.isEmpty)
+    }
 }
