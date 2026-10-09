@@ -73,7 +73,8 @@ private struct SnippetCard: View {
         if let snippet {
             VStack(alignment: .leading, spacing: 8) {
                 Text("When I say").font(.caption.bold()).foregroundStyle(.secondary)
-                ForEach(snippet.phrases.indices, id: \.self) { index in
+                // Always at least one field, even for a snippet without phrases yet.
+                ForEach(0..<max(1, snippet.phrases.count), id: \.self) { index in
                     HStack {
                         TextField("e.g. insert my signature", text: phraseBinding(index))
                         if snippet.phrases.count > 1 {
@@ -131,7 +132,15 @@ private struct SnippetCard: View {
 
     private func phraseBinding(_ index: Int) -> Binding<String> {
         Binding(get: { snippet.flatMap { $0.phrases.indices.contains(index) ? $0.phrases[index] : nil } ?? "" },
-                set: { value in change { if $0.phrases.indices.contains(index) { $0.phrases[index] = value } } })
+                set: { value in
+                    change {
+                        if $0.phrases.indices.contains(index) {
+                            $0.phrases[index] = value
+                        } else {
+                            $0.phrases.append(value)   // the empty field shown for a snippet without phrases
+                        }
+                    }
+                })
     }
 
     private var textBinding: Binding<String> {
