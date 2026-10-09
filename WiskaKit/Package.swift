@@ -5,10 +5,12 @@ let package = Package(
     name: "WiskaKit",
     platforms: [.macOS("26.0")],
     products: [
-        .library(name: "WiskaKit", targets: ["Core", "Hotkey", "Audio", "SpeechToText", "Cleanup", "Injection", "Dictation", "HUD", "Preferences", "Parakeet", "History"]),
+        .library(name: "WiskaKit", targets: ["Core", "Hotkey", "Audio", "SpeechToText", "Cleanup", "Injection", "Dictation", "HUD", "Preferences", "Parakeet", "History", "LocalModel"]),
     ],
     dependencies: [
         .package(url: "https://github.com/FluidInference/FluidAudio", exact: "0.17.7"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm", exact: "3.32.3"),
+        .package(url: "https://github.com/huggingface/swift-transformers", exact: "1.3.4"),
     ],
     targets: [
         .target(name: "Core"),
@@ -24,6 +26,13 @@ let package = Package(
         .target(name: "Parakeet", dependencies: [
             "Core", .product(name: "FluidAudio", package: "FluidAudio"),
         ]),
+        .target(name: "LocalModel", dependencies: [
+            "Core",
+            .product(name: "MLXLLM", package: "mlx-swift-lm"),
+            .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+            .product(name: "Tokenizers", package: "swift-transformers"),
+        ]),
+        .testTarget(name: "LocalModelTests", dependencies: ["LocalModel"]),
         .testTarget(name: "CoreTests", dependencies: ["Core"]),
         .testTarget(name: "HotkeyTests", dependencies: ["Hotkey"]),
         .testTarget(name: "AudioTests", dependencies: ["Audio"]),
