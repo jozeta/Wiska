@@ -145,4 +145,6 @@ public enum DictationCommand: Sendable, Equatable {
     case cancel
     /// The recording in progress continues hands-free (double-tap fn).
     case lockHandsFree
+    /// The recording in progress is an edit instruction for the selected text (fn+⌃).
+    case makeCommand
 }

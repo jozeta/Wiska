@@ -67,4 +67,11 @@ struct CommandMapperTests {
         #expect(CommandMapper.map(.locked, context: context)
                 == MappedHotkey(command: .lockHandsFree, newToggleLanguage: nil))
     }
+
+    @Test func commandAddedMakesACommand() {
+        let mapped = CommandMapper.map(.commandAdded, context: HotkeyContext(
+            mode: .autoDetect, primary: .english, secondary: .swedish, toggle: .english,
+            enabled: [.english, .swedish], canStart: true))
+        #expect(mapped == MappedHotkey(command: .makeCommand, newToggleLanguage: nil))
+    }
 }

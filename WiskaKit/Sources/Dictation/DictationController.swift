@@ -103,6 +103,8 @@ public final class DictationController {
             guard state == .listening, !isHandsFree else { return }
             silence = SilenceWatch(timeout: handsFreeSilence())
             isHandsFree = true
+        case .makeCommand:
+            break
         case .switchLanguage(let choice):
             guard state == .listening, choice != currentChoice else { return }
             // Stay in .listening throughout so the HUD doesn't collapse and reopen.

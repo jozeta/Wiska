@@ -11,6 +11,8 @@ public enum HotkeyEvent: Sendable, Equatable {
     case shiftAdded
     /// The second quick tap of a double-tap: the recording that press started keeps going hands-free.
     case locked
+    /// ⌃ went down while fn was held: the recording is an edit instruction for the selected text.
+    case commandAdded
     /// Another key went down while fn was held (fn+arrow etc.).
     case cancelled
 }
@@ -83,4 +85,26 @@ public extension TextCleaner {
 @MainActor
 public protocol TextInjector {
     func inject(_ text: String) async throws
+}
+
+/// Reads the text selected in the frontmost app.
+@MainActor
+public protocol SelectionReader {
+    /// The selection, or nil when nothing (or only whitespace) is selected.
+    func selectedText() async -> String?
+}
+
+public enum EditError: Error, Equatable, Sendable {
+    /// No on-device model (Apple Intelligence off or unsupported).
+    case unavailable
+    /// The selection is longer than the model can take.
+    case tooLong
+    /// Timeout, refusal, error or empty output.
+    case failed
+}
+
+/// Rewrites text following a spoken instruction ("make this more formal").
+@MainActor
+public protocol TextEditor {
+    func edit(_ text: String, instruction: String, language: Language?) async throws -> String
 }

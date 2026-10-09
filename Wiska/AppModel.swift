@@ -330,7 +330,7 @@ final class AppModel {
         if let command = mapped.command {
             switch command {
             case .start(let choice), .switchLanguage(let choice): badge = badgeText(for: choice)
-            case .finish, .cancel, .lockHandsFree: break
+            case .finish, .cancel, .lockHandsFree, .makeCommand: break
             }
             controller.handle(command)
             // A lock that didn't take (no dictation running) must not swallow the next fn press.
