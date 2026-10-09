@@ -8,6 +8,7 @@ import HUD
 import History
 import Hotkey
 import Injection
+import KBWhisper
 import LocalModel
 import Observation
 import Parakeet
@@ -31,6 +32,8 @@ final class AppModel {
     let modelUpdates: ModelUpdateChecker
     let gemmaStore: GemmaModelStore
     let gemma: GemmaModel
+    let kbWhisperStore: KBWhisperModelStore
+    let kbWhisper: KBWhisperRecognizer
     @ObservationIgnored private var cleanupRewriter: SwitchingRewriter!
     @ObservationIgnored private var appleEditor: FoundationModelsEditor!
     @ObservationIgnored private var localRewriter: LocalRewriter!
@@ -88,6 +91,9 @@ final class AppModel {
         self.gemmaStore = gemmaStore
         let gemma = GemmaModel(store: gemmaStore)
         self.gemma = gemma
+        let kbWhisperStore = KBWhisperModelStore()
+        self.kbWhisperStore = kbWhisperStore
+        self.kbWhisper = KBWhisperRecognizer(store: kbWhisperStore)
         let localRewriter = LocalRewriter(generator: gemma)
         let cleanupRewriter = SwitchingRewriter(choice: { settings.languageModel }, apple: rewriter, local: localRewriter)
         let appleEditor = FoundationModelsEditor()
@@ -121,6 +127,10 @@ final class AppModel {
         self.localRewriter = localRewriter
         self.localEditor = localEditor
         // A finished download is what the user asked for: use it, and load it now.
+        kbWhisperStore.onDownloaded = { [weak self] in
+            self?.settings.useKBWhisper = true
+            self?.kbWhisper.prepare()
+        }
         gemmaStore.onDownloaded = { [weak self] in
             self?.settings.languageModel = .gemma
             self?.gemma.prepare()
@@ -264,6 +274,30 @@ final class AppModel {
     }
 
     private func transcriber(for choice: LanguageChoice) -> any Transcriber {
+        // Swedish second pass: on only when wanted, Swedish ticked, and the model installed.
+        SwedishSecondPassTranscriber(primary: baseTranscriber(for: choice), recognizer: kbWhisper,
+                                     isEnabled: { [settings] in settings.useKBWhisper && settings.enabledLanguages.contains(.swedish) })
+    }
+
+    /// The engines Compare on my voice can run on a recording, each when installed.
+    func voiceEngines() -> [(name: String, transcribe: @MainActor ([Float]) async throws -> String)] {
+        var engines: [(name: String, transcribe: @MainActor ([Float]) async throws -> String)] = []
+        func viaSession(_ transcriber: any Transcriber) -> @MainActor ([Float]) async throws -> String {
+            { samples in
+                let session = try await transcriber.makeSession(language: .fixed(.swedish))
+                for start in stride(from: 0, to: samples.count, by: 1_600) {
+                    session.append(AudioChunk(samples: Array(samples[start..<min(start + 1_600, samples.count)])))
+                }
+                return try await session.finish().text
+            }
+        }
+        if apple.isReady(for: .swedish) { engines.append(("Apple", viaSession(apple))) }
+        if parakeet.isReady { engines.append(("Parakeet", viaSession(parakeet))) }
+        if kbWhisper.isReady { engines.append(("KB-Whisper", { [kbWhisper] in try await kbWhisper.transcribe($0, language: .swedish) })) }
+        return engines
+    }
+
+    private func baseTranscriber(for choice: LanguageChoice) -> any Transcriber {
         if settings.usesParakeet && !parakeet.isReady { warmUpParakeetIfSelected() }
         switch plan(for: choice) {
         // KB-Whisper is never a primary engine (a Swedish second pass), so a stray setting means Apple.

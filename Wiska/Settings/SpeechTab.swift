@@ -5,6 +5,7 @@ import SwiftUI
 
 struct SpeechTab: View {
     let model: AppModel
+    @State private var comparingVoice = false
 
     var body: some View {
         @Bindable var settings = model.settings
@@ -37,8 +38,15 @@ struct SpeechTab: View {
             }
             .onChange(of: settings.engine) { model.warmUpParakeetIfSelected() }
             .onChange(of: settings.engineMode) { model.warmUpParakeetIfSelected() }
+            if model.settings.enabledLanguages.contains(.swedish) {
+                Section("Swedish") {
+                    KBWhisperCard(model: model)
+                    Button("Compare on my voice…") { comparingVoice = true }
+                }
+            }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $comparingVoice) { VoiceCompareView(model: model) }
     }
 }
 

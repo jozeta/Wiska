@@ -16,6 +16,7 @@ Private, on-device dictation for macOS. Hold **fn**, speak, release — your wor
 - **Write with nothing selected** — hold fn+⌃ with the cursor in a text field and say what to write ("reply that I'll be there at three"). Wiska uses the text around the cursor (read on your Mac, never stored) as context.
 - **Saved commands** — name instructions you use often ("formal", "fix", "shorter", "bullets" ship by default) and start a command with the name. Settings → Commands.
 - **Local model (optional)** — download Gemma 4 E4B (5.2 GB) in Settings → Cleanup for better grammar and Swedish, also on Macs without Apple Intelligence. *Fix grammar* corrects mistakes like "I has a apple". *Compare models…* shows how it does against Apple Intelligence on your Mac.
+- **KB-Whisper for Swedish (optional)** — download the National Library of Sweden's Whisper (1.1 GB) in Settings → Speech; Swedish dictations are re-transcribed by it for fewer mishearings. *Compare on my voice…* measures each engine on your own reading.
 - **Personal dictionary** — names and terms spelled your way, plus custom replacements.
 - **History** — search and filter past dictations, see exactly what cleanup changed, and track words per day, time saved, top apps and languages. Kept for as long as you choose (or not at all).
 - **Insert or copy** — paste into the active app, or only copy to the clipboard.

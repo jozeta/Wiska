@@ -14,6 +14,7 @@ struct HelpTab: View {
                 tip("First time", "Grant Microphone and Accessibility in the Setup window (General → Open Setup…).")
             }
             Section("Dictating") {
+                tip("Swedish", "Download KB-Whisper in Settings → Speech: Swedish dictations are re-transcribed by the National Library of Sweden's model for fewer mishearings. Compare on my voice shows how each engine does with your voice.")
                 tip("Hands-free", "Double-tap fn, speak as long as you like, tap fn to finish. Esc cancels.")
                 tip("Another language", "Hold fn+⇧ for your second language, or let Auto-detect choose (Settings → Languages).")
                 tip("Live preview", "Your words scroll under the waveform while you speak (Apple engine).")
