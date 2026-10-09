@@ -68,6 +68,7 @@ final class Box<Value> {
 @MainActor
 final class FakeTranscriber: Transcriber {
     let session = FakeSession()
+    var sessionOverride: (any TranscriptionSession)?
     var isReady = true
     /// Choices that are ready even when `isReady` (everything) is false.
     var readyChoices: [LanguageChoice] = []
@@ -80,7 +81,7 @@ final class FakeTranscriber: Transcriber {
     func makeSession(language: LanguageChoice) async throws -> any TranscriptionSession {
         languages.append(language)
         if makeDelay > .zero { try await Task.sleep(for: makeDelay) }
-        return session
+        return sessionOverride ?? session
     }
 }
 

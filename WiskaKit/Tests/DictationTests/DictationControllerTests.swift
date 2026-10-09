@@ -11,13 +11,13 @@ struct DictationControllerTests {
     let injector = FakeInjector()
 
     func makeController(maxDuration: Duration = .seconds(300), releaseTail: Duration = .zero,
-                        silence: TimeInterval = 30,
+                        silence: TimeInterval = 30, showPreview: Bool = true,
                         provider: (@MainActor (LanguageChoice) -> any Transcriber)? = nil) -> DictationController {
         let transcriber = transcriber
         return DictationController(
             audio: audio, transcriber: provider ?? { _ in transcriber }, cleaner: cleaner, injector: injector,
             contextProvider: { DictationContext(appBundleID: "com.apple.TextEdit") },
-            handsFreeSilence: { silence },
+            handsFreeSilence: { silence }, showPreview: { showPreview },
             maxDuration: maxDuration, noticeDuration: .seconds(60), releaseTail: releaseTail
         )
     }
@@ -483,6 +483,44 @@ struct DictationControllerTests {
         await controller.currentTask?.value
         controller.handle(en)
         #expect(!controller.isHandsFree)
+        controller.handle(.cancel)
+    }
+
+    // MARK: Live preview
+
+    @Test(.timeLimit(.minutes(1))) func previewIsForwardedWhileListening() async throws {
+        let live = PreviewSession()
+        transcriber.sessionOverride = live
+        let controller = makeController()
+        controller.handle(en)
+        live.previewInput.yield("hello")
+        while controller.preview != "hello" { try await Task.sleep(for: .milliseconds(10)) }
+        controller.handle(.cancel)
+    }
+
+    @Test(.timeLimit(.minutes(1))) func previewClearsWhenListeningEnds() async throws {
+        let live = PreviewSession()
+        transcriber.sessionOverride = live
+        let controller = makeController()
+        controller.handle(en)
+        live.previewInput.yield("hello")
+        while controller.preview.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        controller.handle(.finish)
+        #expect(controller.preview.isEmpty)
+        await controller.currentTask?.value
+        live.previewInput.yield("late words")
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(controller.preview.isEmpty)
+    }
+
+    @Test func previewOffIsNotForwarded() async throws {
+        let live = PreviewSession()
+        transcriber.sessionOverride = live
+        let controller = makeController(showPreview: false)
+        controller.handle(en)
+        live.previewInput.yield("hello")
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(controller.preview.isEmpty)
         controller.handle(.cancel)
     }
 }

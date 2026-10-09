@@ -25,6 +25,8 @@ public final class DictationController {
     public private(set) var currentChoice: LanguageChoice?
     /// The dictation in progress was locked with a double-tap (no fn to hold).
     public private(set) var isHandsFree = false { didSet { if oldValue != isHandsFree { notify() } } }
+    /// The words heard so far in this dictation (empty when the preview is off or not available).
+    public private(set) var preview = "" { didSet { if oldValue != preview { notify() } } }
     public var onChange: (@MainActor (State, [Float]) -> Void)?
     public var onLanguageDetected: (@MainActor (Language) -> Void)?
     /// A finished dictation (pasted, or paste failed) for history. Never for secure input.
@@ -37,6 +39,7 @@ public final class DictationController {
     private let contextProvider: @MainActor () -> DictationContext
     /// Seconds of silence after which a hands-free dictation finishes (0 = never).
     private let handsFreeSilence: @MainActor () -> TimeInterval
+    private let showPreview: @MainActor () -> Bool
     private let maxDuration: Duration
     private let noticeDuration: Duration
     private let releaseTail: Duration
@@ -49,6 +52,7 @@ public final class DictationController {
     private var timeoutTask: Task<Void, Never>?
     private var resetTask: Task<Void, Never>?
     private var silence: SilenceWatch?
+    private var previewTask: Task<Void, Never>?
 
     public init(
         audio: any AudioSource,
@@ -57,6 +61,7 @@ public final class DictationController {
         injector: any TextInjector,
         contextProvider: @escaping @MainActor () -> DictationContext = { DictationContext() },
         handsFreeSilence: @escaping @MainActor () -> TimeInterval = { 30 },
+        showPreview: @escaping @MainActor () -> Bool = { true },
         maxDuration: Duration = .seconds(300),
         noticeDuration: Duration = .milliseconds(1_500),
         releaseTail: Duration = .milliseconds(150)
@@ -67,6 +72,7 @@ public final class DictationController {
         self.injector = injector
         self.contextProvider = contextProvider
         self.handsFreeSilence = handsFreeSilence
+        self.showPreview = showPreview
         self.maxDuration = maxDuration
         self.noticeDuration = noticeDuration
         self.releaseTail = releaseTail
@@ -86,6 +92,8 @@ public final class DictationController {
                 currentChoice.map { transcriber.isReady(for: $0) } ?? transcriber.isReady
             } ?? true
             endHandsFree()
+            // The preview vanishes the moment listening ends (capture stops after the release tail).
+            endPreview()
             state = ready ? .transcribing : .preparingModel
             currentTask = Task { await finishDictation() }
         case .cancel:
@@ -113,6 +121,7 @@ public final class DictationController {
     private func startListening(_ choice: LanguageChoice) {
         resetTask?.cancel()
         endHandsFree()
+        endPreview()
         context = contextProvider()
         let capture: AudioCapture
         do {
@@ -134,6 +143,14 @@ public final class DictationController {
         // captured before the transcriber is ready is still delivered, in order.
         sessionTask = Task { [weak self] in
             let session = try await transcriber.makeSession(language: choice)
+            if let self, self.showPreview(), !Task.isCancelled {
+                self.previewTask = Task { [weak self] in
+                    for await text in session.preview {
+                        guard !Task.isCancelled, let self, self.state == .listening else { return }
+                        self.preview = text
+                    }
+                }
+            }
             for await chunk in capture.chunks {
                 session.append(chunk)
                 self?.capturedSamples += chunk.samples.count
@@ -239,6 +256,7 @@ public final class DictationController {
         audio.stop()
         levelTask?.cancel()
         levelTask = nil
+        endPreview()
         levels = []
     }
 
@@ -251,6 +269,12 @@ public final class DictationController {
             Self.log.notice("hands-free: silence; auto-finishing")
             handle(.finish)
         }
+    }
+
+    private func endPreview() {
+        previewTask?.cancel()
+        previewTask = nil
+        preview = ""
     }
 
     private func endHandsFree() {
