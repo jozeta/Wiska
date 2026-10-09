@@ -19,9 +19,12 @@ struct HUDRevealTests {
         #expect(HUDView.height(expanded: true) == 62)
     }
 
-    @Test func tickerStaysPutUntilTheTextOverflowsThenShowsTheNewestWords() {
-        #expect(PreviewTicker.scrollTarget(container: 300, text: 120) == 0)
-        #expect(PreviewTicker.scrollTarget(container: 300, text: 276) == 0)
-        #expect(PreviewTicker.scrollTarget(container: 300, text: 450) == 174)
+    /// Every word enters from the right: the line starts just past the right edge and its end
+    /// is headed for `lead` inside it, however short the text is.
+    @Test func tickerTextAlwaysEntersFromTheRight() {
+        #expect(PreviewTicker.scrollTarget(text: 0) == 0)
+        #expect(PreviewTicker.scrollTarget(text: 120) == 120 + PreviewTicker.lead)
+        #expect(PreviewTicker.textX(container: 300, scrolled: 0) == 300)
+        #expect(PreviewTicker.textX(container: 300, scrolled: 144) == 156)
     }
 }

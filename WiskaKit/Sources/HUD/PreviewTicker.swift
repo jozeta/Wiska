@@ -1,26 +1,30 @@
 import SwiftUI
 
-/// The live preview as a ticker inside the notch. The text is laid out once at its natural
-/// width; when it overflows, the whole line glides left (frame by frame, see `TickerMotion`)
-/// at an even, dampened speed so the newest words come into view. Older words scroll out past
-/// a faded left edge. Clipped to its frame, so it never widens the capsule.
+/// The live preview as a news ticker inside the notch. The line starts just past the right edge
+/// and glides left (frame by frame, see `TickerMotion`) at an even, dampened speed, so every
+/// word slides in from the right; new words are appended off-screen and follow. Older words
+/// scroll out past a faded left edge. Clipped to its frame, so it never widens the capsule.
 struct PreviewTicker: View {
     let text: String
-    /// Room kept free at the right edge for the next words.
-    static let lead: CGFloat = 24
+    /// Where the newest word comes to rest, inside the right edge, when speech pauses.
+    static let lead: CGFloat = 16
 
     @State private var textWidth: CGFloat = 0
     @State private var clock = Clock()
-    @Environment(\.displayScale) private var displayScale
 
-    /// How far the line should be scrolled left so its end sits `lead` from the right edge.
-    static func scrollTarget(container: CGFloat, text: CGFloat) -> CGFloat {
-        max(0, text - (container - lead))
+    /// How far the line should have travelled left so its end sits `lead` inside the right edge.
+    static func scrollTarget(text: CGFloat) -> CGFloat {
+        text > 0 ? text + lead : 0
+    }
+
+    /// Where the line's start is drawn: at the right edge before it has moved.
+    static func textX(container: CGFloat, scrolled: CGFloat) -> CGFloat {
+        container - scrolled
     }
 
     var body: some View {
         GeometryReader { geometry in
-            let target = Self.scrollTarget(container: geometry.size.width, text: textWidth)
+            let target = Self.scrollTarget(text: textWidth)
             TimelineView(.animation(paused: clock.motion.isSettled(at: target))) { timeline in
                 let scrolled = clock.advance(to: timeline.date, toward: target)
                 Text(text)
@@ -29,8 +33,8 @@ struct PreviewTicker: View {
                     .lineLimit(1)
                     .fixedSize()
                     .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { textWidth = $0 }
-                    // Whole pixels: text drawn at fractional offsets shimmers while it moves.
-                    .offset(x: -(scrolled * displayScale).rounded() / displayScale)
+                    // Fractional positions on purpose: snapping to pixels makes slow motion stutter.
+                    .offset(x: Self.textX(container: geometry.size.width, scrolled: scrolled))
                     .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
             }
         }
