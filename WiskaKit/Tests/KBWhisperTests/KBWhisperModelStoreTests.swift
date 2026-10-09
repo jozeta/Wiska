@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 import Testing
-@testable import Whisper
+@testable import KBWhisper
 
 struct FakeFileDownloader: FileDownloader {
     var contents = Data("ggml".utf8)
