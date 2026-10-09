@@ -49,7 +49,10 @@ public final class FoundationModelsEditor: TextEditor {
     static func rewrap(original: String, edited: String) -> String {
         let leading = original.prefix { $0.isWhitespace }
         let trailing = String(original.reversed().prefix { $0.isWhitespace }.reversed())
-        let core = CleanupPipeline.stripWrappingQuotes(edited)
+        // Strip quotes the model wrapped its answer in — unless the selection was itself quoted.
+        let quoted = CleanupPipeline.stripWrappingQuotes(original) != original.trimmingCharacters(in: .whitespacesAndNewlines)
+        let core = quoted ? edited.trimmingCharacters(in: .whitespacesAndNewlines)
+                          : CleanupPipeline.stripWrappingQuotes(edited)
         return core.isEmpty ? "" : leading + core + trailing
     }
 

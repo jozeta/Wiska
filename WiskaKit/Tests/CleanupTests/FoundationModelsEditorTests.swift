@@ -59,4 +59,10 @@ struct FoundationModelsEditorTests {
         }
         #expect(ContinuousClock.now - start < .seconds(1))
     }
+
+    /// A selection that is itself a quotation keeps its quotes; a model that adds quotes loses them.
+    @Test func quotedSelectionKeepsItsQuotes() {
+        #expect(FoundationModelsEditor.rewrap(original: "\"Hello world\"", edited: "\"Hej världen\"") == "\"Hej världen\"")
+        #expect(FoundationModelsEditor.rewrap(original: "Hello world", edited: "\"Hej världen\"") == "Hej världen")
+    }
 }
