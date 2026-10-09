@@ -71,7 +71,7 @@ public final class CleanupPipeline: TextCleaner {
             switch CleanupGuard.check(original: segment, cleaned: output, level: level, rules: rules) {
             case .accept:
                 // The model never sees the dictionary; re-apply so it can't undo the user's spellings.
-                return Self.finishSentence(DictionaryCorrector.apply(output, dictionary: dictionary,
+                return StyleFinisher.formal(DictionaryCorrector.apply(output, dictionary: dictionary,
                                                                            isKnownWord: isKnownWord))
             case .reject(let reason):
                 Self.log.notice("model output rejected: \(reason, privacy: .public)")
@@ -101,16 +101,6 @@ public final class CleanupPipeline: TextCleaner {
                 work.cancel()
             }
         }
-    }
-
-    /// The model sometimes skips punctuation; make accepted output look typed (review I5).
-    static func finishSentence(_ text: String) -> String {
-        guard let first = text.first else { return text }
-        var result = first.uppercased() + text.dropFirst()
-        // Look past closing quotes and brackets: `"see you soon."` already ends a sentence.
-        let closers: Set<Character> = ["\"", "”", "'", "’", ")"]
-        if let last = result.last(where: { !closers.contains($0) }), !".?!…:".contains(last) { result += "." }
-        return result
     }
 
     /// Removes quotes the model wrapped its whole answer in, but not real quotations:
