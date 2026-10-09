@@ -28,4 +28,14 @@ public enum CursorContext {
         guard !(before + after).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return "" }
         return before + marker + after
     }
+
+    /// The UTF-16 range of a document to fetch for `window`: the limit plus a little on each side
+    /// of the cursor (or selection), so a long document isn't copied whole.
+    public static func readRange(cursor: Int, length: Int, count: Int,
+                                 margin: Int = CursorContext.limit + 100) -> (location: Int, length: Int) {
+        let cursor = min(max(cursor, 0), count)
+        let start = max(0, cursor - margin)
+        let end = min(count, cursor + max(length, 0) + margin)
+        return (start, end - start)
+    }
 }

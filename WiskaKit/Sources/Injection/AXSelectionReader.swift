@@ -122,22 +122,40 @@ public final class AXSelectionReader: SelectionReader {
         return window.isEmpty ? nil : window
     }
 
-    /// The focused element's text and cursor (start of its selected range), via Accessibility.
+    /// The focused element's text around the cursor (start of its selected range), via
+    /// Accessibility: only `CursorContext.readRange` of it when the app supports that, and never
+    /// waiting long on a busy app.
     public static func focusedTextAroundCursor() -> (text: String, cursor: Int)? {
         var focused: CFTypeRef?
         guard AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString,
                                             &focused) == .success, let focused,
               CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
         let element = focused as! AXUIElement
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success,
-              let text = value as? String else { return nil }
+        AXUIElementSetMessagingTimeout(element, 0.5)
         var rangeValue: CFTypeRef?
-        var range = CFRange(location: text.utf16.count, length: 0)   // no range reported: the end
+        var range = CFRange(location: -1, length: 0)
         if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeValue) == .success,
            let rangeValue, CFGetTypeID(rangeValue) == AXValueGetTypeID() {
             AXValueGetValue(rangeValue as! AXValue, .cfRange, &range)
         }
-        return (text, range.location)
+        var countValue: CFTypeRef?
+        if range.location >= 0,
+           AXUIElementCopyAttributeValue(element, kAXNumberOfCharactersAttribute as CFString, &countValue) == .success,
+           let count = countValue as? Int {
+            let part = CursorContext.readRange(cursor: range.location, length: range.length, count: count)
+            var cfPart = CFRange(location: part.location, length: part.length)
+            var partText: CFTypeRef?
+            if let request = AXValueCreate(.cfRange, &cfPart),
+               AXUIElementCopyParameterizedAttributeValue(element, kAXStringForRangeParameterizedAttribute as CFString,
+                                                          request, &partText) == .success,
+               let text = partText as? String {
+                return (text, min(range.location, count) - part.location)
+            }
+        }
+        // Apps without ranged reads: the whole value.
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success,
+              let text = value as? String else { return nil }
+        return (text, range.location >= 0 ? range.location : text.utf16.count)   // no range reported: the end
     }
 }

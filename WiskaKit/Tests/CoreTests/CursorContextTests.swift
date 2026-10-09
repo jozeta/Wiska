@@ -39,3 +39,13 @@ struct CursorContextTests {
         #expect(CursorContext.window(text: text, cursor: 999) == "Hej 👋 på dig[cursor]")   // clamped
     }
 }
+
+struct CursorContextReadRangeTests {
+    /// Only the part of a long document around the cursor is fetched (UTF-16 units).
+    @Test func readsAMarginAroundTheCursor() {
+        #expect(CursorContext.readRange(cursor: 10_000, length: 0, count: 1_000_000) == (8_400, 3_200))
+        #expect(CursorContext.readRange(cursor: 100, length: 0, count: 500) == (0, 500))
+        #expect(CursorContext.readRange(cursor: 900, length: 50, count: 1_000) == (0, 1_000))
+        #expect(CursorContext.readRange(cursor: 5_000, length: 0, count: 2_000) == (400, 1_600))   // stale cursor: clamped
+    }
+}
