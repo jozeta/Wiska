@@ -22,6 +22,7 @@ public final class SettingsStore {
         static let firstDictationDone = "firstDictationDone"
         static let handsFreeSilence = "handsFreeSilence"
         static let livePreview = "livePreview"
+        static let outputMode = "outputMode"
         static let categoryStyles = "categoryStyles"
         static let appCategories = "appCategories"
         static let recentApps = "recentApps"
@@ -129,6 +130,8 @@ public final class SettingsStore {
     }
     /// Show the words as they're heard, under the waveform in the notch.
     public var livePreview: Bool { didSet { defaults.set(livePreview, forKey: Key.livePreview) } }
+    /// Paste the finished text into the app, or only copy it.
+    public var outputMode: OutputMode { didSet { defaults.set(outputMode.rawValue, forKey: Key.outputMode) } }
 
     /// Styles the user picked per app category; missing ones use the category's default.
     public private(set) var categoryStyles: [AppCategory: WritingStyle]
@@ -197,6 +200,7 @@ public final class SettingsStore {
         firstDictationDone = defaults.bool(forKey: Key.firstDictationDone)
         handsFreeSilence = defaults.object(forKey: Key.handsFreeSilence) as? TimeInterval ?? 30
         livePreview = defaults.object(forKey: Key.livePreview) as? Bool ?? true
+        outputMode = Self.read(defaults, Key.outputMode, OutputMode.insert)
         let storedStyles = defaults.dictionary(forKey: Key.categoryStyles) as? [String: String] ?? [:]
         categoryStyles = Dictionary(uniqueKeysWithValues: storedStyles.compactMap { key, value in
             guard let category = AppCategory(rawValue: key), let style = WritingStyle(rawValue: value) else { return nil }

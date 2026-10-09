@@ -1,3 +1,4 @@
+import Core
 import AppKit
 import Preferences
 import SwiftUI
@@ -36,6 +37,13 @@ struct GeneralTab: View {
                         Text(Self.silenceLabel(seconds)).tag(seconds)
                     }
                 }
+                Picker("After dictation", selection: $settings.outputMode) {
+                    ForEach(OutputMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                Text(settings.outputMode == .insert
+                     ? "The text is pasted where your cursor is."
+                     : "The text is only copied — paste it with ⌘V where you want it.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Toggle("Show live preview in the notch", isOn: $settings.livePreview)
                 Text("The words appear under the waveform as you speak (Apple engine only).")
                     .font(.caption).foregroundStyle(.secondary)

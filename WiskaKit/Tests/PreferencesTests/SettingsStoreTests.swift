@@ -220,4 +220,11 @@ final class SettingsStoreTests {
         defaults.set(["personal": "shouting", "nonsense": "formal"], forKey: "categoryStyles")
         #expect(SettingsStore(defaults: defaults).style(for: .personal) == .casual)
     }
+
+    @Test func outputModeDefaultsToInsertAndPersists() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.outputMode == .insert)
+        store.outputMode = .clipboard
+        #expect(SettingsStore(defaults: defaults).outputMode == .clipboard)
+    }
 }

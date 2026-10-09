@@ -69,7 +69,8 @@ final class AppModel {
                                      dictionary: { dictionaryStore.dictionary },
                                      isKnownWord: { lexicon.isKnown($0) },
                                      style: { settings.style(for: $0) }),
-            injector: PasteboardInjector(),
+            injector: SwitchingInjector(mode: { settings.outputMode }, insert: PasteboardInjector(),
+                                        copy: ClipboardCopier()),
             contextProvider: {
                 let bundleID = FrontApp.bundleID()
                 return DictationContext(appBundleID: bundleID, enabledLanguages: settings.enabledLanguages,
@@ -82,6 +83,7 @@ final class AppModel {
         )
         controller.onChange = { [weak self] state, audio in
             guard let self else { return }
+            let finishedCopy = state == .idle && dictationState == .injecting && settings.outputMode == .clipboard
             if dictationState != state { dictationState = state }
             // A hands-free dictation that ended any way but fn/Esc must not leave fn locked.
             if handsFreeLatch.update(listening: state == .listening, handsFree: controller.isHandsFree) {
@@ -89,6 +91,8 @@ final class AppModel {
             }
             if state != .idle { flashTask?.cancel() }
             hud.show(hudContent(for: state, audio: audio))
+            // Copy-only: nothing appeared in the app, so say where the text went.
+            if finishedCopy { flash("Copied — press ⌘V to paste", for: .milliseconds(1_500)) }
         }
         controller.onLanguageDetected = { [weak self] language in
             guard let self else { return }
