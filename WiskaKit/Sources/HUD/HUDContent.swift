@@ -4,7 +4,7 @@ import Observation
 
 public enum HUDContent: Equatable, Sendable {
     case hidden
-    case listening(levels: [Float], badge: String, preview: String, handsFree: Bool)
+    case listening(audio: AudioLevel, badge: String, preview: String, handsFree: Bool)
     case working(String)
     case message(String)
     /// A failure, shown in the danger colour.

@@ -104,15 +104,16 @@ struct DictationControllerTests {
         #expect(transcriber.session.appended == [[0.1], [0.9]])
     }
 
-    @Test func levelsAreTrackedForTheWaveform() async {
+    @Test func theLatestAudioFrameIsTrackedForTheWaveform() async {
         let controller = makeController()
         controller.handle(en)
-        audio.emitLevel(0.5)
-        audio.emitLevel(0.7)
+        audio.emit(level: AudioLevel(level: 0.5, bands: [-40, -30]))
+        audio.emit(level: AudioLevel(level: 0.7, bands: [-20, -35]))
         try? await Task.sleep(for: .milliseconds(20))
-        #expect(controller.levels == [0.5, 0.7])
+        #expect(controller.audioLevel == AudioLevel(level: 0.7, bands: [-20, -35]))
         controller.handle(.finish)
         await controller.currentTask?.value
+        #expect(controller.audioLevel == .silent)
     }
 
     @Test func cancelDiscardsAudioAndInjectsNothing() async {

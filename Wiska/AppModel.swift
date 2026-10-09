@@ -76,7 +76,7 @@ final class AppModel {
             handsFreeSilence: { settings.handsFreeSilence },
             showPreview: { settings.livePreview }
         )
-        controller.onChange = { [weak self] state, levels in
+        controller.onChange = { [weak self] state, audio in
             guard let self else { return }
             if dictationState != state { dictationState = state }
             // A hands-free dictation that ended any way but fn/Esc must not leave fn locked.
@@ -84,7 +84,7 @@ final class AppModel {
                 hotkey.endHandsFree()
             }
             if state != .idle { flashTask?.cancel() }
-            hud.show(hudContent(for: state, levels: levels))
+            hud.show(hudContent(for: state, audio: audio))
         }
         controller.onLanguageDetected = { [weak self] language in
             guard let self else { return }
@@ -343,10 +343,10 @@ final class AppModel {
         }
     }
 
-    private func hudContent(for state: DictationController.State, levels: [Float]) -> HUDContent {
+    private func hudContent(for state: DictationController.State, audio: AudioLevel) -> HUDContent {
         switch state {
         case .idle: .hidden
-        case .listening: .listening(levels: levels, badge: badge, preview: controller.preview,
+        case .listening: .listening(audio: audio, badge: badge, preview: controller.preview,
                                     handsFree: controller.isHandsFree)
         case .preparingModel: .working("Downloading speech model…")
         case .transcribing, .cleaning, .injecting: .working("Transcribing…")

@@ -18,9 +18,10 @@ public enum HotkeyEvent: Sendable, Equatable {
 /// Live output of one recording. Both streams finish when the source is stopped.
 public struct AudioCapture: Sendable {
     public let chunks: AsyncStream<AudioChunk>
-    public let levels: AsyncStream<Float>
+    /// One analysis frame every 16 ms: loudness plus pitch bands, for the waveform and silence stop.
+    public let levels: AsyncStream<AudioLevel>
 
-    public init(chunks: AsyncStream<AudioChunk>, levels: AsyncStream<Float>) {
+    public init(chunks: AsyncStream<AudioChunk>, levels: AsyncStream<AudioLevel>) {
         self.chunks = chunks
         self.levels = levels
     }

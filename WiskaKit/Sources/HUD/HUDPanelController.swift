@@ -43,7 +43,7 @@ public final class HUDPanelController {
         generation += 1
         guard content != .hidden else { return hide() }
         if !panel.isVisible { place() }
-        // Waveform levels update ~10×/s: only a change of kind (listening → transcribing) cross-fades.
+        // Waveform frames update ~60×/s: only a change of kind (listening → transcribing) cross-fades.
         if Self.kind(model.content) == Self.kind(content) {
             model.content = content
         } else {

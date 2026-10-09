@@ -1,25 +1,24 @@
 import Core
 import SwiftUI
 
-/// Live bars for the microphone level (the newest of `levels`), animated every frame by
-/// `WaveformMotion`: flat in silence, a rippling wave while sound comes in; coloured along the highlight.
+/// Live bars driven by real microphone analysis (`audio`: loudness + one pitch band per bar),
+/// stepped every frame by `WaveformMotion`; coloured along the highlight.
 struct WaveformView: View {
-    static let barCount = 20
+    static let barCount = WaveformMotion.barCount
     static let minBar: CGFloat = 3
     static let maxBar: CGFloat = 28
-    let levels: [Float]
+    let audio: AudioLevel
     let highlight: Highlight
     @State private var clock = Clock()
 
     var body: some View {
-        let level = levels.last ?? 0
-        TimelineView(.animation(paused: level == 0 && clock.motion.envelope == 0)) { timeline in
-            let time = clock.advance(to: timeline.date, level: level)
+        TimelineView(.animation(paused: audio.level == 0 && clock.motion.isFlat)) { timeline in
+            let _ = clock.advance(to: timeline.date, audio: audio)
             HStack(alignment: .center, spacing: 3) {
                 ForEach(0..<Self.barCount, id: \.self) { index in
                     Capsule()
                         .fill(color(at: index))
-                        .frame(width: 3, height: clock.motion.bar(index, time: time))
+                        .frame(width: 3, height: clock.motion.bar(index))
                 }
             }
             .frame(height: Self.maxBar)
@@ -36,11 +35,10 @@ struct WaveformView: View {
         var motion = WaveformMotion()
         private var last: Date?
 
-        func advance(to now: Date, level: Float) -> Double {
+        func advance(to now: Date, audio: AudioLevel) {
             let dt = last.map { min(now.timeIntervalSince($0), 1.0 / 30) } ?? 0
             last = now
-            motion.step(level: level, dt: dt)
-            return now.timeIntervalSinceReferenceDate
+            motion.step(audio, dt: dt)
         }
     }
 }

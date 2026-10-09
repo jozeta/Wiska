@@ -42,7 +42,7 @@ struct HUDView: View {
         switch model.content {
         case .hidden:
             EmptyView()
-        case .listening(let levels, let badge, let preview, let handsFree):
+        case .listening(let audio, let badge, let preview, let handsFree):
             VStack(spacing: -Self.previewOverlap) {
                 HStack(spacing: 10) {
                     HStack(spacing: 4) {
@@ -53,7 +53,7 @@ struct HUDView: View {
                     .padding(.horizontal, 5).padding(.vertical, 2)
                     .foregroundStyle(AuroraTheme.start(model.highlight))
                     .background(AuroraTheme.start(model.highlight).opacity(0.13), in: RoundedRectangle(cornerRadius: 4))
-                    WaveformView(levels: levels, highlight: model.highlight)
+                    WaveformView(audio: audio, highlight: model.highlight)
                 }
                 .frame(height: Self.contentHeight)
                 .offset(y: -Self.waveformLift)

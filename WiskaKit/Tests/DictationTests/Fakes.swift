@@ -16,20 +16,21 @@ final class FakeAudio: AudioSource {
     var startCount = 0
     var failOnStart = false
     private var chunks: AsyncStream<AudioChunk>.Continuation?
-    private var levels: AsyncStream<Float>.Continuation?
+    private var levels: AsyncStream<AudioLevel>.Continuation?
 
     func start() throws -> AudioCapture {
         startCount += 1
         if failOnStart { throw AudioError.noInputDevice }
         let (c, cc) = AsyncStream.makeStream(of: AudioChunk.self)
-        let (l, lc) = AsyncStream.makeStream(of: Float.self)
+        let (l, lc) = AsyncStream.makeStream(of: AudioLevel.self)
         chunks = cc
         levels = lc
         return AudioCapture(chunks: c, levels: l)
     }
 
     func emit(_ samples: [Float]) { chunks?.yield(AudioChunk(samples: samples)) }
-    func emitLevel(_ level: Float) { levels?.yield(level) }
+    func emitLevel(_ level: Float) { levels?.yield(AudioLevel(level: level)) }
+    func emit(level: AudioLevel) { levels?.yield(level) }
 
     func stop() {
         chunks?.finish()

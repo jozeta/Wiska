@@ -1,4 +1,5 @@
 import AppKit
+import Core
 import Testing
 @testable import HUD
 
@@ -19,7 +20,7 @@ struct HUDPanelControllerTests {
     @Test(.enabled(if: !NSScreen.screens.isEmpty))
     func longPreviewNeverWidensTheCapsule() async throws {
         let hud = HUDPanelController()
-        hud.show(.listening(levels: [], badge: "EN", preview: String(repeating: "words keep coming ", count: 20),
+        hud.show(.listening(audio: .silent, badge: "EN", preview: String(repeating: "words keep coming ", count: 20),
                             handsFree: true))
         try await Task.sleep(for: .milliseconds(300))
         hud.panel.contentView?.layoutSubtreeIfNeeded()
@@ -28,8 +29,8 @@ struct HUDPanelControllerTests {
     }
 
     @Test func capsuleExpandsWithTheFirstWordsAndStaysUntilHidden() {
-        let quiet = HUDContent.listening(levels: [], badge: "EN", preview: "", handsFree: false)
-        let words = HUDContent.listening(levels: [], badge: "EN", preview: "hello", handsFree: false)
+        let quiet = HUDContent.listening(audio: .silent, badge: "EN", preview: "", handsFree: false)
+        let words = HUDContent.listening(audio: .silent, badge: "EN", preview: "hello", handsFree: false)
         #expect(!HUDPanelController.expands(false, for: quiet))
         #expect(HUDPanelController.expands(false, for: words))
         #expect(HUDPanelController.expands(true, for: quiet))

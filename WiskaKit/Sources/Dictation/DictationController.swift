@@ -15,11 +15,11 @@ public final class DictationController {
         case failed(DictationFailure)
     }
 
-    public static let levelHistory = 24
     private static let log = Log.logger("Dictation")
 
     public private(set) var state: State = .idle { didSet { notify() } }
-    public private(set) var levels: [Float] = [] { didSet { notify() } }
+    /// The microphone's latest analysis frame, for the waveform (silent when not listening).
+    public private(set) var audioLevel = AudioLevel.silent { didSet { notify() } }
     public private(set) var lastLatency: Duration?
     public private(set) var currentTask: Task<Void, Never>?
     public private(set) var currentChoice: LanguageChoice?
@@ -27,7 +27,7 @@ public final class DictationController {
     public private(set) var isHandsFree = false { didSet { if oldValue != isHandsFree { notify() } } }
     /// The words heard so far in this dictation (empty when the preview is off or not available).
     public private(set) var preview = "" { didSet { if oldValue != preview { notify() } } }
-    public var onChange: (@MainActor (State, [Float]) -> Void)?
+    public var onChange: (@MainActor (State, AudioLevel) -> Void)?
     public var onLanguageDetected: (@MainActor (Language) -> Void)?
     /// A finished dictation (pasted, or paste failed) for history. Never for secure input.
     public var onDictationFinished: (@MainActor (DictationRecord) -> Void)?
@@ -257,14 +257,12 @@ public final class DictationController {
         levelTask?.cancel()
         levelTask = nil
         endPreview()
-        levels = []
+        audioLevel = .silent
     }
 
-    private func pushLevel(_ level: Float) {
-        var next = levels
-        next.append(level)
-        if next.count > Self.levelHistory { next.removeFirst(next.count - Self.levelHistory) }
-        levels = next
+    private func pushLevel(_ frame: AudioLevel) {
+        audioLevel = frame
+        let level = frame.level
         if silence?.feed(level: level, time: ProcessInfo.processInfo.systemUptime) == true {
             Self.log.notice("hands-free: silence; auto-finishing")
             handle(.finish)
@@ -293,6 +291,6 @@ public final class DictationController {
     }
 
     private func notify() {
-        onChange?(state, levels)
+        onChange?(state, audioLevel)
     }
 }

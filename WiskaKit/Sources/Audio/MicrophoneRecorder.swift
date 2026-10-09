@@ -8,7 +8,7 @@ public final class MicrophoneRecorder: AudioSource {
 
     private var engine = AVAudioEngine()
     private var chunkContinuation: AsyncStream<AudioChunk>.Continuation?
-    private var levelContinuation: AsyncStream<Float>.Continuation?
+    private var levelContinuation: AsyncStream<AudioLevel>.Continuation?
     private var configObserver: NSObjectProtocol?
     private var restartsThisRecording = 0
     private static let maxRestartsPerRecording = 2
@@ -21,7 +21,7 @@ public final class MicrophoneRecorder: AudioSource {
         stop()
         let (chunks, chunkContinuation) = AsyncStream.makeStream(of: AudioChunk.self)
         let (levels, levelContinuation) = AsyncStream.makeStream(
-            of: Float.self, bufferingPolicy: .bufferingNewest(8)
+            of: AudioLevel.self, bufferingPolicy: .bufferingNewest(32)
         )
         try startEngine(chunks: chunkContinuation, levels: levelContinuation)
         restartsThisRecording = 0
@@ -42,7 +42,7 @@ public final class MicrophoneRecorder: AudioSource {
     /// A fresh engine per recording: an idle engine doesn't reliably learn about device
     /// changes (AirPods connecting while idle), and a stale input format makes installTap throw.
     private func startEngine(
-        chunks: AsyncStream<AudioChunk>.Continuation, levels: AsyncStream<Float>.Continuation
+        chunks: AsyncStream<AudioChunk>.Continuation, levels: AsyncStream<AudioLevel>.Continuation
     ) throws {
         engine = AVAudioEngine()
         let input = engine.inputNode
@@ -52,7 +52,8 @@ public final class MicrophoneRecorder: AudioSource {
         let converter = try PCMConverter(from: format, to: .speech16kMono)
         input.installTap(
             onBus: 0, bufferSize: 1_024, format: format,
-            block: Self.makeTapBlock(converter: converter, chunks: chunks, levels: levels)
+            block: Self.makeTapBlock(converter: converter, analyzer: SpectrumAnalyzer(), chunks: chunks,
+                                     levels: levels)
         )
         engine.prepare()
         do {
@@ -73,15 +74,16 @@ public final class MicrophoneRecorder: AudioSource {
     /// isolation and trap at runtime under Swift 6.
     private nonisolated static func makeTapBlock(
         converter: PCMConverter,
+        analyzer: SpectrumAnalyzer,
         chunks: AsyncStream<AudioChunk>.Continuation,
-        levels: AsyncStream<Float>.Continuation
+        levels: AsyncStream<AudioLevel>.Continuation
     ) -> AVAudioNodeTapBlock {
         { buffer, _ in
             guard let converted = try? converter.convert(buffer) else { return }
             let samples = converted.floatSamples
             guard !samples.isEmpty else { return }
             chunks.yield(AudioChunk(samples: samples))
-            levels.yield(Levels.normalized(rms: Levels.rms(samples)))
+            for frame in analyzer.analyze(samples) { levels.yield(frame) }
         }
     }
 
