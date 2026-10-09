@@ -9,6 +9,8 @@ struct DictationControllerTests {
     let transcriber = FakeTranscriber()
     let cleaner = FakeCleaner()
     let injector = FakeInjector()
+    let selection = FakeSelection()
+    let editor = FakeEditor()
 
     func makeController(maxDuration: Duration = .seconds(300), releaseTail: Duration = .zero,
                         silence: TimeInterval = 30, showPreview: Bool = true,
@@ -17,7 +19,7 @@ struct DictationControllerTests {
         return DictationController(
             audio: audio, transcriber: provider ?? { _ in transcriber }, cleaner: cleaner, injector: injector,
             contextProvider: { DictationContext(appBundleID: "com.apple.TextEdit") },
-            handsFreeSilence: { silence }, showPreview: { showPreview },
+            handsFreeSilence: { silence }, showPreview: { showPreview }, selection: selection, editor: editor,
             maxDuration: maxDuration, noticeDuration: .seconds(60), releaseTail: releaseTail
         )
     }
@@ -523,5 +525,81 @@ struct DictationControllerTests {
         try await Task.sleep(for: .milliseconds(50))
         #expect(controller.preview.isEmpty)
         controller.handle(.cancel)
+    }
+
+    func runCommand(_ controller: DictationController) async {
+        controller.handle(en)
+        controller.handle(.makeCommand)
+        audio.emit([0.1])
+        controller.handle(.finish)
+        await controller.currentTask?.value
+    }
+
+    @Test func commandEditsTheSelectionAndPastesIt() async {
+        let controller = makeController()
+        let recorder = StateRecorder()
+        controller.onChange = { state, _ in recorder.record(state) }
+        let finished = Box(0)
+        controller.onDictationFinished = { _ in finished.value += 1 }
+        await runCommand(controller)
+        #expect(editor.calls.map(\.instruction) == ["hello world"])
+        #expect(editor.calls.map(\.text) == ["hey can u send it"])
+        #expect(injector.injected == ["edited: hey can u send it"])
+        #expect(cleaner.contexts.isEmpty)
+        #expect(finished.value == 0)
+        #expect(recorder.states == [.listening, .transcribing, .editing, .injecting, .idle])
+    }
+
+    @Test func commandWithoutSelectionFails() async {
+        selection.text = nil
+        let controller = makeController()
+        await runCommand(controller)
+        #expect(controller.state == .failed(.noSelection))
+        #expect(injector.injected.isEmpty)
+    }
+
+    @Test(arguments: [(EditError.unavailable, DictationFailure.editUnavailable),
+                      (.tooLong, .selectionTooLong), (.failed, .editFailed)])
+    func editErrorsBecomeFailures(error: EditError, failure: DictationFailure) async {
+        editor.error = error
+        let controller = makeController()
+        await runCommand(controller)
+        #expect(controller.state == .failed(failure))
+        #expect(injector.injected.isEmpty)
+    }
+
+    @Test func makeCommandOutsideListeningIsIgnored() async {
+        let controller = makeController()
+        controller.handle(.makeCommand)
+        #expect(!controller.isCommand)
+    }
+
+    @Test func nextDictationIsNotACommand() async {
+        let controller = makeController()
+        await runCommand(controller)
+        controller.handle(en)
+        #expect(!controller.isCommand)
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        #expect(injector.injected.last == "cleaned: hello world")
+    }
+
+    @Test func commandSurvivesLanguageSwitch() async {
+        let controller = makeController()
+        controller.handle(en)
+        controller.handle(.makeCommand)
+        controller.handle(.switchLanguage(.fixed(.swedish)))
+        #expect(controller.isCommand)
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        #expect(injector.injected == ["edited: hey can u send it"])
+    }
+
+    @Test func cancelledCommandResets() async {
+        let controller = makeController()
+        controller.handle(en)
+        controller.handle(.makeCommand)
+        controller.handle(.cancel)
+        #expect(!controller.isCommand)
     }
 }

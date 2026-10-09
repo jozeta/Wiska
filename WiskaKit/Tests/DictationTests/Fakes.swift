@@ -125,3 +125,21 @@ final class PreviewSession: TranscriptionSession {
     }
     func cancel() { previewInput.finish() }
 }
+
+@MainActor
+final class FakeSelection: SelectionReader {
+    var text: String? = "hey can u send it"
+    private(set) var reads = 0
+    func selectedText() async -> String? { reads += 1; return text }
+}
+
+@MainActor
+final class FakeEditor: TextEditor {
+    var error: EditError?
+    private(set) var calls: [(text: String, instruction: String)] = []
+    func edit(_ text: String, instruction: String, language: Language?) async throws -> String {
+        calls.append((text, instruction))
+        if let error { throw error }
+        return "edited: \(text)"
+    }
+}

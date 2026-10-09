@@ -11,6 +11,7 @@ public final class DictationController {
         case preparingModel
         case transcribing
         case cleaning
+        case editing
         case injecting
         case failed(DictationFailure)
     }
@@ -27,6 +28,8 @@ public final class DictationController {
     public private(set) var isHandsFree = false { didSet { if oldValue != isHandsFree { notify() } } }
     /// The words heard so far in this dictation (empty when the preview is off or not available).
     public private(set) var preview = "" { didSet { if oldValue != preview { notify() } } }
+    /// The recording in progress is an edit instruction for the selected text (fn+⌃).
+    public private(set) var isCommand = false { didSet { if oldValue != isCommand { notify() } } }
     public var onChange: (@MainActor (State, AudioLevel) -> Void)?
     public var onLanguageDetected: (@MainActor (Language) -> Void)?
     /// A finished dictation (pasted, or paste failed) for history. Never for secure input.
@@ -40,6 +43,8 @@ public final class DictationController {
     /// Seconds of silence after which a hands-free dictation finishes (0 = never).
     private let handsFreeSilence: @MainActor () -> TimeInterval
     private let showPreview: @MainActor () -> Bool
+    private let selection: (any SelectionReader)?
+    private let editor: (any TextEditor)?
     private let maxDuration: Duration
     private let noticeDuration: Duration
     private let releaseTail: Duration
@@ -62,6 +67,8 @@ public final class DictationController {
         contextProvider: @escaping @MainActor () -> DictationContext = { DictationContext() },
         handsFreeSilence: @escaping @MainActor () -> TimeInterval = { 30 },
         showPreview: @escaping @MainActor () -> Bool = { true },
+        selection: (any SelectionReader)? = nil,
+        editor: (any TextEditor)? = nil,
         maxDuration: Duration = .seconds(300),
         noticeDuration: Duration = .milliseconds(1_500),
         releaseTail: Duration = .milliseconds(150)
@@ -73,6 +80,8 @@ public final class DictationController {
         self.contextProvider = contextProvider
         self.handsFreeSilence = handsFreeSilence
         self.showPreview = showPreview
+        self.selection = selection
+        self.editor = editor
         self.maxDuration = maxDuration
         self.noticeDuration = noticeDuration
         self.releaseTail = releaseTail
@@ -82,6 +91,7 @@ public final class DictationController {
         switch command {
         case .start(let choice):
             guard canStart else { return }
+            isCommand = false
             startListening(choice)
         case .finish:
             guard state == .listening else { return }
@@ -99,12 +109,14 @@ public final class DictationController {
         case .cancel:
             guard state == .listening else { return }
             cancelListening()
+            isCommand = false
         case .lockHandsFree:
             guard state == .listening, !isHandsFree else { return }
             silence = SilenceWatch(timeout: handsFreeSilence())
             isHandsFree = true
         case .makeCommand:
-            break
+            guard state == .listening else { return }
+            isCommand = true
         case .switchLanguage(let choice):
             guard state == .listening, choice != currentChoice else { return }
             // Stay in .listening throughout so the HUD doesn't collapse and reopen.
@@ -200,6 +212,10 @@ public final class DictationController {
             return
         }
         Self.log.debug("transcript: \(transcript.text, privacy: .private)")
+        if isCommand {
+            await runCommand(instruction: transcript)
+            return
+        }
 
         var finalText = ""
         do {
@@ -230,6 +246,37 @@ public final class DictationController {
         if currentChoice == .automatic, let language = transcript.language {
             onLanguageDetected?(language)
         }
+    }
+
+    /// fn+⌃: the transcript is an instruction; the selection is edited and pasted over itself.
+    /// Not cleaned and not recorded (the selection may be anything).
+    private func runCommand(instruction transcript: Transcript) async {
+        isCommand = false
+        state = .editing
+        guard let selection, let editor else {
+            fail(.editUnavailable)
+            return
+        }
+        guard let text = await selection.selectedText() else {
+            fail(.noSelection)
+            return
+        }
+        do {
+            let edited = try await editor.edit(text, instruction: transcript.text, language: transcript.language)
+            state = .injecting
+            try await injector.inject(edited)
+        } catch EditError.unavailable {
+            fail(.editUnavailable); return
+        } catch EditError.tooLong {
+            fail(.selectionTooLong); return
+        } catch EditError.failed {
+            fail(.editFailed); return
+        } catch InjectionError.secureInputActive {
+            fail(.secureInput); return
+        } catch {
+            fail(.injection(String(describing: error))); return
+        }
+        state = .idle
     }
 
     private func record(_ transcript: Transcript, _ finalText: String, pasted: Bool) {
