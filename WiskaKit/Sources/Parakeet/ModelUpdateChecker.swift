@@ -35,9 +35,13 @@ public final class ModelUpdateChecker {
         self.setLastCheck = setLastCheck
     }
 
-    /// A different sha is an update; installs from before update checks (no sha) compare dates.
-    public static func isUpdate(installed: String?, installedAt: Date?, latest: ModelRevision) -> Bool {
-        if let installed { return installed != latest.sha }
+    /// A different fingerprint of the installed files is an update. Without one (an empty marker, or
+    /// a repo sha from before fingerprints), the repo changing after the install counts.
+    public static func isUpdate(installed: String?, installedAt: Date?, latest: ModelRevision,
+                                components: Set<String>) -> Bool {
+        if let installed, installed.hasPrefix(ModelRevision.fingerprintPrefix), !components.isEmpty {
+            return installed != latest.fingerprint(of: components)
+        }
         guard let installedAt else { return false }
         return latest.lastModified > installedAt
     }
@@ -72,12 +76,11 @@ public final class ModelUpdateChecker {
         let days = interval()
         guard store.isInstalled, days > 0 else { return false }
         if let last = lastCheck(), now.timeIntervalSince(last) < Double(days) * 86_400 { return false }
-        let previous = state
         do {
+            // A failed check changes nothing, so a "Check now" result from meanwhile stays.
             try await check(now: now)
         } catch {
             Self.log.notice("model update check failed: \(String(describing: error), privacy: .public)")
-            state = previous
             return false
         }
         guard case .updateAvailable(let latest) = state, latest.sha != announcedSha else { return false }
@@ -85,22 +88,30 @@ public final class ModelUpdateChecker {
         return true
     }
 
-    /// Replaces the installed model with the latest revision (Parakeet is unavailable meanwhile).
+    /// Replaces the installed model (Parakeet is unavailable meanwhile), then checks again: the
+    /// download fetches whatever is current, and the check records exactly that.
     public func downloadUpdate() {
-        guard case .updateAvailable(let latest) = state else { return }
+        guard case .updateAvailable = state else { return }
         store.remove()
-        store.download(revision: latest.sha)
+        store.download()
         state = .idle
+        Task { [weak self] in
+            guard let self else { return }
+            while case .downloading = store.status { try? await Task.sleep(for: .milliseconds(200)) }
+            if store.isInstalled { await checkNow() }
+        }
     }
 
     private func check(now: Date) async throws {
         let latest = try await source.latestRevision()
         setLastCheck(now)
         let installed = store.installedRevision
-        if Self.isUpdate(installed: installed, installedAt: store.installedAt, latest: latest) {
+        let components = store.installedComponents
+        if Self.isUpdate(installed: installed, installedAt: store.installedAt, latest: latest, components: components) {
             state = .updateAvailable(latest)
         } else {
-            if installed == nil { store.recordRevision(latest.sha) }
+            let fingerprint = latest.fingerprint(of: components)
+            if installed != fingerprint, !components.isEmpty { store.recordRevision(fingerprint) }
             state = .upToDate(now)
         }
     }

@@ -119,6 +119,12 @@ public final class ParakeetModelStore {
         return sha.isEmpty ? nil : sha
     }
 
+    /// The model folder's top-level entries (the files the downloader fetched), without the marker.
+    public var installedComponents: Set<String> {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        return Set(names.filter { $0 != Self.completionMarker && !$0.hasPrefix(".") })
+    }
+
     /// When the model finished downloading (the marker's date).
     public var installedAt: Date? {
         guard isInstalled else { return nil }

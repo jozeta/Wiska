@@ -41,4 +41,20 @@ struct ModelRevisionTests {
         // A recorded revision survives a relaunch.
         #expect(ParakeetModelStore(directory: dir, downloader: FakeDownloader(installed: true)).installedRevision == "def456")
     }
+
+    @Test func decodesTheFileList() throws {
+        let json = #"{"sha":"a","lastModified":"2026-08-19T20:10:29.000Z","siblings":[{"rfilename":"Encoder.mlmodelc/w.bin","blobId":"b1","size":1},{"rfilename":"README.md","blobId":"b2"}]}"#
+        let revision = try HuggingFaceRevisionSource.decode(Data(json.utf8))
+        #expect(revision.files == ["Encoder.mlmodelc/w.bin": "b1", "README.md": "b2"])
+    }
+
+    @Test func installedComponentsAreTheTopLevelEntries() async throws {
+        let store = ParakeetModelStore(directory: dir, downloader: FakeDownloader(installed: false))
+        store.download()
+        for _ in 0..<200 { if case .downloading = store.status { try await Task.sleep(for: .milliseconds(10)) } }
+        try FileManager.default.createDirectory(at: dir.appendingPathComponent("Encoder.mlmodelc"),
+                                                withIntermediateDirectories: true)
+        #expect(store.installedComponents.contains("Encoder.mlmodelc"))
+        #expect(!store.installedComponents.contains(ParakeetModelStore.completionMarker))
+    }
 }
