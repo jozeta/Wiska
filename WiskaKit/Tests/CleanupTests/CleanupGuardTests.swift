@@ -106,4 +106,42 @@ struct CleanupGuardTests {
         let stillNumbers = everyday.filter { $0.0.rules.numberWords.contains($0.1) }.map(\.1)
         #expect(stillNumbers.isEmpty)
     }
+
+    static let grammarFixes: [(String, String)] = [
+        ("He go to the store yesterday and buyed some milk.", "He went to the store yesterday and bought some milk."),
+        ("I has a apple. Their going to the park.", "I have an apple. They're going to the park."),
+        ("She don't like it, its to late.", "She doesn't like it, it's too late."),
+        ("Jag har en stort hus och hon gillar honom bil.", "Jag har ett stort hus och hon gillar hans bil."),
+        ("Vi ska köpa en äpple imorgon.", "Vi ska köpa ett äpple imorgon."),
+        ("Han har inte ätit något mat idag.", "Han har inte ätit någon mat idag."),
+        ("Ich habe ein großer Hund und er sind sehr nett.", "Ich habe einen großen Hund und er ist sehr nett."),
+    ]
+
+    @Test(arguments: grammarFixes)
+    func grammarFixesPassLightWithGrammarOn(original: String, fixed: String) {
+        let on = CleanupGuard.check(original: original, cleaned: fixed, level: .light, grammar: true)
+        #expect(on == .accept)
+        let off = CleanupGuard.check(original: original, cleaned: fixed, level: .light, grammar: false)
+        #expect(off != .accept)
+    }
+
+    /// Grammar mode doesn't let an answer or added content through.
+    @Test func grammarModeStillRejectsAddedContent() {
+        let added = CleanupGuard.check(original: "send the report today",
+                                       cleaned: "Send the report today and also book a flight to Paris for me.",
+                                       level: .light, grammar: true)
+        #expect(added != .accept)
+        let answered = CleanupGuard.check(original: "what time is it in tokyo right now",
+                                          cleaned: "It is 3 pm in Tokyo.", level: .polished, grammar: true)
+        #expect(answered != .accept)
+    }
+
+    @Test func nearWords() {
+        #expect(CleanupGuard.isNear("have", "has"))
+        #expect(!CleanupGuard.isNear("bought", "buyed"))   // 4 edits: counted as new, within the 20 % limit
+        #expect(CleanupGuard.isNear("an", "a"))
+        #expect(CleanupGuard.isNear("doesn", "don"))
+        #expect(!CleanupGuard.isNear("went", "go"))
+        #expect(!CleanupGuard.isNear("hans", "honom"))
+    }
 }

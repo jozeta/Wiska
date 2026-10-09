@@ -102,7 +102,7 @@ public final class CleanupPipeline: TextCleaner {
             let output = Self.stripWrappingQuotes(try await rewrite(segment, level: level, language: language, style: style, grammar: grammar, deadline: deadline))
                 .split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
                 .joined(separator: " ")
-            switch CleanupGuard.check(original: segment, cleaned: output, level: level, rules: rules) {
+            switch CleanupGuard.check(original: segment, cleaned: output, level: level, rules: rules, grammar: grammar) {
             case .accept:
                 // A model that lost or changed a snippet placeholder would lose the snippet.
                 guard SnippetExpander.placeholders(in: output).isSuperset(of: SnippetExpander.placeholders(in: segment)) else {

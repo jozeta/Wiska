@@ -11,14 +11,16 @@ public enum CleanupGuard {
     static let maxNewWordShare = 0.2
 
     public static func check(original: String, cleaned: String, level: CleanupLevel,
-                             rules: LanguageRules = .default) -> Verdict {
+                             rules: LanguageRules = .default, grammar: Bool = false) -> Verdict {
         let output = words(cleaned)
         guard !output.isEmpty else { return .reject("empty") }
 
         let input = words(original).filter { !rules.fillerSounds.contains($0) }
         let inputSet = Set(input)
         let spokeNumbers = input.contains { rules.numberWords.contains($0) || isNumeric($0) }
-        let newWords = newWordCount(output, known: inputSet, digitsAllowed: spokeNumbers)
+        // Grammar fixes change words ("buyed" → "bought"): a word near one that was said isn't new.
+        let newWords = newWordCount(output, known: inputSet, digitsAllowed: spokeNumbers,
+                                    nearWords: grammar ? input : [])
         if Double(newWords) > max(1, maxNewWordShare * Double(output.count)) {
             return .reject("new words")
         }
@@ -35,11 +37,19 @@ public enum CleanupGuard {
         let kept = required.filter { word in
             outputSet.contains(word) || joinedPairs.contains(word)   // "imorgon" → "i morgon"
                 || (outputHasDigits && rules.numberWords.contains(word))   // "two thirty" → "2:30"
+                || (grammar && output.contains { isNear(word, $0) })   // "go" fixed to "goes"
         }.count
-        // Light must not remove any word besides fillers; Polished may drop false starts.
-        let minimumKept = level == .light ? 1.0 : 0.4
+        // Light must not remove any word besides fillers (with grammar: fix ~1 in 5);
+        // Polished may drop false starts.
+        let minimumKept = level == .light ? (grammar ? 0.8 : 1.0) : 0.4
         if Double(kept) / Double(required.count) < minimumKept { return .reject("dropped words") }
         return .accept
+    }
+
+    /// Words a grammar fix turns into each other: "a"/"an", "has"/"have", "buyed"/"bought".
+    static func isNear(_ a: String, _ b: String) -> Bool {
+        let limit = max(2, max(a.count, b.count) / 2)
+        return PhraseMatcher.editDistance(a, b, limit: limit) <= limit
     }
 
     /// Input words that must survive cleanup: everything but fillers and filler phrases.
@@ -58,12 +68,14 @@ public enum CleanupGuard {
     /// Output words not present in the input. Not counted as new (review I4): words that only
     /// differ in spacing ("imorgon" → "i morgon") and — only if a number was spoken — digits
     /// ("two thirty" → "2:30"). Digits out of nowhere are how answers look ("3:15 pm").
-    static func newWordCount(_ output: [String], known: Set<String>, digitsAllowed: Bool) -> Int {
+    static func newWordCount(_ output: [String], known: Set<String>, digitsAllowed: Bool,
+                             nearWords: [String] = []) -> Int {
         var count = 0
         var index = 0
         while index < output.count {
             let word = output[index]
-            if known.contains(word) || (digitsAllowed && isNumeric(word)) {
+            if known.contains(word) || (digitsAllowed && isNumeric(word))
+                || nearWords.contains(where: { isNear(word, $0) }) {
                 index += 1
             } else if index + 1 < output.count, known.contains(word + output[index + 1]) {
                 index += 2
