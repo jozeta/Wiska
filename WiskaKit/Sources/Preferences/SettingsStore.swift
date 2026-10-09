@@ -22,6 +22,9 @@ public final class SettingsStore {
         static let firstDictationDone = "firstDictationDone"
         static let handsFreeSilence = "handsFreeSilence"
         static let livePreview = "livePreview"
+        static let categoryStyles = "categoryStyles"
+        static let appCategories = "appCategories"
+        static let recentApps = "recentApps"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -127,6 +130,45 @@ public final class SettingsStore {
     /// Show the words as they're heard, under the waveform in the notch.
     public var livePreview: Bool { didSet { defaults.set(livePreview, forKey: Key.livePreview) } }
 
+    /// Styles the user picked per app category; missing ones use the category's default.
+    public private(set) var categoryStyles: [AppCategory: WritingStyle]
+
+    public func style(for category: AppCategory) -> WritingStyle {
+        categoryStyles[category] ?? category.defaultStyle ?? .formal
+    }
+
+    public func setStyle(_ style: WritingStyle, for category: AppCategory) {
+        categoryStyles[category] = style
+        defaults.set(Dictionary(uniqueKeysWithValues: categoryStyles.map { ($0.key.rawValue, $0.value.rawValue) }),
+                     forKey: Key.categoryStyles)
+    }
+
+    /// The user's own app → category choices (bundle ID → category); they win over the built-in list.
+    public private(set) var appCategories: [String: AppCategory]
+
+    public func setCategory(_ category: AppCategory?, for bundleID: String) {
+        appCategories[bundleID] = category
+        saveAppCategories()
+    }
+
+    public func resetAppCategories() {
+        appCategories = [:]
+        saveAppCategories()
+    }
+
+    private func saveAppCategories() {
+        defaults.set(appCategories.mapValues(\.rawValue), forKey: Key.appCategories)
+    }
+
+    public static let maxRecentApps = 12
+    /// Apps recently dictated into (bundle IDs, most recent first), for Settings → Cleanup.
+    public private(set) var recentApps: [String]
+
+    public func noteRecentApp(_ bundleID: String) {
+        recentApps = Array(([bundleID] + recentApps.filter { $0 != bundleID }).prefix(Self.maxRecentApps))
+        defaults.set(recentApps, forKey: Key.recentApps)
+    }
+
     public var onboardingCompleted: Bool { didSet { defaults.set(onboardingCompleted, forKey: Key.onboardingCompleted) } }
     public var fnKeyConfirmed: Bool { didSet { defaults.set(fnKeyConfirmed, forKey: Key.fnKeyConfirmed) } }
     public var firstDictationDone: Bool { didSet { defaults.set(firstDictationDone, forKey: Key.firstDictationDone) } }
@@ -155,6 +197,14 @@ public final class SettingsStore {
         firstDictationDone = defaults.bool(forKey: Key.firstDictationDone)
         handsFreeSilence = defaults.object(forKey: Key.handsFreeSilence) as? TimeInterval ?? 30
         livePreview = defaults.object(forKey: Key.livePreview) as? Bool ?? true
+        let storedStyles = defaults.dictionary(forKey: Key.categoryStyles) as? [String: String] ?? [:]
+        categoryStyles = Dictionary(uniqueKeysWithValues: storedStyles.compactMap { key, value in
+            guard let category = AppCategory(rawValue: key), let style = WritingStyle(rawValue: value) else { return nil }
+            return (category, style)
+        })
+        let storedApps = defaults.dictionary(forKey: Key.appCategories) as? [String: String] ?? [:]
+        appCategories = storedApps.compactMapValues(AppCategory.init(rawValue:))
+        recentApps = Array((defaults.stringArray(forKey: Key.recentApps) ?? []).prefix(Self.maxRecentApps))
     }
 
     private static func read<T: RawRepresentable>(

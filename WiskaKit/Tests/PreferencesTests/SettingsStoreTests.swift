@@ -185,4 +185,39 @@ final class SettingsStoreTests {
         #expect(reloaded.handsFreeSilence == 0)
         #expect(!reloaded.livePreview)
     }
+
+    @Test func stylesDefaultPerCategoryAndPersist() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.style(for: .personal) == .casual)
+        #expect(store.style(for: .email) == .formal)
+        store.setStyle(.veryCasual, for: .personal)
+        #expect(SettingsStore(defaults: defaults).style(for: .personal) == .veryCasual)
+        #expect(SettingsStore(defaults: defaults).style(for: .work) == .casual)
+    }
+
+    @Test func appCategoriesPersistAndReset() {
+        let store = SettingsStore(defaults: defaults)
+        store.setCategory(.work, for: "com.apple.mail")
+        #expect(SettingsStore(defaults: defaults).appCategories == ["com.apple.mail": .work])
+        store.setCategory(nil, for: "com.apple.mail")
+        #expect(SettingsStore(defaults: defaults).appCategories.isEmpty)
+        store.setCategory(.code, for: "a")
+        store.resetAppCategories()
+        #expect(SettingsStore(defaults: defaults).appCategories.isEmpty)
+    }
+
+    @Test func recentAppsAreMostRecentFirstAndCapped() {
+        let store = SettingsStore(defaults: defaults)
+        for index in 0..<15 { store.noteRecentApp("app\(index)") }
+        store.noteRecentApp("app3")
+        let reloaded = SettingsStore(defaults: defaults).recentApps
+        #expect(reloaded.count == SettingsStore.maxRecentApps)
+        #expect(reloaded.first == "app3")
+        #expect(reloaded.filter { $0 == "app3" }.count == 1)
+    }
+
+    @Test func corruptStyleValuesFallBack() {
+        defaults.set(["personal": "shouting", "nonsense": "formal"], forKey: "categoryStyles")
+        #expect(SettingsStore(defaults: defaults).style(for: .personal) == .casual)
+    }
 }
