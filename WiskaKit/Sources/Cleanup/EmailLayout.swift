@@ -34,10 +34,10 @@ enum EmailLayout {
                let (body, signOff) = splitSignOff(previous.text, rules: rules, alone: true), signOff.count == 1 {
                 result.removeLast()
                 if !body.isEmpty { result.append(FormattedLine(text: body, isPlain: true)) }
-                result.append(FormattedLine(text: "", isPlain: false))
+                appendBlankLine(to: &result)
                 result.append(FormattedLine(text: signOff[0], isPlain: false))
-            } else if let previous = result.last, !previous.text.isEmpty {
-                result.append(FormattedLine(text: "", isPlain: false))
+            } else {
+                appendBlankLine(to: &result)
             }
             result.append(snippet)
             return result
@@ -50,6 +50,12 @@ enum EmailLayout {
             result += signOff.map { FormattedLine(text: $0, isPlain: false) }
         }
         return result
+    }
+
+    /// A blank line between parts — never at the very start, and never two in a row.
+    private static func appendBlankLine(to lines: inout [FormattedLine]) {
+        guard let last = lines.last, !last.text.isEmpty else { return }
+        lines.append(FormattedLine(text: "", isPlain: false))
     }
 
     /// "Hi Anna, thanks…" → ("Hi Anna,", "Thanks…"); nil without a greeting, or without a body

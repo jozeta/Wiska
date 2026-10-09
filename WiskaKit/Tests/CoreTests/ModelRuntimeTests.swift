@@ -50,3 +50,16 @@ struct ModelRuntimeTests {
         #expect(await tracker.runs == 0)
     }
 }
+
+/// Cancel at the moment a download starts: no crash ("task created in an invalidated session").
+struct ProgressDownloadCancelTests {
+    @Test func cancelledBeforeStartingThrowsInsteadOfCrashing() async {
+        let destination = FileManager.default.temporaryDirectory.appendingPathComponent("never-\(UUID()).bin")
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            try await ProgressDownload.download(from: URL(string: "https://example.invalid/file")!, to: destination,
+                                                progress: { _ in })
+        }
+        await #expect(throws: (any Error).self) { try await task.value }
+    }
+}

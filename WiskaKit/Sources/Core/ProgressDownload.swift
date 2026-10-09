@@ -10,13 +10,16 @@ public enum ProgressDownload {
         let run = Run(destination: destination, report: progress)
         let session = URLSession(configuration: .default, delegate: run, delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
+        // The task exists before any cancel can arrive; cancelling it (even before it starts)
+        // still ends in didCompleteWithError, so the continuation is resumed exactly once.
+        let task = session.downloadTask(with: url)
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 run.start(continuation)
-                session.downloadTask(with: url).resume()
+                task.resume()
             }
         } onCancel: {
-            session.invalidateAndCancel()
+            task.cancel()
         }
     }
 

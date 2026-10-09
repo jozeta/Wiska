@@ -115,6 +115,8 @@ struct CleanupGuardTests {
         ("Vi ska köpa en äpple imorgon.", "Vi ska köpa ett äpple imorgon."),
         ("Han har inte ätit något mat idag.", "Han har inte ätit någon mat idag."),
         ("Ich habe ein großer Hund und er sind sehr nett.", "Ich habe einen großen Hund und er ist sehr nett."),
+        ("she do it", "She does it."),   // short verbs: "do"/"does", "go"/"goes"
+        ("it go well", "It goes well."),
     ]
 
     @Test(arguments: grammarFixes)

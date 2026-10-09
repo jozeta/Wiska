@@ -48,8 +48,9 @@ public enum CleanupGuard {
 
     /// Words a grammar fix turns into each other: "a"/"an", "has"/"have", "buyed"/"bought".
     static func isNear(_ a: String, _ b: String) -> Bool {
-        // Two-letter words are near only with one letter changed ("to"/"too"), not "on"/"me".
-        let limit = min(a.count, b.count) <= 2 ? 1 : max(2, max(a.count, b.count) / 2)
+        // Two short words are near only with one letter changed ("to"/"too"; not "on"/"me"),
+        // but a short word may grow into a longer form ("do"/"does", "go"/"goes").
+        let limit = max(a.count, b.count) <= 2 ? 1 : max(2, max(a.count, b.count) / 2)
         return PhraseMatcher.editDistance(a, b, limit: limit) <= limit
     }
 

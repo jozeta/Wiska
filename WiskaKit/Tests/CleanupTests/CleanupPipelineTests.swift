@@ -112,6 +112,17 @@ struct CleanupPipelineTests {
     static let name = Snippet(phrases: ["insert my name"], text: "Johan Zetterström")
     static let contact = Snippet(phrases: ["insert my contact"], text: "Johan\n070-123 45 67")
 
+    /// Nothing but a sign-off (or a greeting) before the signature: no blank line first, none doubled.
+    @Test func signatureAfterOnlyASignOffHasNoLeadingBlankLine() async throws {
+        rewriter.transform = { _ in "Thanks." }
+        let email = DictationContext(language: .english, category: .email)
+        let thanks = try await snippetPipeline().clean("thanks insert my signature", context: email)
+        #expect(!thanks.hasPrefix("\n"), "\(thanks.debugDescription)")
+        rewriter.transform = { _ in "Hi Anna, best regards." }
+        let greeting = try await snippetPipeline().clean("hi anna best regards insert my signature", context: email)
+        #expect(!greeting.contains("\n\n\n"), "\(greeting.debugDescription)")
+    }
+
     /// "Best regards" followed by a snippet is a sign-off: the snippet is the name under it.
     @Test func signOffBeforeASnippetIsRecognised() async throws {
         rewriter.transform = { $0.replacingOccurrences(of: "thanks for today best regards", with: "Thanks for today. Best regards,") + "." }
