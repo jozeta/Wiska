@@ -6,8 +6,10 @@ import SwiftUI
 /// scroll out past a faded left edge. Clipped to its frame, so it never widens the capsule.
 struct PreviewTicker: View {
     let text: String
-    /// Where the newest word comes to rest, inside the right edge, when speech pauses.
-    static let lead: CGFloat = 16
+    /// Both edges fade to black over this width: words emerge on the right and dissolve on the left.
+    static let fadeWidth: CGFloat = 24
+    /// Where the newest word comes to rest when speech pauses: just clear of the right fade.
+    static let lead: CGFloat = 28
 
     @State private var textWidth: CGFloat = 0
     @State private var clock = Clock()
@@ -40,9 +42,18 @@ struct PreviewTicker: View {
         }
         .clipped()
         .mask {
-            LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.1)],
-                           startPoint: .leading, endPoint: .trailing)
+            GeometryReader { geometry in
+                LinearGradient(stops: Self.fadeStops(width: geometry.size.width),
+                               startPoint: .leading, endPoint: .trailing)
+            }
         }
+    }
+
+    /// Transparent at both edges, opaque in between, with `fadeWidth` ramps.
+    static func fadeStops(width: CGFloat) -> [Gradient.Stop] {
+        let ramp = width > 0 ? min(0.5, fadeWidth / width) : 0
+        return [.init(color: .clear, location: 0), .init(color: .black, location: ramp),
+                .init(color: .black, location: 1 - ramp), .init(color: .clear, location: 1)]
     }
 
     /// Steps the motion with the real frame time. A reference type so the timeline can advance
