@@ -8,6 +8,7 @@ import HUD
 import History
 import Hotkey
 import Injection
+import LocalModel
 import Observation
 import Parakeet
 import Preferences
@@ -28,6 +29,12 @@ final class AppModel {
     @ObservationIgnored private var holdHideUntil = Date.distantPast
     /// Checks whether a newer Parakeet model has been published (Settings → Speech).
     let modelUpdates: ModelUpdateChecker
+    let gemmaStore: GemmaModelStore
+    let gemma: GemmaModel
+    @ObservationIgnored private var cleanupRewriter: SwitchingRewriter!
+    @ObservationIgnored private var appleEditor: FoundationModelsEditor!
+    @ObservationIgnored private var localRewriter: LocalRewriter!
+    @ObservationIgnored private var localEditor: LocalEditor!
     private(set) var missingPermissions: [Permission] = []
     private(set) var dictationState: DictationController.State = .idle
 
@@ -77,14 +84,23 @@ final class AppModel {
         parakeet = ParakeetTranscriber(store: store, languages: { settings.enabledLanguages })
         let rewriter = FoundationModelsRewriter()
         self.rewriter = rewriter
+        let gemmaStore = GemmaModelStore()
+        self.gemmaStore = gemmaStore
+        let gemma = GemmaModel(store: gemmaStore)
+        self.gemma = gemma
+        let localRewriter = LocalRewriter(generator: gemma)
+        let cleanupRewriter = SwitchingRewriter(choice: { settings.languageModel }, apple: rewriter, local: localRewriter)
+        let appleEditor = FoundationModelsEditor()
+        let localEditor = LocalEditor(generator: gemma)
         controller = DictationController(
             audio: MicrophoneRecorder(),
             transcriber: { [weak self] choice in self?.transcriber(for: choice) ?? AppleTranscriber() },
-            cleaner: CleanupPipeline(level: { settings.cleanupLevel }, rewriter: rewriter,
+            cleaner: CleanupPipeline(level: { settings.cleanupLevel }, rewriter: cleanupRewriter,
                                      dictionary: { dictionaryStore.dictionary },
                                      isKnownWord: { lexicon.isKnown($0) },
                                      style: { settings.style(for: $0) },
-                                     snippets: { snippetStore.snippets }),
+                                     snippets: { snippetStore.snippets },
+                                     grammar: { settings.fixGrammar }),
             injector: SwitchingInjector(mode: { settings.outputMode }, insert: PasteboardInjector(),
                                         copy: ClipboardCopier()),
             contextProvider: {
@@ -95,10 +111,20 @@ final class AppModel {
             handsFreeSilence: { settings.handsFreeSilence },
             showPreview: { settings.livePreview },
             selection: AXSelectionReader(),
-            editor: FoundationModelsEditor(),
+            editor: SwitchingEditor(choice: { settings.languageModel }, apple: appleEditor, local: localEditor,
+                                    appleAvailable: { rewriter.isAvailable }, localAvailable: { gemma.isAvailable }),
             commands: { commandStore.commands },
             isSecureInput: { IsSecureEventInputEnabled() }
         )
+        self.cleanupRewriter = cleanupRewriter
+        self.appleEditor = appleEditor
+        self.localRewriter = localRewriter
+        self.localEditor = localEditor
+        // A finished download is what the user asked for: use it, and load it now.
+        gemmaStore.onDownloaded = { [weak self] in
+            self?.settings.languageModel = .gemma
+            self?.gemma.prepare()
+        }
         controller.onChange = { [weak self] state, audio in
             guard let self else { return }
             let finishedCopy = state == .idle && dictationState == .injecting && settings.outputMode == .clipboard
@@ -214,7 +240,22 @@ final class AppModel {
 
     /// True when AI cleanup is selected but Apple Intelligence isn't available.
     var cleanupUnavailable: Bool {
-        settings.cleanupLevel != .off && !rewriter.isAvailable
+        settings.cleanupLevel != .off && !cleanupRewriter.isAvailable
+    }
+
+    /// The models Compare can run: Apple Intelligence and Gemma, each when available.
+    func benchmarkEngines() -> [(name: String, rewriter: any TextRewriter, editor: any Core.TextEditor)] {
+        var engines: [(name: String, rewriter: any TextRewriter, editor: any Core.TextEditor)] = []
+        if rewriter.isAvailable { engines.append(("Apple", rewriter, appleEditor)) }
+        if gemma.isAvailable { engines.append(("Gemma", localRewriter, localEditor)) }
+        return engines
+    }
+
+    /// Picking Gemma before it's downloaded starts the download.
+    func chooseLanguageModel(_ choice: LanguageModelChoice) {
+        settings.languageModel = choice
+        if choice == .gemma, gemmaStore.status == .notDownloaded { gemmaStore.download() }
+        if choice == .gemma { gemma.prepare() }
     }
 
     private func plan(for choice: LanguageChoice) -> EnginePlan {

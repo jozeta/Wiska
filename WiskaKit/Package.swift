@@ -32,7 +32,7 @@ let package = Package(
             .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
             .product(name: "Tokenizers", package: "swift-transformers"),
         ]),
-        .testTarget(name: "LocalModelTests", dependencies: ["LocalModel"]),
+        .testTarget(name: "LocalModelTests", dependencies: ["LocalModel", "Cleanup"]),
         .testTarget(name: "CoreTests", dependencies: ["Core"]),
         .testTarget(name: "HotkeyTests", dependencies: ["Hotkey"]),
         .testTarget(name: "AudioTests", dependencies: ["Audio"]),

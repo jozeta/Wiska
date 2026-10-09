@@ -55,13 +55,14 @@ struct HelpTab: View {
                 }
             }
             Section("Styles") {
+                tip("Grammar", "With Fix grammar on (Settings → Cleanup), “I has a apple” becomes “I have an apple”. Gemma, downloaded in Settings → Cleanup, is best at it, especially in Swedish.")
                 tip("Per kind of app", "Messages and work chat are Casual, email is Formal, terminals and editors get exactly what you say. Change it in Cleanup → Styles.")
                 tip("Numbers", "“three thirty” becomes 3:30, “twenty five percent” becomes 25%.")
             }
             Section("Troubleshooting") {
                 tip("fn opens the emoji picker", "System Settings → Keyboard → “Press 🌐 key to” → Do Nothing.")
                 tip("Nothing is typed", "Check Accessibility in System Settings → Privacy & Security, or switch After dictation to Copy to clipboard only.")
-                tip("No cleanup or editing", "Cleanup and editing need Apple Intelligence (System Settings → Apple Intelligence & Siri).")
+                tip("No cleanup or editing", "Cleanup and editing need Apple Intelligence (System Settings → Apple Intelligence & Siri) or the Gemma model (Settings → Cleanup).")
                 tip("Wrong words", "Add names and terms in the Dictionary tab.")
             }
         }

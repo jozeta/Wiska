@@ -5,10 +5,22 @@ import SwiftUI
 
 struct CleanupTab: View {
     let model: AppModel
+    @State private var comparing = false
 
     var body: some View {
         @Bindable var settings = model.settings
         Form {
+            Section("Language model") {
+                Picker("Model", selection: Binding(get: { settings.languageModel },
+                                                   set: { model.chooseLanguageModel($0) })) {
+                    ForEach(LanguageModelChoice.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                GemmaCard(model: model)
+                Toggle("Fix grammar", isOn: $settings.fixGrammar)
+                Text("Light and Polished also fix grammar mistakes — “He go… buyed” → “He went… bought”, “en stort hus” → “ett stort hus”.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Button("Compare models…") { comparing = true }
+            }
             Section("Cleanup") {
                 Picker("Level", selection: $settings.cleanupLevel) {
                     ForEach(CleanupLevel.allCases, id: \.self) { Text($0.displayName).tag($0) }
@@ -19,7 +31,7 @@ struct CleanupTab: View {
                      + settings.enabledLanguages.map { "\($0.flag) “\($0.rules.newLine[0])”" }.joined(separator: ", ") + ".")
                     .font(.caption).foregroundStyle(.secondary)
                 if model.cleanupUnavailable {
-                    Text("Apple Intelligence is unavailable — basic cleanup is used.")
+                    Text("No language model is available — basic cleanup is used.")
                         .font(.caption).foregroundStyle(.orange)
                 }
             }
@@ -64,6 +76,7 @@ struct CleanupTab: View {
             }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $comparing) { CompareModelsView(model: model) }
     }
 }
 
