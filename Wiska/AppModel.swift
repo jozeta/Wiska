@@ -32,6 +32,8 @@ final class AppModel {
     let modelUpdates: ModelUpdateChecker
     let gemmaStore: GemmaModelStore
     let gemma: GemmaModel
+    /// Checks whether a newer Gemma has been published (Settings → Cleanup); never downloads by itself.
+    let gemmaUpdates: ModelUpdateChecker
     let kbWhisperStore: KBWhisperModelStore
     let kbWhisper: KBWhisperRecognizer
     @ObservationIgnored private var cleanupRewriter: SwitchingRewriter!
@@ -78,7 +80,7 @@ final class AppModel {
         }
         self.settings = settings
         parakeetStore = store
-        modelUpdates = ModelUpdateChecker(store: store, source: HuggingFaceRevisionSource(repo: Repo.parakeetV3.rawValue),
+        modelUpdates = ModelUpdateChecker(store: store, source: HuggingFaceRevisionSource(repo: ParakeetModelStore.huggingFaceRepo),
                                           interval: { settings.modelUpdateInterval },
                                           lastCheck: { settings.lastModelUpdateCheck },
                                           setLastCheck: { settings.lastModelUpdateCheck = $0 })
@@ -93,6 +95,10 @@ final class AppModel {
         self.gemmaStore = gemmaStore
         let gemma = GemmaModel(store: gemmaStore)
         self.gemma = gemma
+        gemmaUpdates = ModelUpdateChecker(store: gemma, source: HuggingFaceRevisionSource(repo: GemmaModelStore.repo),
+                                          interval: { settings.modelUpdateInterval },
+                                          lastCheck: { settings.lastGemmaUpdateCheck },
+                                          setLastCheck: { settings.lastGemmaUpdateCheck = $0 })
         let kbWhisperStore = KBWhisperModelStore()
         self.kbWhisperStore = kbWhisperStore
         self.kbWhisper = KBWhisperRecognizer(store: kbWhisperStore)
@@ -198,11 +204,14 @@ final class AppModel {
                 self?.applyRetention()
             }
         }
-        // Parakeet model updates: at launch, then hourly; only when due, never downloads.
+        // Parakeet and Gemma updates: at launch, then hourly; only when due, never downloads.
         updateTask = Task { [weak self] in
             while !Task.isCancelled {
                 if let self, await modelUpdates.checkIfDue() {
                     flash("Speech model update available", for: .seconds(2))
+                }
+                if let self, await gemmaUpdates.checkIfDue() {
+                    flash("Gemma update available", for: .seconds(2))
                 }
                 try? await Task.sleep(for: .seconds(3_600))
             }

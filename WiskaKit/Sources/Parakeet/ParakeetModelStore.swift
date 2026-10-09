@@ -153,6 +153,9 @@ public final class ParakeetModelStore {
 }
 
 extension ParakeetModelStore: UpdatableModelStore {
+    /// The Hugging Face repo update checks ask about.
+    public nonisolated static var huggingFaceRepo: String { Repo.parakeetV3.rawValue }
+
     public var isDownloading: Bool {
         if case .downloading = status { true } else { false }
     }

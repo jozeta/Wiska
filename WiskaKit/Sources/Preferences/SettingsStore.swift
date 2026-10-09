@@ -28,6 +28,7 @@ public final class SettingsStore {
         static let useKBWhisper = "useKBWhisper"
         static let modelUpdateInterval = "modelUpdateInterval"
         static let lastModelUpdateCheck = "lastModelUpdateCheck"
+        static let lastGemmaUpdateCheck = "lastGemmaUpdateCheck"
         static let categoryStyles = "categoryStyles"
         static let appCategories = "appCategories"
         static let recentApps = "recentApps"
@@ -154,6 +155,10 @@ public final class SettingsStore {
     public var lastModelUpdateCheck: Date? {
         didSet { defaults.set(lastModelUpdateCheck, forKey: Key.lastModelUpdateCheck) }
     }
+    /// When Gemma was last checked for a newer version (same interval as Parakeet).
+    public var lastGemmaUpdateCheck: Date? {
+        didSet { defaults.set(lastGemmaUpdateCheck, forKey: Key.lastGemmaUpdateCheck) }
+    }
 
     /// Styles the user picked per app category; missing ones use the category's default.
     public private(set) var categoryStyles: [AppCategory: WritingStyle]
@@ -228,6 +233,7 @@ public final class SettingsStore {
         useKBWhisper = defaults.object(forKey: Key.useKBWhisper) as? Bool ?? false
         modelUpdateInterval = defaults.object(forKey: Key.modelUpdateInterval) as? Int ?? 7
         lastModelUpdateCheck = defaults.object(forKey: Key.lastModelUpdateCheck) as? Date
+        lastGemmaUpdateCheck = defaults.object(forKey: Key.lastGemmaUpdateCheck) as? Date
         let storedStyles = defaults.dictionary(forKey: Key.categoryStyles) as? [String: String] ?? [:]
         categoryStyles = Dictionary(uniqueKeysWithValues: storedStyles.compactMap { key, value in
             guard let category = AppCategory(rawValue: key), let style = WritingStyle(rawValue: value) else { return nil }

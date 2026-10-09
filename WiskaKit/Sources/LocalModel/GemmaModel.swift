@@ -99,3 +99,17 @@ public final class GemmaModel: LocalGenerator {
         }
     }
 }
+
+/// Update checks (Settings → Cleanup): through the model, so replacing it also lets the old one
+/// go from memory.
+extension GemmaModel: UpdatableModelStore {
+    public var isInstalled: Bool { store.isInstalled }
+    public var isDownloading: Bool {
+        if case .downloading = store.status { true } else { false }
+    }
+    public var installedRevision: String? { store.installedRevision }
+    public var installedAt: Date? { store.installedAt }
+    public var installedComponents: Set<String> { store.installedComponents }
+    public func recordRevision(_ fingerprint: String) { store.recordRevision(fingerprint) }
+    public func startDownload() { store.download() }
+}

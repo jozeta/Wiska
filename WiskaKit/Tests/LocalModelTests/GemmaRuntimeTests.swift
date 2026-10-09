@@ -216,3 +216,48 @@ struct GemmaCleanupPassTests {
         #expect(failed.value == 2)
     }
 }
+
+/// Gemma update checks: the installed version is remembered, and checks work like Parakeet's.
+@MainActor
+struct GemmaUpdateTests {
+    final class Source: ModelRevisionSource, @unchecked Sendable {
+        var revision: ModelRevision
+        init(_ revision: ModelRevision) { self.revision = revision }
+        func latestRevision() async throws -> ModelRevision { revision }
+    }
+
+    func installed() -> GemmaModel {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("gemma-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? Data("{}".utf8).write(to: directory.appendingPathComponent("config.json"))
+        try? Data().write(to: directory.appendingPathComponent(GemmaModelStore.completionMarker))
+        return GemmaModel(store: GemmaModelStore(directory: directory, downloader: FakeRepoDownloader(), freeSpace: { nil }),
+                          runtime: GemmaRuntime { _ in FakeLoadedModel() })
+    }
+
+    @Test func storeRemembersTheInstalledVersion() {
+        let model = installed()
+        #expect(model.installedRevision == nil)   // downloaded before update checks: no record yet
+        #expect(model.installedComponents == ["config.json"])
+        #expect(model.installedAt != nil)
+        model.recordRevision("files:abc")
+        #expect(model.installedRevision == "files:abc")
+    }
+
+    /// The current install has no record: a repo changed after the download is an update; an
+    /// older one is up to date (and recorded, so later checks compare the files).
+    @Test func checksCompareWithTheInstall() async {
+        let model = installed()
+        let newer = ModelRevision(sha: "s2", lastModified: Date().addingTimeInterval(3_600), files: ["config.json": "b"])
+        let source = Source(newer)
+        let checker = ModelUpdateChecker(store: model, source: source, interval: { 7 }, lastCheck: { nil },
+                                         setLastCheck: { _ in })
+        await checker.checkNow()
+        #expect(checker.state == .updateAvailable(newer))
+        let older = ModelRevision(sha: "s1", lastModified: Date(timeIntervalSince1970: 0), files: ["config.json": "a"])
+        source.revision = older
+        await checker.checkNow()
+        if case .upToDate = checker.state {} else { Issue.record("expected up to date, got \(checker.state)") }
+        #expect(model.installedRevision == older.fingerprint(of: ["config.json"]))
+    }
+}

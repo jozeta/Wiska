@@ -241,6 +241,15 @@ final class SettingsStoreTests {
         #expect(SettingsStore(defaults: defaults).useKBWhisper)
     }
 
+    @Test func gemmaUpdateCheckDateIsSeparate() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.lastGemmaUpdateCheck == nil)
+        let date = Date(timeIntervalSince1970: 1_000)
+        store.lastGemmaUpdateCheck = date
+        #expect(SettingsStore(defaults: defaults).lastGemmaUpdateCheck == date)
+        #expect(SettingsStore(defaults: defaults).lastModelUpdateCheck == nil)
+    }
+
     @Test func outputModeDefaultsToInsertAndPersists() {
         let store = SettingsStore(defaults: defaults)
         #expect(store.outputMode == .insert)

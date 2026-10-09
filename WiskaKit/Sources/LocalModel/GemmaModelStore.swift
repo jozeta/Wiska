@@ -100,6 +100,33 @@ public final class GemmaModelStore {
         }
     }
 
+    private var markerURL: URL { directory.appendingPathComponent(Self.completionMarker) }
+
+    /// The installed files' fingerprint, recorded by an update check; nil before the first one.
+    public var installedRevision: String? {
+        guard isInstalled, let text = try? String(contentsOf: markerURL, encoding: .utf8) else { return nil }
+        let revision = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return revision.isEmpty ? nil : revision
+    }
+
+    /// When the model finished downloading (the marker's date).
+    public var installedAt: Date? {
+        guard isInstalled else { return nil }
+        return (try? FileManager.default.attributesOfItem(atPath: markerURL.path))?[.modificationDate] as? Date
+    }
+
+    /// The model folder's files (what an update check compares), without the marker.
+    public var installedComponents: Set<String> {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        return Set(names.filter { $0 != Self.completionMarker && !$0.hasPrefix(".") })
+    }
+
+    /// Remembers which version is installed (found current by an update check).
+    public func recordRevision(_ revision: String) {
+        guard isInstalled else { return }
+        try? Data(revision.utf8).write(to: markerURL)
+    }
+
     public func cancelDownload() {
         task?.cancel()
     }
