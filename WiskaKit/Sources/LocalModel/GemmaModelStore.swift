@@ -30,6 +30,9 @@ public final class GemmaModelStore {
     @ObservationIgnored private var task: Task<Void, Never>?
     /// Called after a download completes (Gemma becomes the chosen model).
     @ObservationIgnored public var onDownloaded: (@MainActor () -> Void)?
+    /// Called whenever a download attempt ends — finished, failed, cancelled or refused for disk
+    /// space — so the app can switch back to Apple when Gemma still isn't installed.
+    @ObservationIgnored public var onDownloadEnded: (@MainActor () -> Void)?
 
     public var isInstalled: Bool { status == .ready }
 
@@ -63,6 +66,7 @@ public final class GemmaModelStore {
         }
         if let free = freeSpace(), free < Self.requiredFreeBytes {
             status = .failed("Needs about 6 GB free")
+            onDownloadEnded?()
             return
         }
         status = .downloading(0)
@@ -82,6 +86,7 @@ public final class GemmaModelStore {
                 self?.status = .ready
                 Self.log.info("gemma model downloaded")
                 self?.onDownloaded?()
+                self?.onDownloadEnded?()
             } catch {
                 try? FileManager.default.removeItem(at: directory)
                 if Task.isCancelled || error is CancellationError {
@@ -90,6 +95,7 @@ public final class GemmaModelStore {
                     Self.log.error("gemma download failed: \(String(describing: error), privacy: .public)")
                     self?.status = .failed("Download failed — try again")
                 }
+                self?.onDownloadEnded?()
             }
         }
     }

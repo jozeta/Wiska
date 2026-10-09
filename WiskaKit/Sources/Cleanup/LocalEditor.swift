@@ -42,6 +42,8 @@ public final class LocalEditor: TextEditor {
                 try await generator.generate(system: system, prompt: prompt, maxTokens: maxTokens)
             }
             return LocalOutput.clean(raw)
+        } catch is CancellationError {
+            throw CancellationError()   // cancelled stays cancelled: no retry on Apple
         } catch {
             throw EditError.failed   // load errors, timeouts: retrying on Apple may help
         }

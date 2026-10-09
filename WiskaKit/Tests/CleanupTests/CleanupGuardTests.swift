@@ -143,5 +143,9 @@ struct CleanupGuardTests {
         #expect(CleanupGuard.isNear("doesn", "don"))
         #expect(!CleanupGuard.isNear("went", "go"))
         #expect(!CleanupGuard.isNear("hans", "honom"))
+        // Cleanup pass: two-letter words are only near with one letter changed ("on" isn't "me").
+        #expect(!CleanupGuard.isNear("on", "me"))
+        #expect(!CleanupGuard.isNear("re", "to"))
+        #expect(CleanupGuard.isNear("to", "too"))
     }
 }

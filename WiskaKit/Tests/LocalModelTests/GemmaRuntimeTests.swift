@@ -174,3 +174,45 @@ struct GemmaModelLifecycleTests {
         #expect(!model.isLoaded)
     }
 }
+
+@MainActor
+struct GemmaCleanupPassTests {
+    func readyStore() -> GemmaModelStore {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("gemma-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? Data().write(to: directory.appendingPathComponent(GemmaModelStore.completionMarker))
+        return GemmaModelStore(directory: directory, downloader: FakeRepoDownloader(), freeSpace: { nil })
+    }
+
+    /// A one-off load failure can be retried without downloading 5.2 GB again.
+    @Test func loadErrorCanBeRetried() async throws {
+        let attempts = Counter()
+        let model = GemmaModel(store: readyStore(), runtime: GemmaRuntime { _ in
+            await attempts.increment()
+            if await attempts.value == 1 { throw CocoaError(.fileReadCorruptFile) }
+            return FakeLoadedModel()
+        })
+        model.prepare()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(model.loadError != nil)
+        model.retryLoading()
+        #expect(model.loadError == nil)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(model.isLoaded)
+    }
+
+    /// A failed or cancelled download tells the app, so the picker can go back to Apple.
+    @Test func failedOrCancelledDownloadIsReported() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("gemma-\(UUID().uuidString)")
+        let failed = Box(0)
+        let store = GemmaModelStore(directory: directory, downloader: FakeRepoDownloader(fails: true), freeSpace: { nil })
+        store.onDownloadEnded = { if !store.isInstalled { failed.value += 1 } }
+        store.download()
+        while case .downloading = store.status { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(failed.value == 1)
+        let full = GemmaModelStore(directory: directory, downloader: FakeRepoDownloader(), freeSpace: { 1 })
+        full.onDownloadEnded = { failed.value += 1 }
+        full.download()   // not enough disk
+        #expect(failed.value == 2)
+    }
+}

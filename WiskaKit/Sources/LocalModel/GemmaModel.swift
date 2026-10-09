@@ -60,6 +60,12 @@ public final class GemmaModel: LocalGenerator {
         }
     }
 
+    /// Forgets a load error and tries again, without downloading again (Settings → Try again).
+    public func retryLoading() {
+        loadError = nil
+        prepare()
+    }
+
     /// Deletes the model files and forgets a load error (Settings → Remove).
     public func remove() {
         unload()

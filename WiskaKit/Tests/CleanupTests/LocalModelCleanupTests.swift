@@ -66,7 +66,7 @@ struct LocalModelCleanupTests {
         let off = LocalEditor(generator: generator)
         await #expect(throws: EditError.unavailable) { try await off.edit("x", instruction: "y", language: nil) }
         let failing = FakeGenerator()
-        failing.error = CancellationError()
+        failing.error = RewriteError()
         await #expect(throws: EditError.failed) {
             try await LocalEditor(generator: failing).write(instruction: "y", context: nil, language: nil)
         }
@@ -78,6 +78,21 @@ struct LocalModelCleanupTests {
         let long = Array(repeating: "word", count: EditPrompts.maxWords + 1).joined(separator: " ")
         await #expect(throws: EditError.tooLong) {
             try await LocalEditor(generator: FakeGenerator()).edit(long, instruction: "y", language: nil)
+        }
+    }
+
+    /// Cleanup pass: a thinking block cut off by the length limit is never pasted.
+    @Test func unclosedThinkingIsDropped() {
+        #expect(LocalOutput.clean("<|channel>thought\nThe user wants a reply, so") == "")
+        #expect(LocalOutput.clean("Fine.<|channel>thought\nhmm") == "Fine.")
+    }
+
+    /// A cancelled command stays cancelled: it isn't turned into "failed" and retried on Apple.
+    @Test func cancellationIsNotAFailure() async {
+        let generator = FakeGenerator()
+        generator.error = CancellationError()
+        await #expect(throws: CancellationError.self) {
+            try await LocalEditor(generator: generator).edit("x", instruction: "y", language: nil)
         }
     }
 }
