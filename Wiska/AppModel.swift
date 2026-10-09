@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import Audio
 import Cleanup
 import Core
@@ -87,7 +88,8 @@ final class AppModel {
             handsFreeSilence: { settings.handsFreeSilence },
             showPreview: { settings.livePreview },
             selection: AXSelectionReader(),
-            editor: FoundationModelsEditor()
+            editor: FoundationModelsEditor(),
+            isSecureInput: { IsSecureEventInputEnabled() }
         )
         controller.onChange = { [weak self] state, audio in
             guard let self else { return }

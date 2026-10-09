@@ -602,4 +602,15 @@ struct DictationControllerTests {
         controller.handle(.cancel)
         #expect(!controller.isCommand)
     }
+
+    @Test func commandInASecureFieldSaysSo() async {
+        let controller = DictationController(
+            audio: audio, transcriber: { [transcriber] _ in transcriber }, cleaner: cleaner, injector: injector,
+            selection: selection, editor: editor, isSecureInput: { true }, noticeDuration: .seconds(60),
+            releaseTail: .zero)
+        await runCommand(controller)
+        #expect(controller.state == .failed(.secureInput))
+        #expect(selection.reads == 0)
+        #expect(editor.calls.isEmpty)
+    }
 }

@@ -45,6 +45,8 @@ public final class DictationController {
     private let showPreview: @MainActor () -> Bool
     private let selection: (any SelectionReader)?
     private let editor: (any TextEditor)?
+    /// A password field has focus: nothing may be read or pasted there.
+    private let isSecureInput: @MainActor () -> Bool
     private let maxDuration: Duration
     private let noticeDuration: Duration
     private let releaseTail: Duration
@@ -69,6 +71,7 @@ public final class DictationController {
         showPreview: @escaping @MainActor () -> Bool = { true },
         selection: (any SelectionReader)? = nil,
         editor: (any TextEditor)? = nil,
+        isSecureInput: @escaping @MainActor () -> Bool = { false },
         maxDuration: Duration = .seconds(300),
         noticeDuration: Duration = .milliseconds(1_500),
         releaseTail: Duration = .milliseconds(150)
@@ -82,6 +85,7 @@ public final class DictationController {
         self.showPreview = showPreview
         self.selection = selection
         self.editor = editor
+        self.isSecureInput = isSecureInput
         self.maxDuration = maxDuration
         self.noticeDuration = noticeDuration
         self.releaseTail = releaseTail
@@ -253,6 +257,11 @@ public final class DictationController {
     private func runCommand(instruction transcript: Transcript) async {
         isCommand = false
         state = .editing
+        // Checked first: in a password field the selection can't (and mustn't) be read.
+        guard !isSecureInput() else {
+            fail(.secureInput)
+            return
+        }
         guard let selection, let editor else {
             fail(.editUnavailable)
             return
