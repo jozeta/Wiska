@@ -36,4 +36,17 @@ struct FormatRulesTests {
         #expect(merged.listMarkers[1].contains("second"))
         #expect(merged.greetings.contains(["hej"]))
     }
+
+    @Test(arguments: Language.allCases)
+    func everyLanguageHasInsertWords(language: Language) {
+        #expect(!language.formatRules.insertWords.isEmpty)
+        #expect(!language.formatRules.possessives.isEmpty)
+    }
+
+    @Test func insertWordsMerge() {
+        let merged = FormatRules.merged([.english, .swedish])
+        #expect(merged.insertWords.contains(["insert"]))
+        #expect(merged.insertWords.contains(["infoga"]))
+        #expect(merged.possessives.contains(["min"]))
+    }
 }

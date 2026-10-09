@@ -15,15 +15,22 @@ public struct FormatRules: Sendable, Equatable {
     /// Words that, right after a one-word marker, show it is an ordinary word ("second place",
     /// Italian "secondo me" = "in my opinion", Portuguese "segundo o João" = "according to João").
     public var markerBlockers: Set<String>
+    /// "insert", "infoga": the word that asks for a snippet.
+    public var insertWords: [[String]]
+    /// "my", "min/mitt/mina": optional between the insert word and the snippet's name.
+    public var possessives: [[String]]
 
     public init(listMarkers: [[String]], conjunctions: Set<String>, greetings: [[String]],
-                signOffs: [[String]], numberExtras: Set<String>, markerBlockers: Set<String> = []) {
+                signOffs: [[String]], numberExtras: Set<String>, markerBlockers: Set<String> = [],
+                insertWords: [[String]] = [], possessives: [[String]] = []) {
         self.listMarkers = listMarkers
         self.conjunctions = conjunctions
         self.greetings = greetings
         self.signOffs = signOffs
         self.numberExtras = numberExtras
         self.markerBlockers = markerBlockers
+        self.insertWords = insertWords
+        self.possessives = possessives
     }
 
     /// Every listed language's words at once — for text whose language is unknown.
@@ -37,6 +44,8 @@ public struct FormatRules: Sendable, Equatable {
             all.signOffs += rules.signOffs
             all.numberExtras.formUnion(rules.numberExtras)
             all.markerBlockers.formUnion(rules.markerBlockers)
+            all.insertWords += rules.insertWords
+            all.possessives += rules.possessives
         }
         return all
     }
@@ -63,7 +72,8 @@ extension Language {
                 numberExtras: ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth",
                                "ninth", "tenth", "eleventh", "twelfth", "percent"],
                 markerBlockers: ["place", "prize", "time", "hand", "half", "class", "floor", "round", "thought",
-                                 "person", "row", "of", "best", "language", "opinion", "chance"])
+                                 "person", "row", "of", "best", "language", "opinion", "chance"],
+                insertWords: phrases(["insert"]), possessives: phrases(["my"]))
         case .swedish:
             FormatRules(
                 listMarkers: [["först", "för det första", "nummer ett"], ["för det andra", "nummer två"],
@@ -76,7 +86,8 @@ extension Language {
                 signOffs: phrases(["med vänliga hälsningar", "vänliga hälsningar", "hälsningar", "mvh", "tack",
                                    "hej då", "ha det bra"]),
                 numberExtras: ["första", "tredje", "fjärde", "femte", "sjätte", "sjunde", "åttonde",
-                               "nionde", "tionde", "elfte", "tolfte", "procent"])
+                               "nionde", "tionde", "elfte", "tolfte", "procent"],
+                insertWords: phrases(["infoga", "lägg in"]), possessives: phrases(["min", "mitt", "mina"]))
         case .german:
             FormatRules(
                 listMarkers: [["erstens", "zuerst", "nummer eins"], ["zweitens", "nummer zwei"],
@@ -91,7 +102,8 @@ extension Language {
                 numberExtras: ["erste", "ersten", "zweite", "zweiten", "dritte", "dritten", "vierte", "vierten",
                                "fünfte", "fünften", "sechste", "sechsten", "siebte", "siebten", "achte", "achten",
                                "neunte", "neunten", "zehnte", "zehnten", "elfte", "elften", "zwölfte", "zwölften",
-                               "prozent"])
+                               "prozent"],
+                insertWords: phrases(["einfügen", "füge ein"]), possessives: phrases(["mein", "meine", "meinen"]))
         case .french:
             FormatRules(
                 listMarkers: [["premièrement", "premier", "première", "numéro un"],
@@ -104,7 +116,8 @@ extension Language {
                 greetings: phrases(["bonjour", "salut", "cher", "chère", "coucou"]),
                 signOffs: phrases(["cordialement", "bien à vous", "merci", "bonne journée", "amicalement"]),
                 numberExtras: ["premier", "première", "deuxième", "troisième", "quatrième", "cinquième", "sixième",
-                               "septième", "huitième", "neuvième", "dixième", "onzième", "douzième"])
+                               "septième", "huitième", "neuvième", "dixième", "onzième", "douzième"],
+                insertWords: phrases(["insérer", "insère"]), possessives: phrases(["mon", "ma", "mes"]))
         case .spanish:
             FormatRules(
                 listMarkers: [["primero", "primera", "en primer lugar", "número uno"],
@@ -119,7 +132,8 @@ extension Language {
                 signOffs: phrases(["un saludo", "saludos", "atentamente", "gracias", "un abrazo"]),
                 numberExtras: ["primero", "primera", "segundo", "segunda", "tercero", "tercera", "cuarto", "quinto",
                                "sexto", "séptimo", "octavo", "noveno", "décimo", "ciento"],
-                markerBlockers: ["lugar", "plato", "piso"])
+                markerBlockers: ["lugar", "plato", "piso"],
+                insertWords: phrases(["insertar", "inserta"]), possessives: phrases(["mi", "mis"]))
         case .italian:
             FormatRules(
                 listMarkers: [["primo", "innanzitutto", "numero uno"], ["secondo", "numero due"],
@@ -132,7 +146,8 @@ extension Language {
                 numberExtras: ["primo", "terzo", "quarto", "quinto", "sesto", "settimo", "ottavo", "nono",
                                "decimo"],
                 markerBlockers: ["me", "te", "lui", "lei", "noi", "voi", "loro", "il", "la", "lo", "i", "gli", "le",
-                                 "piatto", "posto", "tempo"])
+                                 "piatto", "posto", "tempo"],
+                insertWords: phrases(["inserisci", "inserire"]), possessives: phrases(["il mio", "la mia", "mio", "mia"]))
         case .portuguese:
             FormatRules(
                 listMarkers: [["primeiro", "primeira", "em primeiro lugar", "número um"],
@@ -146,7 +161,8 @@ extension Language {
                 signOffs: phrases(["atenciosamente", "cumprimentos", "obrigado", "obrigada", "um abraço", "abraços"]),
                 numberExtras: ["primeiro", "primeira", "terceiro", "quarto", "quinto", "sexto", "sétimo",
                                "oitavo", "nono", "décimo"],
-                markerBlockers: ["o", "a", "os", "as", "ele", "ela", "eles", "elas", "lugar"])
+                markerBlockers: ["o", "a", "os", "as", "ele", "ela", "eles", "elas", "lugar"],
+                insertWords: phrases(["inserir", "insere"]), possessives: phrases(["o meu", "a minha", "meu", "minha"]))
         case .danish:
             FormatRules(
                 listMarkers: [["først", "for det første", "nummer et"], ["for det andet", "nummer to"],
@@ -158,7 +174,8 @@ extension Language {
                 greetings: phrases(["hej", "hejsa", "kære", "hallo"]),
                 signOffs: phrases(["med venlig hilsen", "venlig hilsen", "de bedste hilsner", "hilsen", "mvh", "tak"]),
                 numberExtras: ["første", "tredje", "fjerde", "femte", "sjette", "syvende", "ottende",
-                               "niende", "tiende", "ellevte", "tolvte", "procent"])
+                               "niende", "tiende", "ellevte", "tolvte", "procent"],
+                insertWords: phrases(["indsæt"]), possessives: phrases(["min", "mit", "mine"]))
         case .dutch:
             FormatRules(
                 listMarkers: [["eerst", "ten eerste", "nummer een"], ["ten tweede", "nummer twee"],
@@ -171,7 +188,8 @@ extension Language {
                 signOffs: phrases(["met vriendelijke groet", "vriendelijke groet", "groetjes", "groeten", "bedankt",
                                    "dank je"]),
                 numberExtras: ["eerste", "tweede", "derde", "vierde", "vijfde", "zesde", "zevende", "achtste",
-                               "negende", "tiende", "elfde", "twaalfde", "procent"])
+                               "negende", "tiende", "elfde", "twaalfde", "procent"],
+                insertWords: phrases(["invoegen", "voeg in"]), possessives: phrases(["mijn"]))
         }
     }
 }
