@@ -50,7 +50,9 @@ public final class CleanupPipeline: TextCleaner {
                                                   isKnownWord: isKnownWord)
         guard level != .off else { return corrected }
         // Code gets exactly what was said: no model, no fillers removed, no sentence shape.
-        if context.category == .code { return StyleFinisher.codeSafe(corrected, dictionary: dictionary) }
+        if context.category == .code {
+            return StyleFinisher.codeSafe(CodeVocabulary.apply(corrected), dictionary: dictionary)
+        }
         let style = style(context.category)
         let deadline = ContinuousClock.now + timeout
         var lines: [FormattedLine] = []
