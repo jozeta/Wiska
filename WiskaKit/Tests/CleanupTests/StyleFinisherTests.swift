@@ -37,4 +37,11 @@ struct StyleFinisherTests {
         #expect(StyleFinisher.codeSafe("Ls -la", dictionary: dictionary) == "ls -la")
         #expect(StyleFinisher.codeSafe("Echo done.\nExit.", dictionary: dictionary) == "echo done\nexit")
     }
+
+    @Test func veryCasualKeepsAcronymsAndMultiWordEntries() {
+        let dictionary = PersonalDictionary(words: ["New York", "Wiska"])
+        let output = StyleFinisher.finish("Flying to New York with NASA and the EU team.", style: .veryCasual,
+                                          dictionary: dictionary)
+        #expect(output == "flying to New York with NASA and the EU team")
+    }
 }

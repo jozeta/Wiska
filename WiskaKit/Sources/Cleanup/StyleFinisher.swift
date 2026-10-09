@@ -39,14 +39,24 @@ enum StyleFinisher {
     }
 
     private static func lowerCased(_ text: String, dictionary: PersonalDictionary) -> String {
-        text.split(separator: " ", omittingEmptySubsequences: false).map { token in
+        var result = text.split(separator: " ", omittingEmptySubsequences: false).map { token in
             let word = String(token)
             let core = word.trimmingCharacters(in: .punctuationCharacters)
             if let spelling = dictionary.words.first(where: { $0.caseInsensitiveCompare(core) == .orderedSame }) {
                 return word.replacingOccurrences(of: core, with: spelling)
             }
-            return keepsCapital(word, dictionary: dictionary) ? word : word.lowercased()
+            return keepsCapital(word, dictionary: dictionary) || isAcronym(core) ? word : word.lowercased()
         }.joined(separator: " ")
+        // Multi-word entries ("New York") span tokens: put their spelling back afterwards.
+        for entry in dictionary.words where entry.contains(" ") {
+            result = result.replacingOccurrences(of: entry, with: entry, options: .caseInsensitive)
+        }
+        return result
+    }
+
+    /// "NASA", "EU": two or more letters, all upper-case.
+    private static func isAcronym(_ word: String) -> Bool {
+        word.count >= 2 && word.allSatisfy { $0.isUppercase }
     }
 
     /// "I", "I'm", "I'll"… and the user's own words keep their capitals.
