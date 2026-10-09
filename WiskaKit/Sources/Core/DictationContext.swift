@@ -6,11 +6,14 @@ public struct DictationContext: Sendable, Equatable {
     public var language: Language?
     /// The user's ticked languages: their rules apply when `language` is unknown.
     public var enabledLanguages: [Language]
+    /// The kind of app being dictated into (decides style and formatting).
+    public var category: AppCategory
 
     public init(appBundleID: String? = nil, language: Language? = nil,
-                enabledLanguages: [Language] = [.english, .swedish]) {
+                enabledLanguages: [Language] = [.english, .swedish], category: AppCategory = .other) {
         self.appBundleID = appBundleID
         self.language = language
         self.enabledLanguages = enabledLanguages
+        self.category = category
     }
 }
