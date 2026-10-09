@@ -29,7 +29,7 @@ Decided with the user: all four goals; a separate **Fix grammar** switch; ~1–2
 - **Cleanup (shared, model-agnostic):**
   - `CleanupPrompts`: the cleanup instructions (moved from `FoundationModelsRewriter.instructions`) gain a `grammar: Bool` line: "Fix grammar mistakes (verb forms, agreement, articles, word order); keep the meaning and otherwise the words."
   - `EditPrompts`: edit/write instructions, prompts and output post-processing (`rewrap`, fence/marker stripping, `removeEcho`, `mostlyCopies`, `fitToCursor`) moved from `FoundationModelsEditor`, used by both editors.
-  - `TextRewriter.rewrite` gains `grammar: Bool`; `TextRewriter` gains `timeout: Duration` (Apple: today's value; Gemma: 1.5× it, 6 s minimum) used by the pipeline's deadline.
+  - `TextRewriter.rewrite` gains `grammar: Bool`; `TextRewriter` gains `preferredTimeout: Duration?` (Apple: nil = the pipeline's 1 s; Gemma: 2.5 s) used by the pipeline's deadline; command mode keeps today's per-word timeout for both models.
   - `CleanupGuard.check(…, grammar: Bool)`: with grammar on, Light keeps ≥ 80 % of required words (instead of 100 %); the new-word limit (20 %) is unchanged.
   - `SwitchingRewriter` / `SwitchingEditor`: pick by `languageModel` and availability; on an error or timeout from the chosen model, retry once with the other available one.
   - `ModelBenchmark`: `cases: [BenchmarkCase]`, `run(rewriter:) / run(editor:) async -> [BenchmarkResult]` (`output`, `passed`, `duration`).

@@ -41,6 +41,17 @@ final class FakeRewriter: TextRewriter {
 
 @MainActor
 struct CleanupPipelineTests {
+    /// A model that asks for more time gets it: here 2.5 s, not the pipeline's 50 ms.
+    @Test func rewriterTimeoutWins() async throws {
+        let generator = FakeGenerator()
+        generator.delay = .milliseconds(300)
+        generator.reply = { _, prompt in prompt.uppercased() + "." }
+        let pipeline = CleanupPipeline(level: { .light }, rewriter: LocalRewriter(generator: generator),
+                                       timeout: .milliseconds(50))
+        let output = try await pipeline.clean("send it to me now", context: DictationContext(language: .english))
+        #expect(output == "SEND IT TO ME NOW.")
+    }
+
     @Test func grammarSettingReachesTheModel() async throws {
         let rewriter = FakeRewriter()
         let pipeline = CleanupPipeline(level: { .light }, rewriter: rewriter, grammar: { true })

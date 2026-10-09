@@ -64,7 +64,7 @@ public final class CleanupPipeline: TextCleaner {
         }
         let style = style(context.category)
         let grammar = grammar()
-        let deadline = ContinuousClock.now + timeout
+        let deadline = ContinuousClock.now + (rewriter.preferredTimeout ?? timeout)
         var lines: [FormattedLine] = []
         for segment in corrected.components(separatedBy: "\n") {
             if SnippetExpander.isPlaceholderLine(segment) {

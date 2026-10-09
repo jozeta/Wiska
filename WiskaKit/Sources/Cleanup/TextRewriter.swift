@@ -4,10 +4,16 @@ import Core
 @MainActor
 public protocol TextRewriter: AnyObject, Sendable {
     var isAvailable: Bool { get }
+    /// How long the pipeline waits for this model; nil = the pipeline's own budget.
+    var preferredTimeout: Duration? { get }
     /// `grammar`: the Fix grammar setting, so a warmed session matches the dictation.
     func prewarm(level: CleanupLevel, grammar: Bool)
     /// `language`: the dictation's language when known, so the model is told which one it is.
     /// `style`: how formal the wording should be. `grammar`: fix grammar mistakes too.
     func rewrite(_ text: String, level: CleanupLevel, language: Language?, style: WritingStyle,
                  grammar: Bool) async throws -> String
+}
+
+public extension TextRewriter {
+    var preferredTimeout: Duration? { nil }
 }
