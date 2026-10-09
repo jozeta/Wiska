@@ -87,4 +87,22 @@ struct HistoryReportTests {
         #expect(result.topApps.isEmpty)
         #expect(report([], .all).buckets.count == 1)
     }
+
+    /// Chile changes its clocks at midnight (2026-09-06): days after it must still line up.
+    @Test func midnightDSTKeepsDailyBuckets() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Santiago")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 10, day: 9, hour: 12))!
+        let twoDaysAgo = calendar.date(byAdding: .day, value: -2, to: now)!
+        let text = "one two three"
+        let record = DictationRecord(date: twoDaysAgo, appBundleID: nil, language: nil, engine: .apple,
+                                     rawText: text, finalText: text, pasted: true)
+        let old = DictationRecord(date: calendar.date(from: DateComponents(year: 2026, month: 8, day: 30, hour: 9))!,
+                                  appBundleID: nil, language: nil, engine: .apple, rawText: "x", finalText: "x", pasted: true)
+        for period in [HistoryPeriod.week, .month, .all] {
+            let result = HistoryReport.compute([old, record], period: period, now: now, calendar: calendar)
+            #expect(result.buckets.allSatisfy { calendar.startOfDay(for: $0.start) == $0.start }, "\(period)")
+            #expect(result.buckets.map(\.words).reduce(0, +) == result.words, "\(period)")
+        }
+    }
 }

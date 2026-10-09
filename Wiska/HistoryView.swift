@@ -64,9 +64,9 @@ private struct DictationsList: View {
         let now = Date()
         let shown = items.filter { filter.matches($0.record, now: now) }
         List(shown) { item in
-            DictationRow(item: item, expanded: expanded == item.id, highlight: highlight, store: store)
-                .contentShape(Rectangle())
-                .onTapGesture { expanded = expanded == item.id ? nil : item.id }
+            DictationRow(item: item, expanded: expanded == item.id, highlight: highlight, store: store) {
+                expanded = expanded == item.id ? nil : item.id
+            }
         }
         .overlay {
             if shown.isEmpty {
@@ -114,12 +114,16 @@ private struct DictationRow: View {
     let expanded: Bool
     let highlight: Highlight
     let store: HistoryStore
+    let toggle: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
+                    // Only the header line toggles, so the texts below stay selectable.
                     HStack(spacing: 6) {
+                        Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                            .font(.caption2).foregroundStyle(.secondary)
                         Text(item.record.date, style: .time).font(.caption).foregroundStyle(.secondary)
                         Text(item.record.date, style: .date).font(.caption).foregroundStyle(.secondary)
                         if let language = item.record.language { Text(language.flag).font(.caption) }
@@ -131,6 +135,8 @@ private struct DictationRow: View {
                                 .font(.caption).foregroundStyle(.orange)
                         }
                     }
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: toggle)
                     Text(item.record.finalText).lineLimit(expanded ? nil : 2).textSelection(.enabled)
                 }
                 Spacer()

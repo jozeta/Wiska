@@ -64,7 +64,10 @@ public struct HistoryReport: Equatable, Sendable {
         let last = bucketStart(today)
         while cursor <= last {
             report.buckets.append(Bucket(start: cursor, words: wordsPerBucket[cursor] ?? 0))
-            cursor = calendar.date(byAdding: report.bucketIsWeek ? .weekOfYear : .day, value: 1, to: cursor) ?? last.addingTimeInterval(1)
+            // Re-snap every step: where clocks change at midnight, adding a day lands on 01:00.
+            guard let next = calendar.date(byAdding: report.bucketIsWeek ? .weekOfYear : .day, value: 1, to: cursor)
+            else { break }
+            cursor = bucketStart(next)
         }
 
         // Top apps, then everything else as "Other".
