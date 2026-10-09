@@ -46,6 +46,8 @@ struct HistoryView: View {
                           highlight: settings.highlight)
             }
         }
+        // The same margin below the content as beside it.
+        .padding(.bottom, StatsPane.margin)
     }
 }
 
@@ -195,6 +197,8 @@ private struct StatsPane: View {
     let retention: HistoryRetention
     let highlight: Highlight
     @State private var period = HistoryPeriod.week
+    /// The space around the Stats content; the window keeps the same space at its bottom.
+    static let margin: CGFloat = 12
 
     var body: some View {
         let report = HistoryReport.compute(records, period: period, now: Date())
@@ -235,7 +239,7 @@ private struct StatsPane: View {
                     }
                 }
             }
-            .padding(12)
+            .padding([.horizontal, .top], Self.margin)
         }
     }
 
