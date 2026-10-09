@@ -19,17 +19,20 @@ public final class CleanupPipeline: TextCleaner {
     private let dictionary: @MainActor () -> PersonalDictionary
     private let isKnownWord: @MainActor (String) -> Bool
     private let style: @MainActor (AppCategory) -> WritingStyle
+    private let snippets: @MainActor () -> [Snippet]
 
     public init(level: @escaping @MainActor () -> CleanupLevel, rewriter: any TextRewriter,
                 dictionary: @escaping @MainActor () -> PersonalDictionary = { PersonalDictionary() },
                 isKnownWord: @escaping @MainActor (String) -> Bool = { _ in false },
                 style: @escaping @MainActor (AppCategory) -> WritingStyle = { $0.defaultStyle ?? .formal },
+                snippets: @escaping @MainActor () -> [Snippet] = { [] },
                 timeout: Duration = CleanupPipeline.defaultTimeout) {
         self.level = level
         self.rewriter = rewriter
         self.dictionary = dictionary
         self.isKnownWord = isKnownWord
         self.style = style
+        self.snippets = snippets
         self.timeout = timeout
     }
 
@@ -45,18 +48,27 @@ public final class CleanupPipeline: TextCleaner {
         // The spoken language's words; all ticked languages' when the engine didn't say.
         let rules = context.language?.rules ?? LanguageRules.merged(context.enabledLanguages)
         let format = context.language?.formatRules ?? FormatRules.merged(context.enabledLanguages)
+        // Snippets first: their text never passes through cleanup (placeholders stand in).
+        let extracted = SnippetExpander.extract(VoiceCommands.apply(text, rules: rules), snippets: snippets(),
+                                                rules: format)
+        let slots = extracted.slots
         // The dictionary is spelling, not cleanup: it applies at every level.
-        let corrected = DictionaryCorrector.apply(VoiceCommands.apply(text, rules: rules), dictionary: dictionary,
-                                                  isKnownWord: isKnownWord)
-        guard level != .off else { return corrected }
+        let corrected = DictionaryCorrector.apply(extracted.text, dictionary: dictionary, isKnownWord: isKnownWord)
+        guard level != .off else { return SnippetExpander.fill(corrected, slots: slots) }
         // Code gets exactly what was said: no model, no fillers removed, no sentence shape.
         if context.category == .code {
-            return StyleFinisher.codeSafe(CodeVocabulary.apply(corrected), dictionary: dictionary)
+            return SnippetExpander.fill(StyleFinisher.codeSafe(CodeVocabulary.apply(corrected), dictionary: dictionary),
+                                        slots: slots)
         }
         let style = style(context.category)
         let deadline = ContinuousClock.now + timeout
         var lines: [FormattedLine] = []
         for segment in corrected.components(separatedBy: "\n") {
+            if SnippetExpander.isPlaceholderLine(segment) {
+                // A multi-line snippet's own line: nothing to clean.
+                lines.append(FormattedLine(text: segment.trimmingCharacters(in: .whitespaces), isPlain: false))
+                continue
+            }
             let cleaned = await cleanSegment(segment, level: level, dictionary: dictionary, rules: rules,
                                              language: context.language, style: style, deadline: deadline)
             if let list = ListFormatter.format(cleaned, rules: format) {
@@ -66,10 +78,11 @@ public final class CleanupPipeline: TextCleaner {
             }
         }
         if context.category == .email { lines = EmailLayout.format(lines, rules: format) }
-        return lines.map { line in
+        let finished = lines.map { line in
             line.isPlain && !line.text.isEmpty
                 ? StyleFinisher.finish(line.text, style: style, dictionary: dictionary) : line.text
         }.joined(separator: "\n")
+        return SnippetExpander.fill(finished, slots: slots)
     }
 
     private func cleanSegment(_ raw: String, level: CleanupLevel, dictionary: PersonalDictionary,
@@ -88,6 +101,11 @@ public final class CleanupPipeline: TextCleaner {
                 .joined(separator: " ")
             switch CleanupGuard.check(original: segment, cleaned: output, level: level, rules: rules) {
             case .accept:
+                // A model that lost or changed a snippet placeholder would lose the snippet.
+                guard SnippetExpander.placeholders(in: output).isSuperset(of: SnippetExpander.placeholders(in: segment)) else {
+                    Self.log.notice("model output rejected: snippet placeholder lost")
+                    return RuleCleaner.clean(segment, rules: rules)
+                }
                 // The model never sees the dictionary; re-apply so it can't undo the user's spellings.
                 return DictionaryCorrector.apply(output, dictionary: dictionary, isKnownWord: isKnownWord)
             case .reject(let reason):

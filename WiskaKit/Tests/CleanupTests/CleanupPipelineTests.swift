@@ -48,6 +48,43 @@ struct CleanupPipelineTests {
         try await p.clean(text, context: context)
     }
 
+    static let signature = Snippet(name: "signature", text: "Best regards,\nJohan")
+    static let address = Snippet(name: "address", text: "Storgatan 1, 111 22 Stockholm")
+
+    func snippetPipeline(_ level: CleanupLevel = .polished, style: WritingStyle = .formal) -> CleanupPipeline {
+        CleanupPipeline(level: { level }, rewriter: rewriter, style: { _ in style },
+                        snippets: { [Self.signature, Self.address] }, timeout: .seconds(5))
+    }
+
+    @Test func snippetKeepsItsCapitalsInVeryCasual() async throws {
+        rewriter.isAvailable = false
+        let output = try await snippetPipeline(style: .veryCasual)
+            .clean("um send it to insert my address", context: DictationContext(language: .english))
+        #expect(output == "send it to Storgatan 1, 111 22 Stockholm")
+    }
+
+    @Test func snippetsWorkInCodeAndOff() async throws {
+        #expect(try await snippetPipeline().clean("insert my signature", context: DictationContext(category: .code))
+                == "Best regards,\nJohan")
+        #expect(try await snippetPipeline(.off).clean("thanks insert my signature", context: DictationContext())
+                == "thanks\nBest regards,\nJohan")
+    }
+
+    @Test func snippetSurvivesAModelThatDropsIt() async throws {
+        rewriter.transform = { $0.replacingOccurrences(of: "wiskasnippet1", with: "") + "." }
+        let output = try await snippetPipeline()
+            .clean("please send the parcel to insert my address today", context: DictationContext(language: .english))
+        #expect(output.contains("Storgatan 1, 111 22 Stockholm"), "\(output)")
+    }
+
+    @Test func signatureSnippetInEmail() async throws {
+        rewriter.transform = { _ in "Hi Anna, the report is done." }
+        let output = try await snippetPipeline()
+            .clean("hi anna the report is done insert my signature",
+                   context: DictationContext(language: .english, category: .email))
+        #expect(output == "Hi Anna,\n\nThe report is done.\nBest regards,\nJohan")
+    }
+
     func pipeline(style: WritingStyle, dictionary: PersonalDictionary = PersonalDictionary()) -> CleanupPipeline {
         CleanupPipeline(level: { .polished }, rewriter: rewriter, dictionary: { dictionary },
                         style: { _ in style }, timeout: .seconds(5))
