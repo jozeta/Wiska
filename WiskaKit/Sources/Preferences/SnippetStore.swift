@@ -28,6 +28,14 @@ public final class SnippetStore {
         save()
     }
 
+    /// Removes a snippet that still has neither a name nor text (an abandoned "Add Snippet").
+    public func removeIfEmpty(id: UUID) {
+        guard let snippet = snippets.first(where: { $0.id == id }),
+              snippet.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              snippet.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        remove(id: id)
+    }
+
     public func remove(id: UUID) {
         snippets.removeAll { $0.id == id }
         save()

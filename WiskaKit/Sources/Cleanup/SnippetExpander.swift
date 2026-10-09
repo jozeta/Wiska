@@ -67,7 +67,9 @@ enum SnippetExpander {
                 result = regex.stringByReplacingMatches(in: result, range: NSRange(result.startIndex..., in: result),
                                                         withTemplate: NSRegularExpression.escapedTemplate(for: snippet.text))
             }
-            if let regex = try? NSRegularExpression(pattern: "(?i)\(key)") {
+            // A snippet ending in punctuation keeps its own: drop the sentence's mark right after it.
+            let ownEnd = snippet.text.last.map { ".!?…".contains($0) } ?? false
+            if let regex = try? NSRegularExpression(pattern: "(?i)\(key)" + (ownEnd ? "[.!?…]?" : "")) {
                 result = regex.stringByReplacingMatches(in: result, range: NSRange(result.startIndex..., in: result),
                                                         withTemplate: NSRegularExpression.escapedTemplate(for: snippet.text))
             }

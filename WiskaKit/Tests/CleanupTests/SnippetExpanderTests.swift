@@ -65,4 +65,15 @@ struct SnippetExpanderTests {
     @Test func noSnippetsLeavesTheTextAlone() {
         #expect(expand("insert my signature", []) == "insert my signature")
     }
+
+    /// A snippet that ends in punctuation keeps exactly its own: no "!." or "..".
+    @Test func snippetsOwnPunctuationWins() {
+        let closing = Snippet(name: "closing", text: "See you soon!")
+        #expect(expand("insert my closing.", [closing]) == "See you soon!")
+        #expect(expand("thanks insert my closing.", [closing]) == "thanks See you soon!")
+        let short = Snippet(name: "address", text: "Storgatan 1.")
+        #expect(expand("send it to insert my address.", [short]) == "send it to Storgatan 1.")
+        let filled = SnippetExpander.fill("Thanks wiskasnippet1.", slots: ["wiskasnippet1": closing])
+        #expect(filled == "Thanks See you soon!")
+    }
 }

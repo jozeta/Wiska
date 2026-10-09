@@ -69,16 +69,8 @@ private struct SnippetEditor: View {
                     close()
                 }
                 Spacer()
-                Button("Done") {
-                    var edited = snippet
-                    edited.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-                    edited.aliases = aliases.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-                        .filter { !$0.isEmpty }
-                    edited.text = text
-                    store.update(edited)
-                    close()
-                }
-                .keyboardShortcut(.defaultAction)
+                Button("Done") { close() }
+                    .keyboardShortcut(.defaultAction)
             }
         }
         .onAppear {
@@ -86,5 +78,21 @@ private struct SnippetEditor: View {
             aliases = snippet.aliases.joined(separator: ", ")
             text = snippet.text
         }
+        // Saved as you type: closing the editor any way (another row, another tab) keeps the edits.
+        .onChange(of: name) { save() }
+        .onChange(of: aliases) { save() }
+        .onChange(of: text) { save() }
+        // An abandoned "Add Snippet" doesn't leave an empty row behind.
+        .onDisappear { store.removeIfEmpty(id: snippet.id) }
+    }
+
+    private func save() {
+        var edited = snippet
+        edited.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        edited.aliases = aliases.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        edited.text = text
+        guard edited != snippet else { return }
+        store.update(edited)
     }
 }

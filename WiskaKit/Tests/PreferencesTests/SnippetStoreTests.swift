@@ -30,4 +30,16 @@ struct SnippetStoreTests {
         let snippet = Snippet(name: " Address ", aliases: ["", "adress"], text: "x")
         #expect(snippet.spokenNames == ["Address", "adress"])
     }
+
+    /// A snippet left without a name and text (an abandoned "Add Snippet") is removed.
+    @Test func emptySnippetIsRemoved() {
+        let store = SnippetStore(url: url)
+        let blank = Snippet(name: "", text: "")
+        let kept = Snippet(name: "sig", text: "x")
+        store.add(blank)
+        store.add(kept)
+        store.removeIfEmpty(id: blank.id)
+        store.removeIfEmpty(id: kept.id)
+        #expect(SnippetStore(url: url).snippets == [kept])
+    }
 }
