@@ -59,7 +59,6 @@ struct HelpTab: View {
             }
         }
         .formStyle(.grouped)
-        .frame(minHeight: 360, idealHeight: 720, maxHeight: .infinity)
     }
 
     static let editExamples = [

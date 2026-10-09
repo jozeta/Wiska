@@ -54,7 +54,6 @@ struct GeneralTab: View {
             }
         }
         .formStyle(.grouped)
-        .frame(minHeight: 360, idealHeight: 560, maxHeight: .infinity)
         .onAppear { login.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             login.refresh()

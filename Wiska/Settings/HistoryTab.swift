@@ -20,6 +20,5 @@ struct HistoryTab: View {
             }
         }
         .formStyle(.grouped)
-        .frame(minHeight: 360, idealHeight: 560, maxHeight: .infinity)
     }
 }

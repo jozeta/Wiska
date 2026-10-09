@@ -39,7 +39,6 @@ struct SpeechTab: View {
             .onChange(of: settings.engineMode) { model.warmUpParakeetIfSelected() }
         }
         .formStyle(.grouped)
-        .frame(minHeight: 360, idealHeight: 560, maxHeight: .infinity)
     }
 }
 
