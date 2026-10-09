@@ -27,6 +27,16 @@ public struct SavedCommand: Codable, Equatable, Identifiable, Sendable {
         case noInstruction
     }
 
+    private enum CodingKeys: String, CodingKey { case id, phrases, instruction }
+
+    /// Missing keys get defaults, so older or hand-edited files (and future fields) still load.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        phrases = try container.decodeIfPresent([String].self, forKey: .phrases) ?? []
+        instruction = try container.decodeIfPresent(String.self, forKey: .instruction) ?? ""
+    }
+
     public var problems: [Problem] {
         var problems: [Problem] = []
         if spokenPhrases.isEmpty { problems.append(.noPhrase) }
@@ -44,21 +54,14 @@ public enum CommandResolver {
     /// A command phrase said alone, or followed by a comma (or other mark) or a connector word,
     /// uses its instruction; words after it are added as "Also: …". Anything else — including
     /// an ordinary sentence that happens to start with a command word — is used as said.
+    /// The saved command `spoken` starts with (alone or before a comma or "and"), if any.
+    public static func matchedCommand(_ spoken: String, commands: [SavedCommand]) -> SavedCommand? {
+        match(spoken, commands: commands)?.command
+    }
+
     public static func resolve(_ spoken: String, commands: [SavedCommand]) -> String {
+        guard let found = match(spoken, commands: commands) else { return spoken }
         let tokens = spoken.split(whereSeparator: \.isWhitespace).map(String.init)
-        let bareTokens = tokens.map(PhraseMatcher.bare)
-        let phrases = commands
-            .filter { $0.problems.isEmpty }
-            .flatMap { command in command.spokenPhrases.map { (words: PhraseMatcher.bareWords($0), command: command) } }
-            .filter { !$0.words.isEmpty }
-            .sorted { $0.words.count > $1.words.count }   // the longest phrase wins
-        func separated(after count: Int) -> Bool {
-            count == tokens.count || tokens[count - 1].last?.isPunctuation == true || connectors.contains(bareTokens[count])
-        }
-        guard let found = phrases.first(where: { phrase in
-            phrase.words.count <= tokens.count && PhraseMatcher.matches(bareTokens[0..<phrase.words.count], phrase.words)
-                && separated(after: phrase.words.count)
-        }) else { return spoken }
         var instruction = found.command.instruction.trimmingCharacters(in: .whitespacesAndNewlines)
         var rest = tokens.dropFirst(found.words.count)
         // "formal and shorter": the joining word itself isn't part of the extra instruction.
@@ -69,6 +72,23 @@ public enum CommandResolver {
         guard !extra.isEmpty else { return instruction }
         if let last = instruction.last, !".!?…".contains(last) { instruction += "." }
         return "\(instruction) Also: \(extra)"
+    }
+
+    private static func match(_ spoken: String, commands: [SavedCommand]) -> (words: [String], command: SavedCommand)? {
+        let tokens = spoken.split(whereSeparator: \.isWhitespace).map(String.init)
+        let bareTokens = tokens.map(PhraseMatcher.bare)
+        let phrases = commands
+            .filter { $0.problems.isEmpty }
+            .flatMap { command in command.spokenPhrases.map { (words: PhraseMatcher.bareWords($0), command: command) } }
+            .filter { !$0.words.isEmpty }
+            .sorted { $0.words.count > $1.words.count }   // the longest phrase wins
+        func separated(after count: Int) -> Bool {
+            count == tokens.count || tokens[count - 1].last?.isPunctuation == true || connectors.contains(bareTokens[count])
+        }
+        return phrases.first(where: { phrase in
+            phrase.words.count <= tokens.count && PhraseMatcher.matches(bareTokens[0..<phrase.words.count], phrase.words)
+                && separated(after: phrase.words.count)
+        })
     }
 
     /// Created when the user has no commands file yet; editable and deletable.

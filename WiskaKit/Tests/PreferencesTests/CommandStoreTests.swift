@@ -41,8 +41,32 @@ struct CommandStoreTests {
 
     @Test func corruptFileIsSetAsideAndDefaultsUsed() throws {
         try Data("not json".utf8).write(to: url)
-        #expect(CommandStore(url: url).commands.count == 4)
-        let aside = url.deletingLastPathComponent().appendingPathComponent("commands.corrupt.json")
+        let store = CommandStore(url: url)
+        #expect(store.commands.count == 4)
+        let aside = try #require(store.setAsideFile)
         #expect(FileManager.default.fileExists(atPath: aside.path))
+        #expect(aside.lastPathComponent.hasPrefix("commands.corrupt-"))
+    }
+
+    /// Each unreadable file is kept under its own name, and the store says so.
+    @Test func corruptFilesAreKeptAndReported() throws {
+        try Data("not json".utf8).write(to: url)
+        let first = CommandStore(url: url)
+        #expect(first.setAsideFile != nil)
+        try Data("still not json".utf8).write(to: url)
+        let second = CommandStore(url: url)
+        #expect(second.setAsideFile != nil)
+        #expect(second.setAsideFile != first.setAsideFile)
+        #expect(FileManager.default.fileExists(atPath: first.setAsideFile!.path))
+        #expect(CommandStore(url: url).setAsideFile == nil)   // a readable file: nothing to report
+    }
+
+    /// Closing the tab removes every abandoned command with one save.
+    @Test func removeEmptyRemovesAllAtOnce() {
+        let store = CommandStore(url: url)
+        store.add(SavedCommand(phrases: [""], instruction: ""))
+        store.add(SavedCommand(phrases: [], instruction: " "))
+        store.removeEmpty()
+        #expect(CommandStore(url: url).commands.count == 4)
     }
 }

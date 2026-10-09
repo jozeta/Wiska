@@ -49,3 +49,29 @@ struct CursorContextReadRangeTests {
         #expect(CursorContext.readRange(cursor: 5_000, length: 0, count: 2_000) == (400, 1_600))   // stale cursor: clamped
     }
 }
+
+/// Cleanup pass.
+struct CursorContextCleanupTests {
+    /// The document's own "[cursor]" can't be mistaken for the real cursor.
+    @Test func literalMarkerInTheTextIsDefused() {
+        let window = CursorContext.window(text: "Type [cursor] to mark it. Done", cursor: 30)
+        #expect(window.components(separatedBy: CursorContext.marker).count == 2)
+        #expect(window.hasSuffix("Done[cursor]"))
+    }
+
+    /// Text without spaces (Chinese, a long URL) still gives context, cut at a character.
+    @Test func textWithoutSpacesIsCutAtACharacter() {
+        let text = String(repeating: "漢", count: 3_000)
+        let parts = CursorContext.window(text: text, cursor: 1_500, limit: 200).components(separatedBy: CursorContext.marker)
+        #expect(parts.count == 2)
+        #expect(parts[0].count == 200)
+        #expect(parts[1].count == 200)
+    }
+
+    @Test func commandBadgeSaysWhatWillHappen() {
+        #expect(CommandBadge.text(selectedText: "some words", rangeIsEmpty: false) == "⌃ Edit")
+        #expect(CommandBadge.text(selectedText: nil, rangeIsEmpty: true) == "⌃ Write")
+        #expect(CommandBadge.text(selectedText: "  ", rangeIsEmpty: true) == "⌃ Write")
+        #expect(CommandBadge.text(selectedText: nil, rangeIsEmpty: false) == "⌃ Command")   // the app doesn't say
+    }
+}

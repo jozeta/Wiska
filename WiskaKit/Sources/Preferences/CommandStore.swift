@@ -12,9 +12,14 @@ public final class CommandStore {
     public private(set) var commands: [SavedCommand]
     @ObservationIgnored private let url: URL
 
+    /// Where an unreadable commands file was moved this launch (shown in the Commands tab).
+    public private(set) var setAsideFile: URL?
+
     public init(url: URL = CommandStore.defaultURL) {
         self.url = url
-        if let loaded = Self.load(from: url) {
+        let result = Self.load(from: url)
+        setAsideFile = result.setAside
+        if let loaded = result.commands {
             commands = loaded
         } else {
             commands = CommandResolver.defaults
@@ -30,6 +35,14 @@ public final class CommandStore {
     public func update(_ command: SavedCommand) {
         guard let index = commands.firstIndex(where: { $0.id == command.id }) else { return }
         commands[index] = command
+        save()
+    }
+
+    /// Removes every abandoned command, with one save (closing the Commands tab).
+    public func removeEmpty() {
+        let kept = commands.filter { !($0.spokenPhrases.isEmpty && $0.instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+        guard kept.count != commands.count else { return }
+        commands = kept
         save()
     }
 
@@ -57,18 +70,25 @@ public final class CommandStore {
         }
     }
 
-    /// nil when there's no file yet, or when it was unreadable (then it's set aside).
-    private static func load(from url: URL) -> [SavedCommand]? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
+    /// nil commands when there's no file yet, or when it was unreadable (then it's set aside,
+    /// under its own dated name, so an earlier one is never overwritten).
+    private static func load(from url: URL) -> (commands: [SavedCommand]?, setAside: URL?) {
+        guard FileManager.default.fileExists(atPath: url.path) else { return (nil, nil) }
         do {
-            return try JSONDecoder().decode([SavedCommand].self, from: data)
+            return (try JSONDecoder().decode([SavedCommand].self, from: Data(contentsOf: url)), nil)
         } catch {
             // Never overwrite a file we couldn't read: keep it aside for the user.
-            let aside = url.deletingLastPathComponent().appendingPathComponent("commands.corrupt.json")
-            try? FileManager.default.removeItem(at: aside)
-            try? FileManager.default.moveItem(at: url, to: aside)
-            log.error("commands.json unreadable; moved to commands.corrupt.json")
-            return nil
+            let stamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: true))
+                .replacingOccurrences(of: ":", with: "-")
+            let aside = url.deletingLastPathComponent().appendingPathComponent("commands.corrupt-\(stamp).json")
+            do {
+                try FileManager.default.moveItem(at: url, to: aside)
+            } catch {
+                log.error("commands.json unreadable and couldn't be moved aside")
+                return (nil, nil)
+            }
+            log.error("commands.json unreadable; moved aside")
+            return (nil, aside)
         }
     }
 }

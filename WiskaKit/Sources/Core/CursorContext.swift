@@ -16,15 +16,19 @@ public enum CursorContext {
 
         var start = text.index(index, offsetBy: -limit, limitedBy: text.startIndex) ?? text.startIndex
         if start > text.startIndex, !text[text.index(before: start)].isWhitespace {
-            // Mid-word: skip to the next whitespace, so no partial word is kept.
-            start = text[start..<index].firstIndex(where: \.isWhitespace) ?? index
+            // Mid-word: skip to the next whitespace, so no partial word is kept — unless there's
+            // none nearby (Chinese, a long URL): then cut at a character.
+            start = text[start..<index].prefix(100).firstIndex(where: \.isWhitespace) ?? start
         }
         var end = text.index(index, offsetBy: limit, limitedBy: text.endIndex) ?? text.endIndex
         if end < text.endIndex, !text[end].isWhitespace {
-            end = text[index..<end].lastIndex(where: \.isWhitespace) ?? index
+            end = text[index..<end].suffix(100).lastIndex(where: \.isWhitespace) ?? end
         }
+        // The document's own "[cursor]" mustn't look like the real one.
         let before = String(text[start..<index]).replacing(/^\s+/, with: "")
+            .replacingOccurrences(of: marker, with: "(cursor)")
         let after = String(text[index..<end]).replacing(/\s+$/, with: "")
+            .replacingOccurrences(of: marker, with: "(cursor)")
         guard !(before + after).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return "" }
         return before + marker + after
     }

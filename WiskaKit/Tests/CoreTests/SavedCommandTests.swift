@@ -67,3 +67,22 @@ struct SavedCommandTests {
                                    "Turn it into a bulleted list."])
     }
 }
+
+/// Cleanup pass.
+struct SavedCommandCleanupTests {
+    /// Older or hand-edited files with missing keys still load.
+    @Test func missingKeysDecodeWithDefaults() throws {
+        let json = #"[{"phrases":["fix"]},{"instruction":"Be brief."}]"#
+        let commands = try JSONDecoder().decode([SavedCommand].self, from: Data(json.utf8))
+        #expect(commands.map(\.phrases) == [["fix"], []])
+        #expect(commands.map(\.instruction) == ["", "Be brief."])
+        #expect(commands[0].id != commands[1].id)
+    }
+
+    /// Try it: typing exactly a command's instruction text isn't "no command".
+    @Test func matchedCommandIsFoundEvenWhenItsTextEqualsTheInput() {
+        let command = SavedCommand(phrases: ["shorter"], instruction: "shorter")
+        #expect(CommandResolver.matchedCommand("shorter", commands: [command]) == command)
+        #expect(CommandResolver.matchedCommand("make it friendlier", commands: [command]) == nil)
+    }
+}
