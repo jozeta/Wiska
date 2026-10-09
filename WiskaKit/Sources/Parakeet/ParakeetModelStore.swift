@@ -74,7 +74,7 @@ public final class ParakeetModelStore {
     }
 
     /// Starts a download. Only ever called from the Settings "Download" button.
-    public func download() {
+    public func download(revision: String? = nil) {
         switch status {
         case .ready, .downloading: return
         case .notDownloaded, .failed: break
@@ -95,7 +95,7 @@ public final class ParakeetModelStore {
                 try await downloader.download(to: directory, progress: report)
                 try Task.checkCancellation()
                 guard downloader.exists(at: directory) else { throw CocoaError(.fileReadCorruptFile) }
-                try Data().write(to: directory.appendingPathComponent(Self.completionMarker))
+                try Data((revision ?? "").utf8).write(to: directory.appendingPathComponent(Self.completionMarker))
                 self?.status = .ready
                 Self.log.info("parakeet model downloaded")
             } catch {
@@ -108,6 +108,27 @@ public final class ParakeetModelStore {
                 }
             }
         }
+    }
+
+    private var markerURL: URL { directory.appendingPathComponent(Self.completionMarker) }
+
+    /// The repo revision this model was downloaded at; nil for installs from before update checks.
+    public var installedRevision: String? {
+        guard isInstalled, let text = try? String(contentsOf: markerURL, encoding: .utf8) else { return nil }
+        let sha = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return sha.isEmpty ? nil : sha
+    }
+
+    /// When the model finished downloading (the marker's date).
+    public var installedAt: Date? {
+        guard isInstalled else { return nil }
+        return (try? FileManager.default.attributesOfItem(atPath: markerURL.path))?[.modificationDate] as? Date
+    }
+
+    /// Remembers which revision the installed model is (found to be current by an update check).
+    public func recordRevision(_ sha: String) {
+        guard isInstalled else { return }
+        try? Data(sha.utf8).write(to: markerURL)
     }
 
     public func cancelDownload() {
