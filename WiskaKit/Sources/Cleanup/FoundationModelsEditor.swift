@@ -127,7 +127,10 @@ public final class FoundationModelsEditor: TextEditor {
         } catch {
             throw Self.editError(for: error)
         }
+        // Written text is new, so fence markers at either end are always the model's: it may
+        // even start with the fence that closes the context (">>> I'll be there").
         let unmarked = output.replacing(/(?i)\[\s*cursor\s*\]/, with: "")
+            .replacing(/^(\s*(<<<|>>>))+/, with: "").replacing(/((<<<|>>>)\s*)+$/, with: "")
         let written = Self.removeEcho(Self.rewrap(original: "", edited: unmarked), context: context)
         // A rewrite of the surrounding text instead of new text would paste it twice.
         guard !written.isEmpty, !Self.mostlyCopies(written, context: context) else { throw EditError.failed }

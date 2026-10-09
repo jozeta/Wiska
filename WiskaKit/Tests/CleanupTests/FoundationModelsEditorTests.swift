@@ -147,6 +147,15 @@ struct FoundationModelsEditorTests {
         #expect(FoundationModelsEditor.fitToCursor("Hi.", context: nil) == "Hi.")
     }
 
+    /// The model may start its answer with the fence that closes the context (">>> I'll be there").
+    @Test func fenceMarkersAtEitherEndAreRemoved() async throws {
+        for raw in [">>> I'll be there at three.", ">>>\nI'll be there at three.\n<<<", "<<< I'll be there at three. >>>"] {
+            let editor = FoundationModelsEditor(isAvailable: { true }, respond: { _, _ in raw }, timeout: { _ in .seconds(5) })
+            #expect(try await editor.write(instruction: "reply", context: "Are you coming?\n\n[cursor]", language: nil)
+                    == "I'll be there at three.", "\(raw)")
+        }
+    }
+
     /// A model that copies the text around the cursor: only its own words are pasted.
     @Test func echoedContextIsNotPastedTwice() {
         let context = "Hi Johan,\n\nAre you coming tomorrow?\n\nAnna\n\n[cursor]\n\nSent from my iPhone"
@@ -177,7 +186,7 @@ struct FoundationModelsEditorTests {
                                                                context: context, language: .english)
         #expect(!written.isEmpty)
         #expect(written.lowercased().contains("three") || written.contains("3"), "\(written)")
-        #expect(!written.contains("[cursor]"))
+        #expect(!written.contains("[cursor]") && !written.contains(">>>") && !written.contains("<<<"), "\(written)")
     }
 }
 
