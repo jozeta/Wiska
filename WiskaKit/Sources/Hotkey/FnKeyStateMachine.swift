@@ -28,6 +28,8 @@ public struct FnKeyStateMachine {
     /// The press in progress began while armed.
     private var secondPress = false
     public private(set) var isLocked = false
+    /// fn went down while locked: only its release finishes (⇧ alone also arrives as "fn up").
+    private var lockedFnDown = false
 
     public init() {}
 
@@ -73,7 +75,11 @@ public struct FnKeyStateMachine {
 
     private mutating func handleLocked(_ input: KeyInput) -> HotkeyEvent? {
         switch input {
+        case .flagsChanged(fnDown: true, shift: _, time: _):
+            lockedFnDown = true
+            return nil
         case .flagsChanged(fnDown: false, shift: _, time: _):
+            guard lockedFnDown else { return nil }
             unlock()
             return .released
         case .keyDown(keyCode: Self.escapeKeyCode, time: _):
@@ -85,8 +91,15 @@ public struct FnKeyStateMachine {
     }
 
     /// Leave hands-free (the dictation ended some other way: silence, the time cap, an error).
+    /// Does nothing unless locked, so it never disarms a first tap.
     public mutating func unlock() {
+        guard isLocked else { return }
+        clear()
+    }
+
+    private mutating func clear() {
         isLocked = false
+        lockedFnDown = false
         pressedAt = nil
         secondPress = false
         armedUntil = nil
@@ -96,7 +109,7 @@ public struct FnKeyStateMachine {
     /// have been missed). Returns true if a hold or a hands-free dictation was in progress.
     public mutating func reset() -> Bool {
         let wasActive = (pressedAt != nil && !interrupted) || isLocked
-        unlock()
+        clear()
         shifted = false
         interrupted = false
         return wasActive

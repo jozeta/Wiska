@@ -87,6 +87,29 @@ struct AppleTranscriberTests {
         #expect(transcript.text.lowercased().contains("rapporten"))
     }
 
+    /// Hands-free makes long dictations with pauses normal: each sentence must appear once.
+    @Test(.timeLimit(.minutes(3)))
+    func swedishPausedDictationKeepsEachSentenceOnce() async throws {
+        let first = try spokenSamples("Kan du skicka rapporten till mig innan lunch", voice: "Alva")
+        let second = try spokenSamples("Sen vill jag ha kaffe och en kanelbulle", voice: "Alva")
+        let samples = first + Array(repeating: 0, count: 24_000) + second
+        var texts: [Bool: String] = [:]
+        for live in [false, true] {
+            let session = try await AppleTranscriber(languages: { [.swedish] }, livePreview: { live })
+                .makeSession(language: .fixed(.swedish))
+            for start in stride(from: 0, to: samples.count, by: 1_600) {
+                session.append(AudioChunk(samples: Array(samples[start..<min(start + 1_600, samples.count)])))
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            texts[live] = try await session.finish().text.lowercased()
+        }
+        for (live, text) in texts {
+            #expect(text.components(separatedBy: "rapporten").count == 2, "live=\(live): \(text)")
+            #expect(text.components(separatedBy: "kaffe").count == 2, "live=\(live): \(text)")
+            #expect(text.range(of: "rapporten")!.lowerBound < text.range(of: "kaffe")!.lowerBound, "\(text)")
+        }
+    }
+
     @Test(.timeLimit(.minutes(1)))
     func previewOffYieldsOnlyFinishedSegments() async throws {
         let session = try await AppleTranscriber(languages: { [.english] }, livePreview: { false })

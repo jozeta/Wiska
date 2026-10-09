@@ -148,4 +148,24 @@ struct FnKeyStateMachineTests {
         #expect(run([down(10), up(10.1), key(10.2), down(10.3), up(10.4)])
                 == [.pressed(shifted: false), .tapped(shifted: false), nil, .pressed(shifted: false), .tapped(shifted: false)])
     }
+
+    /// The app releases the lock whenever a dictation stops; between the taps that must not disarm.
+    @Test func unlockWhileNotLockedKeepsTheArm() {
+        var machine = FnKeyStateMachine()
+        _ = [down(10), up(10.1)].map { machine.handle($0) }
+        machine.unlock()
+        #expect(machine.handle(down(10.3)) == .pressed(shifted: false))
+        machine.unlock()
+        #expect(machine.handle(up(10.4)) == .locked)
+    }
+
+    /// ⇧ alone while locked arrives as flagsChanged with fn up: it must not finish the dictation.
+    @Test func lockedShiftAloneDoesNotFinish() {
+        #expect(run([down(10), up(10.1), down(10.3), up(10.4),
+                     .flagsChanged(fnDown: false, shift: true, time: 11),
+                     .flagsChanged(fnDown: false, shift: false, time: 11.1),
+                     down(12), up(12.1)])
+                == [.pressed(shifted: false), .tapped(shifted: false), .pressed(shifted: false), .locked,
+                    nil, nil, nil, .released])
+    }
 }

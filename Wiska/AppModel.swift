@@ -36,6 +36,7 @@ final class AppModel {
     @ObservationIgnored private var flashTask: Task<Void, Never>?
     @ObservationIgnored private var hotkeyFailureLogged = false
     @ObservationIgnored private var badge = "AUTO"
+    @ObservationIgnored private var handsFreeLatch = HandsFreeLatch()
 
     init() {
         LegacyMigration.run()   // before any store touches the data folder
@@ -79,7 +80,9 @@ final class AppModel {
             guard let self else { return }
             if dictationState != state { dictationState = state }
             // A hands-free dictation that ended any way but fn/Esc must not leave fn locked.
-            if state != .listening { hotkey.endHandsFree() }
+            if handsFreeLatch.update(listening: state == .listening, handsFree: controller.isHandsFree) {
+                hotkey.endHandsFree()
+            }
             if state != .idle { flashTask?.cancel() }
             hud.show(hudContent(for: state, levels: levels))
         }
