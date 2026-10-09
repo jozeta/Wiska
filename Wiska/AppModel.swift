@@ -255,7 +255,7 @@ final class AppModel {
     func chooseLanguageModel(_ choice: LanguageModelChoice) {
         settings.languageModel = choice
         if choice == .gemma, gemmaStore.status == .notDownloaded { gemmaStore.download() }
-        if choice == .gemma { gemma.prepare() }
+        if choice == .gemma { gemma.prepare() } else { gemma.unload() }   // ~5 GB back when not in use
     }
 
     private func plan(for choice: LanguageChoice) -> EnginePlan {

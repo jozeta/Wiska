@@ -13,36 +13,49 @@ public final class GemmaModel: LocalGenerator {
     /// Why the model couldn't be loaded; cleared by removing it.
     public private(set) var loadError: String?
 
-    public init(store: GemmaModelStore, runtime: GemmaRuntime = GemmaRuntime(loader: MLXLoadedModel.load)) {
+    /// Bumped by remove() and unload(): a load or answer that finishes afterwards is old news.
+    @ObservationIgnored private var epoch = 0
+
+    public init(store: GemmaModelStore,
+                runtime: GemmaRuntime = GemmaRuntime(release: MLXLoadedModel.releaseMemory, loader: MLXLoadedModel.load)) {
         self.store = store
         self.runtime = runtime
+        // The runtime lets the model go after 30 idle minutes: "Loaded" must follow, and the next
+        // fn press must load it again.
+        let unloaded: @MainActor @Sendable () -> Void = { [weak self] in self?.isLoaded = false }
+        Task { await runtime.setOnUnload(unloaded) }
     }
 
     public var isAvailable: Bool { store.isInstalled && loadError == nil }
 
+    /// Loads in the background (fn press). Cheap when the model is already in memory.
     public func prepare() {
-        guard isAvailable, !isLoaded else { return }
+        guard isAvailable else { return }
         let runtime = runtime
         let directory = store.directory
+        let started = epoch
         Task { [weak self] in
             do {
                 _ = try await runtime.load(from: directory)
-                self?.isLoaded = true
+                guard let self, self.epoch == started else { return }
+                self.isLoaded = true
             } catch {
-                self?.failedToLoad(error)
+                guard let self, self.epoch == started else { return }
+                self.failedToLoad(error)
             }
         }
     }
 
     public func generate(system: String, prompt: String, maxTokens: Int) async throws -> String {
         guard isAvailable else { throw LocalModelError.unavailable }
+        let started = epoch
         do {
             let answer = try await runtime.generate(directory: store.directory, system: system, prompt: prompt,
                                                     maxTokens: maxTokens)
-            isLoaded = true
+            if epoch == started { isLoaded = true }
             return answer
         } catch let error as LocalModelError {
-            failedToLoad(error)
+            if epoch == started { failedToLoad(error) }
             throw error
         }
     }
@@ -54,7 +67,9 @@ public final class GemmaModel: LocalGenerator {
         store.remove()
     }
 
+    /// Lets the model go now (Remove, or switching to Apple Intelligence).
     public func unload() {
+        epoch += 1
         isLoaded = false
         let runtime = runtime
         Task { await runtime.unload() }

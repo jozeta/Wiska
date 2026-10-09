@@ -1,4 +1,5 @@
 import Foundation
+import MLX
 import MLXLLM
 import MLXLMCommon
 import Tokenizers
@@ -10,6 +11,11 @@ public struct MLXLoadedModel: LoadedModel {
     public static func load(from directory: URL) async throws -> any LoadedModel {
         let container = try await LLMModelFactory.shared.loadContainer(from: directory, using: TransformersTokenizerLoader())
         return MLXLoadedModel(container: container)
+    }
+
+    /// MLX keeps freed GPU buffers for reuse: give them back to macOS once the model is dropped.
+    public static func releaseMemory() {
+        Memory.clearCache()
     }
 
     public func respond(system: String, prompt: String, maxTokens: Int) async throws -> String {

@@ -10,6 +10,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/FluidInference/FluidAudio", exact: "0.17.7"),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm", exact: "3.32.3"),
+        .package(url: "https://github.com/ml-explore/mlx-swift", exact: "0.32.3"),
         .package(url: "https://github.com/huggingface/swift-transformers", exact: "1.3.4"),
     ],
     targets: [
@@ -28,6 +29,7 @@ let package = Package(
         ]),
         .target(name: "LocalModel", dependencies: [
             "Core",
+            .product(name: "MLX", package: "mlx-swift"),
             .product(name: "MLXLLM", package: "mlx-swift-lm"),
             .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
             .product(name: "Tokenizers", package: "swift-transformers"),

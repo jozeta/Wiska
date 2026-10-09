@@ -85,3 +85,92 @@ struct GemmaModelTests {
                 == "Download failed — try again")
     }
 }
+
+actor Counter {
+    private(set) var value = 0
+    func increment() { value += 1 }
+}
+
+/// Review fixes: memory is given back, a load nobody wants any more is dropped, and the
+/// model is loaded early again after an idle unload.
+struct GemmaRuntimeLifecycleTests {
+    let directory = URL(fileURLWithPath: "/tmp/gemma")
+
+    /// A model loaded early (fn press) but never used is still let go after the idle time.
+    @Test func loadAloneIsUnloadedWhenIdle() async throws {
+        let runtime = GemmaRuntime(idleLimit: .milliseconds(100)) { _ in FakeLoadedModel() }
+        _ = try await runtime.load(from: directory)
+        #expect(await runtime.isLoaded)
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(await !runtime.isLoaded)
+    }
+
+    /// Remove (or switching to Apple) during a load: the finished load is thrown away.
+    @Test func unloadDuringLoadDiscardsTheLoad() async throws {
+        let runtime = GemmaRuntime { _ in
+            try await Task.sleep(for: .milliseconds(200))
+            return FakeLoadedModel()
+        }
+        let load = Task { try await runtime.load(from: directory) }
+        try await Task.sleep(for: .milliseconds(50))
+        await runtime.unload()
+        await #expect(throws: (any Error).self) { try await load.value }
+        #expect(await !runtime.isLoaded)
+    }
+
+    /// Unloading hands MLX's buffer cache back and tells whoever shows "Loaded".
+    @Test func unloadReleasesMemoryAndReports() async throws {
+        let released = Counter()
+        let reported = Counter()
+        let runtime = GemmaRuntime(idleLimit: .milliseconds(100), release: { Task { await released.increment() } }) { _ in
+            FakeLoadedModel()
+        }
+        await runtime.setOnUnload { Task { await reported.increment() } }
+        _ = try await runtime.load(from: directory)
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(await released.value == 1)
+        #expect(await reported.value == 1)
+    }
+}
+
+@MainActor
+struct GemmaModelLifecycleTests {
+    func readyStore() -> GemmaModelStore {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("gemma-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? Data().write(to: directory.appendingPathComponent(GemmaModelStore.completionMarker))
+        return GemmaModelStore(directory: directory, downloader: FakeRepoDownloader(), freeSpace: { nil })
+    }
+
+    /// After the idle unload, the next fn press loads the model again (not after release).
+    @Test func prepareLoadsAgainAfterIdleUnload() async throws {
+        let loads = Counter()
+        let model = GemmaModel(store: readyStore(), runtime: GemmaRuntime(idleLimit: .milliseconds(150)) { _ in
+            await loads.increment()
+            return FakeLoadedModel()
+        })
+        model.prepare()
+        try await Task.sleep(for: .milliseconds(80))
+        #expect(model.isLoaded)
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(!model.isLoaded)
+        model.prepare()
+        try await Task.sleep(for: .milliseconds(80))
+        #expect(model.isLoaded)
+        #expect(await loads.value == 2)
+    }
+
+    /// Remove while loading: the load that fails afterwards (files gone) doesn't mark Gemma broken.
+    @Test func removeDuringLoadIgnoresItsResult() async throws {
+        let model = GemmaModel(store: readyStore(), runtime: GemmaRuntime { _ in
+            try await Task.sleep(for: .milliseconds(150))
+            throw CocoaError(.fileReadNoSuchFile)
+        })
+        model.prepare()
+        try await Task.sleep(for: .milliseconds(30))
+        model.remove()
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(model.loadError == nil)
+        #expect(!model.isLoaded)
+    }
+}
