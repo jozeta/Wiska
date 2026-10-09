@@ -12,6 +12,7 @@ struct SettingsView: View {
             Tab("Dictionary", systemImage: "character.book.closed") { DictionaryTab(store: model.dictionaryStore) }
             Tab("History", systemImage: "clock") { HistoryTab(model: model) }
             Tab("Appearance", systemImage: "paintpalette") { AppearanceTab(model: model) }
+            Tab("Help", systemImage: "questionmark.circle") { HelpTab(model: model) }
         }
         .frame(width: 520)
     }
