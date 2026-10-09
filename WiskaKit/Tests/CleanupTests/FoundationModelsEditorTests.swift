@@ -33,4 +33,30 @@ struct FoundationModelsEditorTests {
         #expect(edited != original)
         #expect(!CleanupGuard.words(edited).contains("u"), "\(edited)")
     }
+
+    @Test func keepsTheSelectionsSurroundingWhitespace() {
+        #expect(FoundationModelsEditor.rewrap(original: "hey there\n", edited: "Hello there.") == "Hello there.\n")
+        #expect(FoundationModelsEditor.rewrap(original: "  - item one  ", edited: "- Item one")
+                == "  - Item one  ")
+        #expect(FoundationModelsEditor.rewrap(original: "plain", edited: "\"Plain.\"\n") == "Plain.")
+    }
+
+    @Test func longerSelectionsGetMoreTime() {
+        #expect(FoundationModelsEditor.timeout(forWords: 20) == .seconds(10))
+        #expect(FoundationModelsEditor.timeout(forWords: FoundationModelsEditor.maxWords) > .seconds(30))
+        #expect(FoundationModelsEditor.maxWords <= 700)
+    }
+
+    @Test func aModelThatIgnoresCancellationStillTimesOut() async {
+        let editor = FoundationModelsEditor(isAvailable: { true }, respond: { _ in
+            let end = ContinuousClock.now + .seconds(5)
+            while ContinuousClock.now < end { try? await Task.sleep(for: .milliseconds(10)) }
+            return "too late"
+        }, timeout: { _ in .milliseconds(100) })
+        let start = ContinuousClock.now
+        await #expect(throws: EditError.failed) {
+            try await editor.edit("some text", instruction: "shorten", language: nil)
+        }
+        #expect(ContinuousClock.now - start < .seconds(1))
+    }
 }

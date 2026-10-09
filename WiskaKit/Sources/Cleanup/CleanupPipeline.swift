@@ -135,7 +135,7 @@ public final class CleanupPipeline: TextCleaner {
 }
 
 /// Resumes a continuation exactly once, from whichever racer gets there first.
-private final class ResumeOnce: Sendable {
+final class ResumeOnce: Sendable {
     private let continuation: Mutex<CheckedContinuation<String, Error>?>
 
     init(_ continuation: CheckedContinuation<String, Error>) {
