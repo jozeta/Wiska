@@ -151,3 +151,11 @@ public final class ParakeetModelStore {
         onRemove?()
     }
 }
+
+extension ParakeetModelStore: UpdatableModelStore {
+    public var isDownloading: Bool {
+        if case .downloading = status { true } else { false }
+    }
+
+    public func startDownload() { download() }
+}

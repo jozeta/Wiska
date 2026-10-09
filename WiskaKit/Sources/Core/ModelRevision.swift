@@ -1,5 +1,4 @@
 import CryptoKit
-import FluidAudio
 import Foundation
 
 /// One published state of the model repo on Hugging Face.
@@ -51,7 +50,7 @@ public struct HuggingFaceRevisionSource: ModelRevisionSource {
     private let url: URL
     private let session: URLSession
 
-    public init(repo: String = Repo.parakeetV3.rawValue, session: URLSession = .shared) {
+    public init(repo: String, session: URLSession = .shared) {
         // blobs=true adds each file's content id, so only the files Wiska uses are compared.
         self.url = URL(string: "https://huggingface.co/api/models/\(repo)?blobs=true")!
         self.session = session

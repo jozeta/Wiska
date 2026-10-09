@@ -78,7 +78,7 @@ final class AppModel {
         }
         self.settings = settings
         parakeetStore = store
-        modelUpdates = ModelUpdateChecker(store: store, source: HuggingFaceRevisionSource(),
+        modelUpdates = ModelUpdateChecker(store: store, source: HuggingFaceRevisionSource(repo: Repo.parakeetV3.rawValue),
                                           interval: { settings.modelUpdateInterval },
                                           lastCheck: { settings.lastModelUpdateCheck },
                                           setLastCheck: { settings.lastModelUpdateCheck = $0 })

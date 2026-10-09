@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+@testable import Core
 @testable import Parakeet
 
 struct CheckFailed: Error {}

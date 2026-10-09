@@ -1,8 +1,24 @@
-import Core
 import Foundation
 import Observation
 
-/// Checks whether a newer revision of the installed Parakeet model has been published.
+/// What the update checker needs from a downloadable model (Parakeet, Gemma).
+@MainActor
+public protocol UpdatableModelStore: AnyObject {
+    var isInstalled: Bool { get }
+    var isDownloading: Bool { get }
+    /// The installed files' fingerprint (or an older repo sha); nil when not recorded.
+    var installedRevision: String? { get }
+    /// When the installed model finished downloading.
+    var installedAt: Date? { get }
+    /// The installed model folder's top-level entries (what the fingerprint covers).
+    var installedComponents: Set<String> { get }
+    func recordRevision(_ fingerprint: String)
+    /// Deletes the installed model (and lets go of it in memory).
+    func remove()
+    func startDownload()
+}
+
+/// Checks whether a newer revision of an installed model has been published.
 /// Never downloads by itself: `downloadUpdate()` is only called from the Settings button.
 @MainActor @Observable
 public final class ModelUpdateChecker {
@@ -14,10 +30,10 @@ public final class ModelUpdateChecker {
         case failed(String)
     }
 
-    private static let log = Log.logger("Parakeet")
+    private static let log = Log.logger("Models")
 
     public private(set) var state: State = .idle
-    @ObservationIgnored private let store: ParakeetModelStore
+    @ObservationIgnored private let store: any UpdatableModelStore
     @ObservationIgnored private let source: any ModelRevisionSource
     @ObservationIgnored private let interval: @MainActor () -> Int
     @ObservationIgnored private let lastCheck: @MainActor () -> Date?
@@ -25,7 +41,7 @@ public final class ModelUpdateChecker {
     /// The last update announced by an automatic check, so it's announced once.
     @ObservationIgnored private var announcedSha: String?
 
-    public init(store: ParakeetModelStore, source: any ModelRevisionSource,
+    public init(store: any UpdatableModelStore, source: any ModelRevisionSource,
                 interval: @escaping @MainActor () -> Int, lastCheck: @escaping @MainActor () -> Date?,
                 setLastCheck: @escaping @MainActor (Date) -> Void) {
         self.store = store
@@ -96,11 +112,11 @@ public final class ModelUpdateChecker {
     public func downloadUpdate() {
         guard case .updateAvailable = state else { return }
         store.remove()
-        store.download()
+        store.startDownload()
         state = .idle
         Task { [weak self] in
             guard let self else { return }
-            while case .downloading = store.status { try? await Task.sleep(for: .milliseconds(200)) }
+            while store.isDownloading { try? await Task.sleep(for: .milliseconds(200)) }
             // Quietly: offline right after a successful download isn't worth an error on the card.
             guard store.isInstalled else { return }
             do { try await check(now: Date()) } catch {
