@@ -115,4 +115,6 @@ public enum EditError: Error, Equatable, Sendable {
 @MainActor
 public protocol TextEditor {
     func edit(_ text: String, instruction: String, language: Language?) async throws -> String
+    /// New text for the cursor; `context` is the text around it (`CursorContext.window`), if any.
+    func write(instruction: String, context: String?, language: Language?) async throws -> String
 }

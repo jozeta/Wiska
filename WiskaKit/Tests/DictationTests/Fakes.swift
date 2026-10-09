@@ -137,9 +137,15 @@ final class FakeSelection: SelectionReader {
 final class FakeEditor: TextEditor {
     var error: EditError?
     private(set) var calls: [(text: String, instruction: String)] = []
+    private(set) var writes: [(instruction: String, context: String?)] = []
     func edit(_ text: String, instruction: String, language: Language?) async throws -> String {
         calls.append((text, instruction))
         if let error { throw error }
         return "edited: \(text)"
+    }
+    func write(instruction: String, context: String?, language: Language?) async throws -> String {
+        writes.append((instruction, context))
+        if let error { throw error }
+        return "written: \(instruction)"
     }
 }
