@@ -4,7 +4,7 @@ import SwiftUI
 struct HUDView: View {
     let model: HUDModel
     static let contentHeight: CGFloat = 44
-    static let previewHeight: CGFloat = 18
+    static let previewHeight: CGFloat = 20
 
     static func height(expanded: Bool) -> CGFloat {
         contentHeight + (expanded ? previewHeight : 0)

@@ -168,4 +168,15 @@ struct FnKeyStateMachineTests {
                 == [.pressed(shifted: false), .tapped(shifted: false), .pressed(shifted: false), .locked,
                     nil, nil, nil, .released])
     }
+
+    /// A real fn/🌐 tap is followed by a key down with code 179 (the 🌐 key's own action),
+    /// recorded from the app: it is the same key, so it must not disarm or cancel.
+    @Test func globeKeyDownAfterARealTapKeepsTheArm() {
+        #expect(run([down(10), up(10.1), key(10.1, 179), down(10.2), up(10.3), key(10.3, 179)])
+                == [.pressed(shifted: false), .tapped(shifted: false), nil, .pressed(shifted: false), .locked, nil])
+    }
+
+    @Test func globeKeyDownWhileHeldDoesNotCancel() {
+        #expect(run([down(10), key(10.2, 179), up(11)]) == [.pressed(shifted: false), nil, .released])
+    }
 }

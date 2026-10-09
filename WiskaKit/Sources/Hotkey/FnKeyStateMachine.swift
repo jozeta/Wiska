@@ -18,6 +18,9 @@ public enum KeyInput: Equatable {
 ///   Esc → `.cancelled`, everything else is ignored, until one of those or `unlock()`.
 public struct FnKeyStateMachine {
     public static let escapeKeyCode: Int64 = 53
+    /// macOS sends this key down right after a real fn/🌐 tap (the 🌐 key's own action).
+    /// It is the fn key itself, never "another key".
+    public static let globeKeyCode: Int64 = 179
     public var minimumHold: TimeInterval = 0.25
     public var doubleTapWindow: TimeInterval = 0.4
     private var pressedAt: TimeInterval?
@@ -49,6 +52,9 @@ public struct FnKeyStateMachine {
             shifted = shift
             interrupted = false
             return .pressed(shifted: shift)
+
+        case .keyDown(keyCode: Self.globeKeyCode, time: _):
+            return nil
 
         case .keyDown:
             armedUntil = nil
