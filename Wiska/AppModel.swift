@@ -53,8 +53,8 @@ final class AppModel {
     @ObservationIgnored private var flashTask: Task<Void, Never>?
     @ObservationIgnored private var hotkeyFailureLogged = false
     @ObservationIgnored private var badge = "AUTO"
-    /// fn+⌃: "⌃ Edit" with a selection, "⌃ Write" without, "⌃ Command" when the app doesn't say.
-    @ObservationIgnored private var commandBadge = "⌃ Command"
+    /// fn+⌃: "Edit" with a selection, "Write" without, "Command" when the app doesn't say.
+    @ObservationIgnored private var commandBadge = "Command"
     @ObservationIgnored private var handsFreeLatch = HandsFreeLatch()
 
     init() {

@@ -69,9 +69,9 @@ struct CursorContextCleanupTests {
     }
 
     @Test func commandBadgeSaysWhatWillHappen() {
-        #expect(CommandBadge.text(selectedText: "some words", rangeIsEmpty: false) == "⌃ Edit")
-        #expect(CommandBadge.text(selectedText: nil, rangeIsEmpty: true) == "⌃ Write")
-        #expect(CommandBadge.text(selectedText: "  ", rangeIsEmpty: true) == "⌃ Write")
-        #expect(CommandBadge.text(selectedText: nil, rangeIsEmpty: false) == "⌃ Command")   // the app doesn't say
+        #expect(CommandBadge.text(selectedText: "some words", rangeIsEmpty: false) == "Edit")
+        #expect(CommandBadge.text(selectedText: nil, rangeIsEmpty: true) == "Write")
+        #expect(CommandBadge.text(selectedText: "  ", rangeIsEmpty: true) == "Write")
+        #expect(CommandBadge.text(selectedText: nil, rangeIsEmpty: false) == "Command")   // the app doesn't say
     }
 }
