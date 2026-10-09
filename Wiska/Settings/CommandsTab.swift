@@ -13,13 +13,20 @@ struct CommandsTab: View {
                 Text("Hold fn+⌃ and start with a command's phrase — with text selected to change it, or with nothing selected to write something new. Say the phrase alone, or add more after a comma or “and”: “formal and a bit shorter”. More in the Help tab.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            if let aside = store.setAsideFile {
+                Section {
+                    Label("Your commands file couldn't be read, so the default commands are back. The old file was kept as \(aside.lastPathComponent) in Wiska's folder.",
+                          systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+            }
             Section("Try it") {
                 TextField("Try it", text: $trial, prompt: Text("Type what you would say, e.g. “formal and a bit shorter”"))
                     .labelsHidden()
                     .textFieldStyle(.roundedBorder)
                 if !trial.trimmingCharacters(in: .whitespaces).isEmpty {
                     let instruction = CommandResolver.resolve(trial, commands: store.commands)
-                    if instruction == trial {
+                    if CommandResolver.matchedCommand(trial, commands: store.commands) == nil {
                         Text("No saved command — your words are the instruction, as said.")
                             .font(.caption).foregroundStyle(.secondary)
                     } else {
@@ -48,7 +55,7 @@ struct CommandsTab: View {
         .formStyle(.grouped)
         // Commands left with neither a phrase nor an instruction don't stay behind.
         .onDisappear {
-            for command in store.commands { store.removeIfEmpty(id: command.id) }
+            store.removeEmpty()
         }
     }
 }
