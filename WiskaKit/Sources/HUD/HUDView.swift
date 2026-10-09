@@ -7,7 +7,9 @@ struct HUDView: View {
     /// The preview row: the text sits at its top, with a little room left below it.
     static let previewHeight: CGFloat = 22
     /// How far the preview row tucks up under the waveform row (tightens the gap between them).
-    static let previewOverlap: CGFloat = 8
+    static let previewOverlap: CGFloat = 11
+    /// The badge-and-waveform row sits this much above its row's centre, closer to the notch.
+    static let waveformLift: CGFloat = 2
 
     static func height(expanded: Bool) -> CGFloat {
         contentHeight + (expanded ? previewHeight - previewOverlap : 0)
@@ -54,6 +56,7 @@ struct HUDView: View {
                     WaveformView(levels: levels, highlight: model.highlight)
                 }
                 .frame(height: Self.contentHeight)
+                .offset(y: -Self.waveformLift)
                 if model.expanded {
                     PreviewTicker(text: preview)
                         .frame(height: Self.previewHeight, alignment: .top)
