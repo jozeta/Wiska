@@ -56,7 +56,8 @@ final class AppModel {
         parakeetStore = store
         apple = AppleTranscriber(languages: { settings.enabledLanguages },
                                  fallbackLanguage: { settings.lastDetectedLanguage },
-                                 vocabulary: { dictionaryStore.dictionary.words })
+                                 vocabulary: { dictionaryStore.dictionary.words },
+                                 livePreview: { settings.livePreview })
         parakeet = ParakeetTranscriber(store: store, languages: { settings.enabledLanguages })
         let rewriter = FoundationModelsRewriter()
         self.rewriter = rewriter
@@ -70,11 +71,15 @@ final class AppModel {
             contextProvider: {
                 DictationContext(appBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
                                  enabledLanguages: settings.enabledLanguages)
-            }
+            },
+            handsFreeSilence: { settings.handsFreeSilence },
+            showPreview: { settings.livePreview }
         )
         controller.onChange = { [weak self] state, levels in
             guard let self else { return }
             if dictationState != state { dictationState = state }
+            // A hands-free dictation that ended any way but fn/Esc must not leave fn locked.
+            if state != .listening { hotkey.endHandsFree() }
             if state != .idle { flashTask?.cancel() }
             hud.show(hudContent(for: state, levels: levels))
         }
@@ -317,6 +322,8 @@ final class AppModel {
             case .finish, .cancel, .lockHandsFree: break
             }
             controller.handle(command)
+            // A lock that didn't take (no dictation running) must not swallow the next fn press.
+            if command == .lockHandsFree, !controller.isHandsFree { hotkey.endHandsFree() }
         }
         if mapped.newToggleLanguage != nil { switchToggleLanguage() }
     }
@@ -336,7 +343,8 @@ final class AppModel {
     private func hudContent(for state: DictationController.State, levels: [Float]) -> HUDContent {
         switch state {
         case .idle: .hidden
-        case .listening: .listening(levels: levels, badge: badge)
+        case .listening: .listening(levels: levels, badge: badge, preview: controller.preview,
+                                    handsFree: controller.isHandsFree)
         case .preparingModel: .working("Downloading speech model…")
         case .transcribing, .cleaning, .injecting: .working("Transcribing…")
         case .failed(let failure): .error(failure.message)

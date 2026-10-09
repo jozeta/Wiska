@@ -174,4 +174,15 @@ final class SettingsStoreTests {
         store.enabledLanguages = [.english, .italian]
         #expect(store.usesParakeet)
     }
+
+    @Test func handsFreeAndPreviewDefaultsAndPersist() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.handsFreeSilence == 30)
+        #expect(store.livePreview)
+        store.handsFreeSilence = 0
+        store.livePreview = false
+        let reloaded = SettingsStore(defaults: defaults)
+        #expect(reloaded.handsFreeSilence == 0)
+        #expect(!reloaded.livePreview)
+    }
 }

@@ -20,6 +20,8 @@ public final class SettingsStore {
         static let onboardingCompleted = "onboardingCompleted"
         static let fnKeyConfirmed = "fnKeyConfirmed"
         static let firstDictationDone = "firstDictationDone"
+        static let handsFreeSilence = "handsFreeSilence"
+        static let livePreview = "livePreview"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -117,6 +119,14 @@ public final class SettingsStore {
         didSet { defaults.set(historyRetention.rawValue, forKey: Key.historyRetention) }
     }
 
+    public static let handsFreeSilenceChoices: [TimeInterval] = [0, 10, 30, 60, 120]
+    /// Seconds of silence after which a hands-free dictation finishes; 0 = never.
+    public var handsFreeSilence: TimeInterval {
+        didSet { defaults.set(handsFreeSilence, forKey: Key.handsFreeSilence) }
+    }
+    /// Show the words as they're heard, under the waveform in the notch.
+    public var livePreview: Bool { didSet { defaults.set(livePreview, forKey: Key.livePreview) } }
+
     public var onboardingCompleted: Bool { didSet { defaults.set(onboardingCompleted, forKey: Key.onboardingCompleted) } }
     public var fnKeyConfirmed: Bool { didSet { defaults.set(fnKeyConfirmed, forKey: Key.fnKeyConfirmed) } }
     public var firstDictationDone: Bool { didSet { defaults.set(firstDictationDone, forKey: Key.firstDictationDone) } }
@@ -143,6 +153,8 @@ public final class SettingsStore {
         onboardingCompleted = defaults.bool(forKey: Key.onboardingCompleted)
         fnKeyConfirmed = defaults.bool(forKey: Key.fnKeyConfirmed)
         firstDictationDone = defaults.bool(forKey: Key.firstDictationDone)
+        handsFreeSilence = defaults.object(forKey: Key.handsFreeSilence) as? TimeInterval ?? 30
+        livePreview = defaults.object(forKey: Key.livePreview) as? Bool ?? true
     }
 
     private static func read<T: RawRepresentable>(
