@@ -58,7 +58,7 @@ Commands are **not** stored in History, don't call `onDictationFinished`, and do
 
 ## 5. HUD and settings
 
-- `HUDContent.listening` gains `command: Bool`; when true the badge reads "⌘ Edit" (instead of the language) in the highlight colour.
+- `HUDContent.listening` gains `command: Bool`; when true the badge reads "⌃ Edit" (instead of the language) in the highlight colour.
 - Working text for commands: "Editing…".
 - Settings → General gesture list gains: "Edit: Select text, hold fn+⌃, say what to change". No toggle.
 

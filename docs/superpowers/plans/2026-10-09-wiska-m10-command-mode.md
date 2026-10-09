@@ -4,7 +4,7 @@
 
 **Goal:** Select text, hold fn+⌃, say an instruction, release — the selection is rewritten on-device and pasted over itself.
 
-**Architecture:** The hotkey state machine reports ⌃ during a hold as `.commandAdded`; the controller marks the recording as a command and, on finish, transcribes the instruction, reads the selection (`SelectionReader`), edits it (`TextEditor`) and pastes with the existing injector — no cleanup, no History. Concrete `AXSelectionReader` (Accessibility, then ⌘C) lives in Injection, `FoundationModelsEditor` in Cleanup; the app wires both and shows "⌘ Edit" / "Editing…" in the notch.
+**Architecture:** The hotkey state machine reports ⌃ during a hold as `.commandAdded`; the controller marks the recording as a command and, on finish, transcribes the instruction, reads the selection (`SelectionReader`), edits it (`TextEditor`) and pastes with the existing injector — no cleanup, no History. Concrete `AXSelectionReader` (Accessibility, then ⌘C) lives in Injection, `FoundationModelsEditor` in Cleanup; the app wires both and shows "⌃ Edit" / "Editing…" in the notch.
 
 **Tech Stack:** Swift 6.2, SwiftPM `WiskaKit` (Core, Hotkey, Dictation, Injection, Cleanup), Swift Testing, FoundationModels, ApplicationServices (AX), SwiftUI app `Wiska`.
 
@@ -16,12 +16,12 @@
 - No cleanup for the instruction; commands are not stored in History, don't call `onDictationFinished`, don't update recent apps.
 - Selection: Accessibility first; else ⌘C, poll every 20 ms for up to 300 ms, restore the clipboard. Whitespace-only = none.
 - Editor: fresh `LanguageModelSession`, temperature 0, 10 s limit, `.tooLong` above 2,000 words (checked before the model).
-- HUD messages: "Select text first", "Command mode needs Apple Intelligence", "Selection too long", "Couldn't edit — try again"; badge "⌘ Edit"; working text "Editing…".
+- HUD messages: "Select text first", "Command mode needs Apple Intelligence", "Selection too long", "Couldn't edit — try again"; badge "⌃ Edit"; working text "Editing…".
 - Tests: `cd WiskaKit && swift test`. App build from repo root: `xcodebuild -project Wiska.xcodeproj -scheme Wiska -allowProvisioningUpdates -derivedDataPath build -quiet build`.
 - Commits end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
 **Decisions made while planning (deviations from the spec's wording, same behaviour):**
-- The "⌘ Edit" badge is passed through the existing `HUDContent.listening(badge:)` string instead of a new `command: Bool` field — the HUD needs no change.
+- The "⌃ Edit" badge is passed through the existing `HUDContent.listening(badge:)` string instead of a new `command: Bool` field — the HUD needs no change.
 - `FnKeyStateMachine.handle` still returns one event; a fn press with ⌃ already down yields `.pressed` and then `.commandAdded` through a new `handleAll(_:) -> [HotkeyEvent]` that the monitor uses.
 - The ⌘C sender is a closure on `AXSelectionReader` (not a new `KeySender` requirement), so existing `KeySender` fakes stay untouched.
 - The controller gets a new state `.editing` (the HUD's "Editing…").
@@ -832,7 +832,7 @@ In `AppModel.init`, the `DictationController(...)` call gains, after `showPrevie
 In `hudContent(for:audio:)`:
 
 ```swift
-        case .listening: .listening(audio: audio, badge: controller.isCommand ? "⌘ Edit" : badge,
+        case .listening: .listening(audio: audio, badge: controller.isCommand ? "⌃ Edit" : badge,
                                     preview: controller.preview, handsFree: controller.isHandsFree)
         case .editing: .working("Editing…")
 ```
@@ -854,11 +854,11 @@ Expected: all tests pass (1 known Parakeet Danish issue); the app builds.
 
 - [ ] **Step 3: Manual check**
 
-Relaunch (`pkill -x Wiska; open build/Build/Products/Debug/Wiska.app`). In TextEdit select "hey can u send it asap", hold fn+⌃, say "make this more formal", release → notch shows "⌘ Edit", then "Editing…", the selection is replaced; ⌘Z restores it. Repeat in Slack or a browser text field (⌘C path). With nothing selected → "Select text first".
+Relaunch (`pkill -x Wiska; open build/Build/Products/Debug/Wiska.app`). In TextEdit select "hey can u send it asap", hold fn+⌃, say "make this more formal", release → notch shows "⌃ Edit", then "Editing…", the selection is replaced; ⌘Z restores it. Repeat in Slack or a browser text field (⌘C path). With nothing selected → "Select text first".
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add Wiska
-git commit -m "feat(app): command mode wired — ⌘ Edit badge, Editing…, gesture listed in Settings"
+git commit -m "feat(app): command mode wired — ⌃ Edit badge, Editing…, gesture listed in Settings"
 ```

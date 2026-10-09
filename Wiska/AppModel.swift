@@ -357,7 +357,7 @@ final class AppModel {
     private func hudContent(for state: DictationController.State, audio: AudioLevel) -> HUDContent {
         switch state {
         case .idle: .hidden
-        case .listening: .listening(audio: audio, badge: controller.isCommand ? "⌘ Edit" : badge,
+        case .listening: .listening(audio: audio, badge: controller.isCommand ? "⌃ Edit" : badge,
                                     preview: controller.preview, handsFree: controller.isHandsFree)
         case .editing: .working("Editing…")
         case .preparingModel: .working("Downloading speech model…")
