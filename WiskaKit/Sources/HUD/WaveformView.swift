@@ -1,43 +1,46 @@
 import Core
 import SwiftUI
 
-/// Bars for the most recent loudness samples; newest on the right, coloured along the highlight.
+/// Live bars for the microphone level (the newest of `levels`), animated every frame by
+/// `WaveformMotion`: flat in silence, a rippling wave while sound comes in; coloured along the highlight.
 struct WaveformView: View {
     static let barCount = 20
     static let minBar: CGFloat = 3
     static let maxBar: CGFloat = 28
-    /// Levels at or below this (room noise) draw the smallest bar.
-    static let noiseFloor: Float = 0.2
-    /// Levels at or above this (loud speech) draw the tallest bar.
-    static let fullScale: Float = 0.75
     let levels: [Float]
     let highlight: Highlight
+    @State private var clock = Clock()
 
     var body: some View {
-        HStack(alignment: .center, spacing: 3) {
-            ForEach(0..<Self.barCount, id: \.self) { index in
-                Capsule()
-                    .fill(color(at: index))
-                    .frame(width: 3, height: Self.barHeight(level: level(at: index)))
+        let level = levels.last ?? 0
+        TimelineView(.animation(paused: level == 0 && clock.motion.envelope == 0)) { timeline in
+            let time = clock.advance(to: timeline.date, level: level)
+            HStack(alignment: .center, spacing: 3) {
+                ForEach(0..<Self.barCount, id: \.self) { index in
+                    Capsule()
+                        .fill(color(at: index))
+                        .frame(width: 3, height: clock.motion.bar(index, time: time))
+                }
             }
+            .frame(height: Self.maxBar)
         }
-        .frame(height: Self.maxBar)
-        .animation(.easeOut(duration: 0.08), value: levels)
-    }
-
-    /// Room noise stays flat; speech is stretched over the full height, and the curve (> 1)
-    /// lifts loud moments above ordinary ones so the bars look wavy rather than uniform.
-    static func barHeight(level: Float) -> CGFloat {
-        let span = max(0, min(1, (level - noiseFloor) / (fullScale - noiseFloor)))
-        return minBar + CGFloat(pow(span, 1.3)) * (maxBar - minBar)
-    }
-
-    private func level(at index: Int) -> Float {
-        let offset = Self.barCount - levels.count
-        return index >= offset ? levels[index - offset] : 0
     }
 
     private func color(at index: Int) -> Color {
         AuroraTheme.color(highlight, at: Double(index) / Double(Self.barCount - 1))
+    }
+
+    /// Steps the motion with the real frame time; a reference type so the timeline can advance
+    /// it while rendering without invalidating the view.
+    final class Clock {
+        var motion = WaveformMotion()
+        private var last: Date?
+
+        func advance(to now: Date, level: Float) -> Double {
+            let dt = last.map { min(now.timeIntervalSince($0), 1.0 / 30) } ?? 0
+            last = now
+            motion.step(level: level, dt: dt)
+            return now.timeIntervalSinceReferenceDate
+        }
     }
 }
