@@ -22,4 +22,18 @@ public struct CGEventKeySender: KeySender {
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
     }
+
+    private static let cKeyCode: CGKeyCode = 8   // physical C position
+
+    /// Posts ⌘C (used to read a selection that Accessibility doesn't expose).
+    public func sendCopy() throws {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        guard let down = CGEvent(keyboardEventSource: source, virtualKey: Self.cKeyCode, keyDown: true),
+              let up = CGEvent(keyboardEventSource: source, virtualKey: Self.cKeyCode, keyDown: false)
+        else { throw InjectionError.eventCreationFailed }
+        down.flags = .maskCommand
+        up.flags = .maskCommand
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
+    }
 }
