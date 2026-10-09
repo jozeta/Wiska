@@ -7,7 +7,7 @@ import Core
 public final class SpectrumAnalyzer: @unchecked Sendable {
     public static let windowSize = 512
     public static let hop = 256
-    public static let bandCount = 20
+    public static let bandCount = 32
     public static let floorDecibels: Float = -100
     static let sampleRate: Float = 16_000
     static let lowHz: Float = 90
@@ -19,7 +19,8 @@ public final class SpectrumAnalyzer: @unchecked Sendable {
     private var pending: [Float] = []
     private let dft: vDSP.DiscreteFourierTransform<Float>
     private let window: [Float]
-    private let bandBins: [Range<Int>]
+    /// FFT bins summed into each band; consecutive and never shared, so no two bars move as one.
+    let bandBins: [Range<Int>]
     private let tilt: [Float]
     private let zeros: [Float]
 
@@ -35,7 +36,8 @@ public final class SpectrumAnalyzer: @unchecked Sendable {
         for k in 0..<Self.bandCount {
             let lowF = Self.lowHz * pow(Self.highHz / Self.lowHz, Float(k) / Float(Self.bandCount))
             let highF = Self.lowHz * pow(Self.highHz / Self.lowHz, Float(k + 1) / Float(Self.bandCount))
-            let lo = max(1, Int((lowF / binHz).rounded()))
+            // The lowest bands are narrower than a bin: give each the next unused bin instead.
+            let lo = max(bins.last?.upperBound ?? 1, Int((lowF / binHz).rounded()))
             let hi = max(lo + 1, Int((highF / binHz).rounded()))
             bins.append(lo..<min(hi, n / 2))
             tilt.append(Self.tiltPerOctave * log2((lowF * highF).squareRoot() / 500))

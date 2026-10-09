@@ -7,8 +7,8 @@ import Testing
 /// varied, loud speech only somewhat taller, quick onset, visible dips in pauses.
 struct WaveformMotionTests {
     /// A speech-like spectrum: strong low-mid bars, weaker highs, with some unevenness.
-    static let voice: [Float] = (0..<20).map { i in
-        -20 - Float(i) * 1.2 - (i % 3 == 0 ? 0 : 7)
+    static let voice: [Float] = (0..<WaveformMotion.barCount).map { i in
+        -20 - Float(i) * 0.75 - (i % 3 == 0 ? 0 : 7)
     }
 
     private func frame(_ level: Float, bands: [Float] = voice) -> AudioLevel {
@@ -72,7 +72,7 @@ struct WaveformMotionTests {
 
     /// Detail comes from the audio: the loudest band draws the tallest bar.
     @Test func barsFollowTheirBands() {
-        var bands = [Float](repeating: -50, count: 20)
+        var bands = [Float](repeating: -50, count: WaveformMotion.barCount)
         bands[13] = -15
         var motion = WaveformMotion()
         run(&motion, frame(0.4, bands: bands), seconds: 0.3)

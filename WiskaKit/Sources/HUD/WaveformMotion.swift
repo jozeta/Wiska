@@ -12,7 +12,8 @@ import Foundation
 ///   so the shape follows syllables, consonants and pitch.
 /// - Each bar rises fast (attack) and falls a little slower (release).
 struct WaveformMotion {
-    static let barCount = 20
+    /// One bar per analyzer band (`SpectrumAnalyzer.bandCount`).
+    static let barCount = 32
     /// Loudness (0…1 = −50…0 dBFS) at which the gate opens: ≈ −43 dBFS, very quiet speech.
     static let gateOpen: Float = 0.14
     /// …and below which it closes again: ≈ −45 dBFS, room noise.

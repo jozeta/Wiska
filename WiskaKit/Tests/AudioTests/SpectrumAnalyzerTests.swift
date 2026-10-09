@@ -27,6 +27,15 @@ struct SpectrumAnalyzerTests {
         #expect(frame.bands.allSatisfy { $0 <= SpectrumAnalyzer.floorDecibels })
     }
 
+    @Test func everyBandHasItsOwnBins() {
+        let bins = SpectrumAnalyzer().bandBins
+        #expect(bins.count == SpectrumAnalyzer.bandCount)
+        let empty = bins.filter(\.isEmpty)
+        #expect(empty.isEmpty)
+        let overlapping = zip(bins, bins.dropFirst()).filter { $0.upperBound > $1.lowerBound }
+        #expect(overlapping.isEmpty)
+    }
+
     @Test func aToneLightsTheBarForItsPitch() {
         let low = SpectrumAnalyzer().analyze(sine(200)).last!
         let high = SpectrumAnalyzer().analyze(sine(3_000)).last!

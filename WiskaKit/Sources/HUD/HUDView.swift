@@ -44,7 +44,7 @@ struct HUDView: View {
             EmptyView()
         case .listening(let audio, let badge, let preview, let handsFree):
             VStack(spacing: -Self.previewOverlap) {
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     HStack(spacing: 4) {
                         Text(badge)
                         if handsFree { Image(systemName: "lock.fill").font(.system(size: 8, weight: .bold)) }
@@ -53,8 +53,9 @@ struct HUDView: View {
                     .padding(.horizontal, 5).padding(.vertical, 2)
                     .foregroundStyle(AuroraTheme.start(model.highlight))
                     .background(AuroraTheme.start(model.highlight).opacity(0.13), in: RoundedRectangle(cornerRadius: 4))
-                    WaveformView(audio: audio, highlight: model.highlight)
+                    WaveformView(audio: audio, highlight: model.highlight)   // takes the rest of the width
                 }
+                .padding(.horizontal, 4)
                 .frame(height: Self.contentHeight)
                 .offset(y: -Self.waveformLift)
                 if model.expanded {
