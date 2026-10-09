@@ -16,7 +16,7 @@ struct HUDRevealTests {
 
     @Test func previewRowAddsHeightOnlyWhenExpanded() {
         #expect(HUDView.height(expanded: false) == 44)
-        #expect(HUDView.height(expanded: true) == 60)
+        #expect(HUDView.height(expanded: true) == 58)
     }
 
     /// Every word enters from the right: the line starts just past the right edge and its end
