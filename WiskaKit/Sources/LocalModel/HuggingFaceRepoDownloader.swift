@@ -1,3 +1,4 @@
+import Core
 import Foundation
 
 public protocol RepoDownloader: Sendable {
@@ -38,12 +39,10 @@ public struct HuggingFaceRepoDownloader: RepoDownloader {
                 .appendingPathComponent(file.rfilename)
             try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(),
                                                     withIntermediateDirectories: true)
-            let base = done
-            let delegate = ProgressDelegate { written in progress(Double(base + written) / Double(total)) }
-            let (temporary, fileResponse) = try await session.download(from: url, delegate: delegate)
-            try Self.check(fileResponse)
-            try? FileManager.default.removeItem(at: destination)
-            try FileManager.default.moveItem(at: temporary, to: destination)
+            let base = done, size = file.size ?? 0
+            try await ProgressDownload.download(from: url, to: destination) { fraction in
+                progress(Double(base) / Double(total) + fraction * Double(size) / Double(total))
+            }
             done += file.size ?? 0
             progress(Double(done) / Double(total))
         }
@@ -66,17 +65,4 @@ public struct HuggingFaceRepoDownloader: RepoDownloader {
             throw URLError(.badServerResponse)
         }
     }
-}
-
-/// Byte progress of one file (the weights are a single 5 GB file).
-private final class ProgressDelegate: NSObject, URLSessionDownloadDelegate, Sendable {
-    let report: @Sendable (Int) -> Void
-    init(report: @escaping @Sendable (Int) -> Void) { self.report = report }
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
-                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-        report(Int(totalBytesWritten))
-    }
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
 }
