@@ -88,3 +88,37 @@ struct SwedishSecondPassTests {
         #expect(transcriber.isReady == primary.isReady)
     }
 }
+
+/// Cleanup pass: no load and no kept audio when KB-Whisper can't be used for this dictation.
+@MainActor
+struct SwedishSecondPassCleanupTests {
+    let primary = SessionsTranscriber(.apple)
+    let recognizer = FakeRecognizer()
+
+    /// fn+⇧ fixed to English: KB-Whisper (1.5 GB) isn't loaded for it.
+    @Test func noLoadForAnotherFixedLanguage() async throws {
+        let transcriber = SwedishSecondPassTranscriber(primary: primary, recognizer: recognizer, isEnabled: { true })
+        _ = try await transcriber.makeSession(language: .fixed(.english))
+        #expect(recognizer.prepared == 0)
+        _ = try await transcriber.makeSession(language: .fixed(.swedish))
+        _ = try await transcriber.makeSession(language: .automatic)
+        #expect(recognizer.prepared == 2)
+    }
+
+    /// The recording is only kept when the second pass can run.
+    @Test func audioIsOnlyKeptWhenUsable() async throws {
+        let off = try await SwedishSecondPassTranscriber(primary: primary, recognizer: recognizer, isEnabled: { false })
+            .makeSession(language: .automatic) as! SecondPassSession
+        #expect(!off.keepsAudio)
+        recognizer.isReady = false
+        let notInstalled = try await SwedishSecondPassTranscriber(primary: primary, recognizer: recognizer, isEnabled: { true })
+            .makeSession(language: .automatic) as! SecondPassSession
+        #expect(!notInstalled.keepsAudio)
+        let english = try await SwedishSecondPassTranscriber(primary: primary, recognizer: FakeRecognizer(), isEnabled: { true })
+            .makeSession(language: .fixed(.english)) as! SecondPassSession
+        #expect(!english.keepsAudio)
+        let usable = try await SwedishSecondPassTranscriber(primary: primary, recognizer: FakeRecognizer(), isEnabled: { true })
+            .makeSession(language: .automatic) as! SecondPassSession
+        #expect(usable.keepsAudio)
+    }
+}

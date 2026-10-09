@@ -77,6 +77,21 @@ struct KBWhisperModelStoreTests {
         #expect(!FileManager.default.fileExists(atPath: directory.path))
     }
 
+    /// Cancel while the 1.1 GB file is being checked: nothing is installed.
+    @Test func cancelDuringTheChecksumInstallsNothing() async throws {
+        let store = KBWhisperModelStore(directory: directory, downloader: FakeFileDownloader(), freeSpace: { nil },
+                                        expectedSHA256: sha, hash: { url in
+            Thread.sleep(forTimeInterval: 0.3)
+            return try KBWhisperModelStore.sha256(of: url)
+        })
+        store.download()
+        try await Task.sleep(for: .milliseconds(100))
+        store.cancelDownload()
+        await waitWhileDownloading(store)
+        #expect(store.status == .notDownloaded)
+        #expect(!FileManager.default.fileExists(atPath: directory.path))
+    }
+
     @Test func pinnedModelFile() {
         #expect(KBWhisperModelStore.fileURL.absoluteString
                 == "https://huggingface.co/KBLab/kb-whisper-large/resolve/d5d5984b4d8f7c4847a8ea203f1976285fb28300/ggml-model-q5_0.bin")

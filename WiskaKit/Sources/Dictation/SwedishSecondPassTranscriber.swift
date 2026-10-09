@@ -22,10 +22,20 @@ public final class SwedishSecondPassTranscriber: Transcriber {
     public func isReady(for choice: LanguageChoice) -> Bool { primary.isReady(for: choice) }
     public func prepare() async throws { try await primary.prepare() }
 
+    static func mayBeSwedish(_ choice: LanguageChoice) -> Bool {
+        switch choice {
+        case .automatic: true
+        case .fixed(let language): language == .swedish
+        }
+    }
+
     public func makeSession(language: LanguageChoice) async throws -> any TranscriptionSession {
-        if isEnabled() { recognizer.prepare() }   // load while the user speaks
+        // Only a dictation that may be Swedish can use it: no load, no kept audio otherwise.
+        let usable = isEnabled() && Self.mayBeSwedish(language)
+        if usable { recognizer.prepare() }   // load while the user speaks
         return SecondPassSession(primary: try await primary.makeSession(language: language),
-                                 recognizer: recognizer, isEnabled: isEnabled)
+                                 recognizer: recognizer, isEnabled: isEnabled,
+                                 keepsAudio: usable && recognizer.isReady)
     }
 }
 
@@ -36,17 +46,21 @@ final class SecondPassSession: TranscriptionSession {
     private let recognizer: any BatchRecognizer
     private let isEnabled: @MainActor () -> Bool
     private var samples: [Float] = []
+    /// The recording is copied only when the second pass may run (up to ~7.7 MB for 2 minutes).
+    let keepsAudio: Bool
 
-    init(primary: any TranscriptionSession, recognizer: any BatchRecognizer, isEnabled: @escaping @MainActor () -> Bool) {
+    init(primary: any TranscriptionSession, recognizer: any BatchRecognizer, isEnabled: @escaping @MainActor () -> Bool,
+         keepsAudio: Bool = true) {
         self.primary = primary
         self.recognizer = recognizer
         self.isEnabled = isEnabled
+        self.keepsAudio = keepsAudio
     }
 
     var preview: AsyncStream<String> { primary.preview }
 
     func append(_ chunk: AudioChunk) {
-        samples += chunk.samples
+        if keepsAudio { samples += chunk.samples }
         primary.append(chunk)
     }
 
@@ -57,7 +71,7 @@ final class SecondPassSession: TranscriptionSession {
 
     func finish() async throws -> Transcript {
         let transcript = try await primary.finish()
-        guard transcript.language == .swedish, isEnabled(), recognizer.isReady,
+        guard keepsAudio, transcript.language == .swedish, isEnabled(), recognizer.isReady,
               !transcript.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return transcript }
         let samples = samples
         let recognizer = recognizer
@@ -95,10 +109,15 @@ final class SecondPassSession: TranscriptionSession {
             let task = Task { @MainActor in
                 do { once.resume(.success(try await work())) } catch { once.resume(.failure(error)) }
             }
-            Task {
+            let timer = Task {
                 try? await Task.sleep(for: limit)
+                guard !Task.isCancelled else { return }
                 once.resume(.failure(Timeout()))
                 task.cancel()
+            }
+            Task { @MainActor in
+                _ = await task.result
+                timer.cancel()   // the work won: no timer left running for up to 30 s
             }
         }
     }

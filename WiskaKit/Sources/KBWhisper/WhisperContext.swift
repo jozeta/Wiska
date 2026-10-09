@@ -34,7 +34,14 @@ final class WhisperContext: WhisperModel, @unchecked Sendable {
         whisper_free(context)
     }
 
+    /// whisper.cpp ignores input under 1 s; pad short clips with silence to 1.2 s.
+    static func padded(_ samples: [Float]) -> [Float] {
+        let minimum = 19_200
+        return samples.count >= minimum ? samples : samples + [Float](repeating: 0, count: minimum - samples.count)
+    }
+
     func transcribe(_ samples: [Float], language: String) throws -> String {
+        let samples = Self.padded(samples)
         var params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY)
         params.print_progress = false
         params.print_realtime = false

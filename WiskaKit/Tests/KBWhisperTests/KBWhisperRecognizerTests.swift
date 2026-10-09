@@ -55,3 +55,12 @@ struct KBWhisperRecognizerTests {
                 == "Needs about 2 GB free")
     }
 }
+
+struct WhisperPaddingTests {
+    /// whisper.cpp ignores input under 1 s: short clips ("Ja", "Tack") are padded with silence.
+    @Test func shortClipsArePadded() {
+        #expect(WhisperContext.padded([Float](repeating: 0.5, count: 8_000)).count == 19_200)
+        #expect(WhisperContext.padded([Float](repeating: 0.5, count: 8_000)).prefix(8_000).allSatisfy { $0 == 0.5 })
+        #expect(WhisperContext.padded([Float](repeating: 0.5, count: 40_000)).count == 40_000)
+    }
+}

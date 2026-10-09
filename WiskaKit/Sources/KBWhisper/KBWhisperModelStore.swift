@@ -32,6 +32,7 @@ public final class KBWhisperModelStore {
     @ObservationIgnored private let downloader: any FileDownloader
     @ObservationIgnored private let freeSpace: @MainActor () -> Int64?
     @ObservationIgnored private let expectedSHA256: String
+    @ObservationIgnored private let hash: @Sendable (URL) throws -> String
     @ObservationIgnored private var task: Task<Void, Never>?
     /// Called after a download completes (the toggle is switched on).
     @ObservationIgnored public var onDownloaded: (@MainActor () -> Void)?
@@ -42,7 +43,9 @@ public final class KBWhisperModelStore {
     public init(directory: URL = KBWhisperModelStore.defaultDirectory,
                 downloader: any FileDownloader = URLSessionFileDownloader(),
                 freeSpace: @escaping @MainActor () -> Int64? = KBWhisperModelStore.availableSpace,
-                expectedSHA256: String = KBWhisperModelStore.sha256) {
+                expectedSHA256: String = KBWhisperModelStore.sha256,
+                hash: @escaping @Sendable (URL) throws -> String = { try KBWhisperModelStore.sha256(of: $0) }) {
+        self.hash = hash
         self.directory = directory
         self.downloader = downloader
         self.freeSpace = freeSpace
@@ -78,6 +81,7 @@ public final class KBWhisperModelStore {
         let directory = directory
         let downloader = downloader
         let expected = expectedSHA256
+        let hash = hash
         let partial = directory.appendingPathComponent(Self.fileName + ".partial")
         let final = modelFile
         let report: @Sendable (Double) -> Void = { [weak self] fraction in
@@ -90,7 +94,8 @@ public final class KBWhisperModelStore {
             do {
                 try await downloader.download(from: Self.fileURL, to: partial, progress: report)
                 try Task.checkCancellation()
-                let actual = try await Task.detached { try Self.sha256(of: partial) }.value
+                let actual = try await Task.detached { try hash(partial) }.value
+                try Task.checkCancellation()   // Cancel pressed while the file was being checked
                 guard actual == expected else { throw CocoaError(.fileReadCorruptFile) }
                 try FileManager.default.moveItem(at: partial, to: final)
                 try Data().write(to: directory.appendingPathComponent(Self.completionMarker))
@@ -109,7 +114,7 @@ public final class KBWhisperModelStore {
         }
     }
 
-    nonisolated static func sha256(of url: URL) throws -> String {
+    public nonisolated static func sha256(of url: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         var hasher = SHA256()
