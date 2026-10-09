@@ -25,15 +25,38 @@ public final class AXSelectionReader: SelectionReader {
         if let text = Self.nonBlank(accessibilitySelection()) { return text }
         let snapshot = PasteboardSnapshot.capture(pasteboard)
         let before = pasteboard.changeCount
-        defer { snapshot.restore(to: pasteboard) }
         do { try sendCopy() } catch { return nil }
         let deadline = ContinuousClock.now + copyTimeout
         while pasteboard.changeCount == before, ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(20))
         }
-        guard pasteboard.changeCount != before else { return nil }
-        return Self.nonBlank(pasteboard.string(forType: .string))
+        guard pasteboard.changeCount != before else {
+            // Nothing copied (yet): leave the clipboard alone, but undo a copy that lands late.
+            undoLateCopy(after: before, restoring: snapshot)
+            return nil
+        }
+        let text = Self.nonBlank(pasteboard.string(forType: .string))
+        snapshot.restore(to: pasteboard)
+        return text
     }
+
+    /// Watches a little longer: a busy app may finish ⌘C after we stopped waiting, which would
+    /// replace the user's clipboard with the selection.
+    private func undoLateCopy(after changeCount: Int, restoring snapshot: PasteboardSnapshot) {
+        let pasteboard = pasteboard
+        Task { @MainActor in
+            let end = ContinuousClock.now + Self.lateCopyWindow
+            while ContinuousClock.now < end {
+                try? await Task.sleep(for: .milliseconds(50))
+                if pasteboard.changeCount != changeCount {
+                    snapshot.restore(to: pasteboard)
+                    return
+                }
+            }
+        }
+    }
+
+    static let lateCopyWindow: Duration = .seconds(1)
 
     private static func nonBlank(_ text: String?) -> String? {
         guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }

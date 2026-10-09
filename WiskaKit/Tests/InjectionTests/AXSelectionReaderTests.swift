@@ -39,4 +39,29 @@ struct AXSelectionReaderTests {
         #expect(await reader(ax: "  \n ", copies: nil).selectedText() == nil)
         #expect(await reader(ax: nil, copies: "   ").selectedText() == nil)
     }
+
+    /// An app that copies after Wiska stopped waiting must not leave the selection on the clipboard.
+    @Test func lateCopyIsUndone() async throws {
+        pasteboard.clearContents()
+        pasteboard.setString("clipboard", forType: .string)
+        let reader = AXSelectionReader(pasteboard: pasteboard, accessibilitySelection: { nil }, sendCopy: { [pasteboard] in
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(200))
+                pasteboard.clearContents()
+                pasteboard.setString("late selection", forType: .string)
+            }
+        }, copyTimeout: .milliseconds(100))
+        #expect(await reader.selectedText() == nil)
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(pasteboard.string(forType: .string) == "clipboard")
+    }
+
+    /// Nothing copied: the clipboard is left exactly as it was (not rewritten).
+    @Test func noCopyLeavesTheClipboardUntouched() async {
+        pasteboard.clearContents()
+        pasteboard.setString("clipboard", forType: .string)
+        let before = pasteboard.changeCount
+        #expect(await reader(ax: nil, copies: nil).selectedText() == nil)
+        #expect(pasteboard.changeCount == before)
+    }
 }
