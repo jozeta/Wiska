@@ -66,7 +66,7 @@ enum EmailLayout {
         guard let phrase = rules.signOffs.filter({ startsWith(tokens, $0, at: 0) }).max(by: { $0.count < $1.count })
         else { return nil }
         let name = Array(tokens[phrase.count...])
-        guard name.count <= 3, name.allSatisfy({ $0.first?.isUppercase == true }) else { return nil }
+        guard name.count <= 3, name.allSatisfy(isSignOffName) else { return nil }
         let closing = tokens[..<phrase.count].joined(separator: " ").trimmingCharacters(in: .punctuationCharacters)
         var lines = [capitalized(closing) + ","]
         if !name.isEmpty {
@@ -92,6 +92,15 @@ enum EmailLayout {
     private static func isNameWord(_ token: String) -> Bool {
         let bare = token.trimmingCharacters(in: .punctuationCharacters)
         return (bare.first?.isUppercase == true && !isI(bare)) || groupWords.contains(bare.lowercased())
+    }
+
+    /// Capitalised words that are pronouns, not names ("Danke Ihnen", "Thanks, I").
+    private static let capitalisedPronouns: Set<String> = ["I", "Sie", "Ihnen", "Ihr", "Ihre", "Euch", "Dir",
+                                                           "Dich", "Du"]
+
+    private static func isSignOffName(_ token: String) -> Bool {
+        let bare = token.trimmingCharacters(in: .punctuationCharacters)
+        return bare.first?.isUppercase == true && !capitalisedPronouns.contains(bare)
     }
 
     private static func isI(_ token: String) -> Bool {

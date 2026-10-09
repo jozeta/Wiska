@@ -64,4 +64,12 @@ struct EmailLayoutTests {
         #expect(lines.map(\.text) == ["Hi Anna,", "", "Thanks for the help.", "", "Best regards,", "Johan"])
         #expect(lines.map(\.isPlain) == [false, false, true, false, false, false])
     }
+
+    /// A capitalised pronoun after a sign-off word is not a name ("Danke Ihnen" = "thank you").
+    @Test func pronounIsNotASignOffName() {
+        let german = layout("Ich komme morgen. Danke Ihnen.", rules: Language.german.formatRules)
+        #expect(german == ["Ich komme morgen. Danke Ihnen."])
+        let named = layout("Ich komme morgen. Viele Grüße Johan.", rules: Language.german.formatRules)
+        #expect(named == ["Ich komme morgen.", "", "Viele Grüße,", "Johan"])
+    }
 }
