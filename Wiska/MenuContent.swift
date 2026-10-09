@@ -21,6 +21,9 @@ struct MenuContent: View {
         if model.parakeetUnavailable {
             Text("Parakeet unavailable — using Apple")
         }
+        if model.modelUpdateAvailable {
+            Button("Speech model update available…") { showSettings() }
+        }
         Menu("Cleanup: \(model.settings.cleanupLevel.displayName)") {
             ForEach(CleanupLevel.allCases, id: \.self) { level in
                 Button {
@@ -54,21 +57,23 @@ struct MenuContent: View {
             HistoryWindow.open(openWindow)
         }
         .keyboardShortcut("y")
-        Button("Settings…") {
-            // A menu-bar-only app isn't active, so SettingsLink would open the window
-            // *behind* the frontmost app. Activate first, then raise the window.
-            NSApp.activate()
-            openSettings()
-            DispatchQueue.main.async {
-                NSApp.windows
-                    .first { $0.identifier?.rawValue == "com_apple_SwiftUI_Settings_window" || $0.title.contains("Settings") }?
-                    .orderFrontRegardless()
-            }
-        }
+        Button("Settings…") { showSettings() }
         .keyboardShortcut(",")
         Button("Quit Wiska") {
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q")
+    }
+
+    private func showSettings() {
+        // A menu-bar-only app isn't active, so SettingsLink would open the window
+        // *behind* the frontmost app. Activate first, then raise the window.
+        NSApp.activate()
+        openSettings()
+        DispatchQueue.main.async {
+            NSApp.windows
+                .first { $0.identifier?.rawValue == "com_apple_SwiftUI_Settings_window" || $0.title.contains("Settings") }?
+                .orderFrontRegardless()
+        }
     }
 }

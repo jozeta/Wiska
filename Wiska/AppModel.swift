@@ -21,6 +21,9 @@ final class AppModel {
     let dictionaryStore: DictionaryStore
     let history: HistoryStore?
     @ObservationIgnored private var retentionTask: Task<Void, Never>?
+    @ObservationIgnored private var updateTask: Task<Void, Never>?
+    /// Checks whether a newer Parakeet model has been published (Settings → Speech).
+    let modelUpdates: ModelUpdateChecker
     private(set) var missingPermissions: [Permission] = []
     private(set) var dictationState: DictationController.State = .idle
 
@@ -55,6 +58,10 @@ final class AppModel {
         }
         self.settings = settings
         parakeetStore = store
+        modelUpdates = ModelUpdateChecker(store: store, source: HuggingFaceRevisionSource(),
+                                          interval: { settings.modelUpdateInterval },
+                                          lastCheck: { settings.lastModelUpdateCheck },
+                                          setLastCheck: { settings.lastModelUpdateCheck = $0 })
         apple = AppleTranscriber(languages: { settings.enabledLanguages },
                                  fallbackLanguage: { settings.lastDetectedLanguage },
                                  vocabulary: { dictionaryStore.dictionary.words },
@@ -134,6 +141,19 @@ final class AppModel {
                 self?.applyRetention()
             }
         }
+        // Parakeet model updates: at launch, then hourly; only when due, never downloads.
+        updateTask = Task { [weak self] in
+            while !Task.isCancelled {
+                if let self, await modelUpdates.checkIfDue() {
+                    flash("Speech model update available", for: .seconds(2))
+                }
+                try? await Task.sleep(for: .seconds(3_600))
+            }
+        }
+    }
+
+    var modelUpdateAvailable: Bool {
+        if case .updateAvailable = modelUpdates.state { true } else { false }
     }
 
     func applyRetention() {

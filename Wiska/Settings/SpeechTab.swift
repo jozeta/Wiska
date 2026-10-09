@@ -29,7 +29,9 @@ struct SpeechTab: View {
                         }
                     }
                 }
-                ParakeetCard(store: model.parakeetStore) { model.parakeetModelBecameReady() }
+                ParakeetCard(store: model.parakeetStore, updates: model.modelUpdates, settings: model.settings) {
+                    model.parakeetModelBecameReady()
+                }
                 if model.parakeetUnavailable {
                     Text("Parakeet is selected but not ready — Apple is used until it is.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -45,9 +47,12 @@ struct SpeechTab: View {
 
 private struct ParakeetCard: View {
     let store: ParakeetModelStore
+    let updates: ModelUpdateChecker
+    let settings: SettingsStore
     let onReady: () -> Void
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Parakeet TDT 0.6B v3")
@@ -69,6 +74,44 @@ private struct ParakeetCard: View {
                 Button("Retry") { store.download() }
             }
         }
+        if store.status == .ready {
+            @Bindable var settings = settings
+            HStack {
+                Text(updateStatus).font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                if case .updateAvailable = updates.state {
+                    Button("Download update") { updates.downloadUpdate() }
+                }
+                Button("Check now") { Task { await updates.checkNow() } }
+                    .disabled(updates.state == .checking)
+            }
+            Picker("Check for model updates", selection: $settings.modelUpdateInterval) {
+                ForEach(SettingsStore.modelUpdateIntervals, id: \.self) { days in
+                    Text(Self.intervalLabel(days)).tag(days)
+                }
+            }
+        }
+        }
         .onChange(of: store.status) { if store.status == .ready { onReady() } }
+    }
+
+    private var updateStatus: String {
+        switch updates.state {
+        case .checking: "Checking…"
+        case .updateAvailable: "Update available"
+        case .failed(let message): "Couldn't check: \(message)"
+        case .upToDate(let date): "Up to date · checked \(date.formatted(.relative(presentation: .named)))"
+        case .idle:
+            settings.lastModelUpdateCheck.map { "Up to date · checked \($0.formatted(.relative(presentation: .named)))" }
+                ?? "Not checked yet"
+        }
+    }
+
+    static func intervalLabel(_ days: Int) -> String {
+        switch days {
+        case 0: "Never"
+        case 1: "Every day"
+        default: "Every \(days) days"
+        }
     }
 }
