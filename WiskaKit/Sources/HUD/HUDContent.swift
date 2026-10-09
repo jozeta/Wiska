@@ -4,7 +4,7 @@ import Observation
 
 public enum HUDContent: Equatable, Sendable {
     case hidden
-    case listening(levels: [Float], badge: String)
+    case listening(levels: [Float], badge: String, preview: String, handsFree: Bool)
     case working(String)
     case message(String)
     /// A failure, shown in the danger colour.
@@ -19,4 +19,6 @@ final class HUDModel {
     var highlight: Highlight = .aurora
     /// 0 = tucked into the notch, 1 = fully down. Animated by the panel controller.
     var reveal: CGFloat = 0
+    /// The preview row is showing (from the first words until the capsule hides).
+    var expanded = false
 }

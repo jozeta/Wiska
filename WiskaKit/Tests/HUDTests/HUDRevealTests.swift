@@ -13,4 +13,9 @@ struct HUDRevealTests {
         #expect(HUDReveal.contentOffset(reveal: 0) == -6)
         #expect(HUDReveal.contentOffset(reveal: 1) == 0)
     }
+
+    @Test func previewRowAddsHeightOnlyWhenExpanded() {
+        #expect(HUDView.height(expanded: false) == 44)
+        #expect(HUDView.height(expanded: true) == 62)
+    }
 }

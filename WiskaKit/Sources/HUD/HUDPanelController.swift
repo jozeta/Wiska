@@ -6,7 +6,7 @@ import SwiftUI
 /// The panel keeps a fixed frame while shown; the capsule glides inside it (`HUDModel.reveal`).
 @MainActor
 public final class HUDPanelController {
-    static let contentSize = CGSize(width: NotchLayout.fallbackWidth, height: HUDView.contentHeight)
+    static let contentSize = CGSize(width: NotchLayout.fallbackWidth, height: HUDView.height(expanded: true))
 
     private let model = HUDModel()
     let panel: NSPanel
@@ -49,6 +49,10 @@ public final class HUDPanelController {
         } else {
             withAnimation(.easeInOut(duration: 0.12)) { model.content = content }
         }
+        let expanded = Self.expands(model.expanded, for: content)
+        if expanded != model.expanded {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) { model.expanded = expanded }
+        }
         if model.reveal < 1 {
             withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) { model.reveal = 1 }
         }
@@ -57,10 +61,11 @@ public final class HUDPanelController {
     private func place() {
         guard let screen = activeScreen() else { return }
         let placement = NotchLayout.placement(on: Self.layoutScreen(screen), referenceWidth: Self.referenceWidth,
-                                              contentHeight: HUDView.contentHeight)
+                                              contentHeight: HUDView.height(expanded: true))
         model.insetTop = placement.contentInsetTop
         model.hasNotch = placement.hasNotch
         model.reveal = 0
+        model.expanded = false
         panel.setFrame(placement.frame, display: false)
         panel.orderFrontRegardless()
     }
@@ -72,7 +77,17 @@ public final class HUDPanelController {
         } completion: { [weak self] in
             guard let self, self.generation == token else { return }   // shown again meanwhile
             self.model.content = .hidden
+            self.model.expanded = false
             self.panel.orderOut(nil)
+        }
+    }
+
+    /// The capsule grows a row when the first words arrive and keeps it until it hides.
+    static func expands(_ current: Bool, for content: HUDContent) -> Bool {
+        switch content {
+        case .hidden: false
+        case .listening(_, _, let preview, _): current || !preview.isEmpty
+        default: current
         }
     }
 
