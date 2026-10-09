@@ -45,8 +45,8 @@ Decided with the user: **one line under the waveform**; **Parakeet shows only th
 - **Parakeet:** no preview (the default empty stream).
 - **Auto-detect (Apple `AutoDetectSession`) and hybrid sessions:** the preview follows one session: the language detected last time (`lastDetectedLanguage`) if it is running, otherwise the first running session. The final text is still chosen by the usual judging at the end.
 - **Controller:** while `.listening`, forwards the session's preview to `onPreview(String)`. The preview resets to empty on start, language switch, and when the dictation leaves `.listening`.
-- **HUD:** `HUDContent.listening` gains `preview: String` and `handsFree: Bool`. When the preview is non-empty, the panel shows one extra text line under the waveform: the tail of the text, truncated at the head with "…", in the secondary text colour. The panel stays notch-wide; it grows to the two-row height when the first words arrive (animated with the existing spring) and never shrinks back during that dictation.
-- Setting **Settings → General → "Show live preview"**: on by default (key `"livePreview"`). When off, no preview is requested from the session and the HUD stays as today.
+- **HUD:** `HUDContent.listening` gains `preview: String` and `handsFree: Bool`. When the preview is non-empty, the panel shows one extra text line under the waveform, in the secondary text colour. The line scrolls inside the notch bar like a ticker: the text sits on one line anchored to the right edge, new words slide in from the right (animated), older words move out past the left edge, and the left edge fades out instead of showing "…". The text never widens the panel. The panel stays exactly notch-wide; it grows to the two-row height when the first words arrive (animated with the existing spring) and never shrinks back during that dictation.
+- Setting **Settings → General → "Show live preview in the notch"** (shown / hidden): on by default (key `"livePreview"`). When off, no preview is requested from the session and the HUD stays as today.
 
 ## 4. Testing
 

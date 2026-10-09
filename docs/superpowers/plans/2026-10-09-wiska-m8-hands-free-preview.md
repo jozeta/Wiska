@@ -19,7 +19,7 @@
 - Preview setting key `"livePreview"`, default on.
 - The pasted text is always the finalized, cleaned transcript — never preview text.
 - The 5-minute `maxDuration` cap still applies to every dictation.
-- The capsule stays notch-wide; the preview is one line, truncated at the head.
+- The capsule stays exactly notch-wide; the preview is one line that scrolls inside it like a ticker (new words slide in from the right, the left edge fades), never widening the panel.
 - Tests: `cd WiskaKit && swift test` (Swift Testing). App build: `xcodebuild -project Wiska.xcodeproj -scheme Wiska -allowProvisioningUpdates -derivedDataPath build -quiet build` from the repo root.
 - Commits end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
@@ -1014,10 +1014,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `WiskaKit/Sources/HUD/HUDContent.swift`, `HUDView.swift`, `HUDPanelController.swift`
+- Create: `WiskaKit/Sources/HUD/PreviewTicker.swift`
 - Test: `WiskaKit/Tests/HUDTests/HUDRevealTests.swift`, `HUDPanelControllerTests.swift`
 
 **Interfaces:**
-- Produces: `HUDContent.listening(levels: [Float], badge: String, preview: String, handsFree: Bool)`; `HUDView.previewHeight: CGFloat = 18`; `HUDView.height(expanded: Bool) -> CGFloat`; `HUDPanelController.expands(_ current: Bool, for content: HUDContent) -> Bool` (static).
+- Produces: `HUDContent.listening(levels: [Float], badge: String, preview: String, handsFree: Bool)`; `HUDView.previewHeight: CGFloat = 18`; `HUDView.height(expanded: Bool) -> CGFloat`; `PreviewTicker(text:)` view; `HUDPanelController.expands(_ current: Bool, for content: HUDContent) -> Bool` (static).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1033,6 +1034,17 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 `HUDPanelControllerTests.swift`:
 
 ```swift
+    @Test(.enabled(if: !NSScreen.screens.isEmpty))
+    func longPreviewNeverWidensTheCapsule() async throws {
+        let hud = HUDPanelController()
+        hud.show(.listening(levels: [], badge: "EN", preview: String(repeating: "words keep coming ", count: 20),
+                            handsFree: true))
+        try await Task.sleep(for: .milliseconds(300))
+        hud.panel.contentView?.layoutSubtreeIfNeeded()
+        #expect(hud.panel.frame.width <= 340, "panel width \(hud.panel.frame.width)")
+        hud.show(.hidden)
+    }
+
     @Test func capsuleExpandsWithTheFirstWordsAndStaysUntilHidden() {
         let quiet = HUDContent.listening(levels: [], badge: "EN", preview: "", handsFree: false)
         let words = HUDContent.listening(levels: [], badge: "EN", preview: "hello", handsFree: false)
@@ -1088,14 +1100,40 @@ In `body`, use `let height = Self.height(expanded: model.expanded)` for both `vi
                 }
                 .frame(height: Self.contentHeight)
                 if model.expanded {
-                    Text(preview)
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(AuroraTheme.textSecondary)
-                        .lineLimit(1).truncationMode(.head)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    PreviewTicker(text: preview)
                         .frame(height: Self.previewHeight, alignment: .top)
                 }
             }
+```
+
+Create `WiskaKit/Sources/HUD/PreviewTicker.swift` — the scrolling line:
+
+```swift
+import SwiftUI
+
+/// The live preview as a ticker inside the notch: one line anchored to the right edge, so new
+/// words slide in from the right and older ones scroll out past a faded left edge.
+/// The text is laid out at its natural width and clipped, so it never widens the capsule.
+struct PreviewTicker: View {
+    let text: String
+
+    var body: some View {
+        Color.clear
+            .overlay(alignment: .trailing) {
+                Text(text)
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(AuroraTheme.textSecondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .animation(.easeOut(duration: 0.25), value: text)
+            }
+            .clipped()
+            .mask {
+                LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.12)],
+                               startPoint: .leading, endPoint: .trailing)
+            }
+    }
+}
 ```
 
 `HUDPanelController.swift`:
@@ -1222,7 +1260,7 @@ and `case .finish, .cancel, .lockHandsFree: break` in its switch (already from T
                         Text(Self.silenceLabel(seconds)).tag(seconds)
                     }
                 }
-                Toggle("Show live preview", isOn: Binding(get: { model.settings.livePreview },
+                Toggle("Show live preview in the notch", isOn: Binding(get: { model.settings.livePreview },
                                                           set: { model.settings.livePreview = $0 }))
                 Text("The words appear under the waveform as you speak (Apple engine only).")
                     .font(.caption).foregroundStyle(.secondary)
