@@ -18,15 +18,18 @@ public final class CleanupPipeline: TextCleaner {
     private let timeout: Duration
     private let dictionary: @MainActor () -> PersonalDictionary
     private let isKnownWord: @MainActor (String) -> Bool
+    private let style: @MainActor (AppCategory) -> WritingStyle
 
     public init(level: @escaping @MainActor () -> CleanupLevel, rewriter: any TextRewriter,
                 dictionary: @escaping @MainActor () -> PersonalDictionary = { PersonalDictionary() },
                 isKnownWord: @escaping @MainActor (String) -> Bool = { _ in false },
+                style: @escaping @MainActor (AppCategory) -> WritingStyle = { $0.defaultStyle ?? .formal },
                 timeout: Duration = CleanupPipeline.defaultTimeout) {
         self.level = level
         self.rewriter = rewriter
         self.dictionary = dictionary
         self.isKnownWord = isKnownWord
+        self.style = style
         self.timeout = timeout
     }
 
@@ -41,21 +44,34 @@ public final class CleanupPipeline: TextCleaner {
         let dictionary = dictionary()
         // The spoken language's words; all ticked languages' when the engine didn't say.
         let rules = context.language?.rules ?? LanguageRules.merged(context.enabledLanguages)
+        let format = context.language?.formatRules ?? FormatRules.merged(context.enabledLanguages)
         // The dictionary is spelling, not cleanup: it applies at every level.
         let corrected = DictionaryCorrector.apply(VoiceCommands.apply(text, rules: rules), dictionary: dictionary,
                                                   isKnownWord: isKnownWord)
         guard level != .off else { return corrected }
+        // Code gets exactly what was said: no model, no fillers removed, no sentence shape.
+        if context.category == .code { return StyleFinisher.codeSafe(corrected, dictionary: dictionary) }
+        let style = style(context.category)
         let deadline = ContinuousClock.now + timeout
-        var cleaned: [String] = []
+        var lines: [FormattedLine] = []
         for segment in corrected.components(separatedBy: "\n") {
-            cleaned.append(await cleanSegment(segment, level: level, dictionary: dictionary, rules: rules,
-                                              language: context.language, deadline: deadline))
+            let cleaned = await cleanSegment(segment, level: level, dictionary: dictionary, rules: rules,
+                                             language: context.language, style: style, deadline: deadline)
+            if let list = ListFormatter.format(cleaned, rules: format) {
+                lines += list.map { FormattedLine(text: $0, isPlain: false) }
+            } else {
+                lines.append(FormattedLine(text: cleaned, isPlain: true))
+            }
         }
-        return cleaned.joined(separator: "\n")
+        if context.category == .email { lines = EmailLayout.format(lines, rules: format) }
+        return lines.map { line in
+            line.isPlain && !line.text.isEmpty
+                ? StyleFinisher.finish(line.text, style: style, dictionary: dictionary) : line.text
+        }.joined(separator: "\n")
     }
 
     private func cleanSegment(_ raw: String, level: CleanupLevel, dictionary: PersonalDictionary,
-                              rules: LanguageRules, language: Language?,
+                              rules: LanguageRules, language: Language?, style: WritingStyle,
                               deadline: ContinuousClock.Instant) async -> String {
         let segment = raw.trimmingCharacters(in: .whitespaces)
         guard !segment.isEmpty else { return "" }
@@ -65,14 +81,13 @@ public final class CleanupPipeline: TextCleaner {
         }
         do {
             // The segment is one line; line breaks only come from voice commands, not the model.
-            let output = Self.stripWrappingQuotes(try await rewrite(segment, level: level, language: language, deadline: deadline))
+            let output = Self.stripWrappingQuotes(try await rewrite(segment, level: level, language: language, style: style, deadline: deadline))
                 .split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
                 .joined(separator: " ")
             switch CleanupGuard.check(original: segment, cleaned: output, level: level, rules: rules) {
             case .accept:
                 // The model never sees the dictionary; re-apply so it can't undo the user's spellings.
-                return StyleFinisher.formal(DictionaryCorrector.apply(output, dictionary: dictionary,
-                                                                           isKnownWord: isKnownWord))
+                return DictionaryCorrector.apply(output, dictionary: dictionary, isKnownWord: isKnownWord)
             case .reject(let reason):
                 Self.log.notice("model output rejected: \(reason, privacy: .public)")
                 return RuleCleaner.clean(segment, rules: rules)
@@ -86,13 +101,13 @@ public final class CleanupPipeline: TextCleaner {
 
     /// Races the model against the deadline without waiting for the model to honour
     /// cancellation: whichever finishes first resumes, the other is ignored.
-    private func rewrite(_ segment: String, level: CleanupLevel, language: Language?,
+    private func rewrite(_ segment: String, level: CleanupLevel, language: Language?, style: WritingStyle,
                          deadline: ContinuousClock.Instant) async throws -> String {
         let rewriter = rewriter
         return try await withCheckedThrowingContinuation { continuation in
             let once = ResumeOnce(continuation)
             let work = Task { @MainActor in
-                do { once.resume(.success(try await rewriter.rewrite(segment, level: level, language: language))) }
+                do { once.resume(.success(try await rewriter.rewrite(segment, level: level, language: language, style: style))) }
                 catch { once.resume(.failure(error)) }
             }
             Task {

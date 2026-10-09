@@ -53,7 +53,7 @@ struct FoundationModelsRewriterTests {
         let rewriter = FoundationModelsRewriter()
         let long = String(repeating: "um so I think we should uh talk about the quarterly report ", count: 12)
         let start = ContinuousClock.now
-        let task = Task { try await rewriter.rewrite(long, level: .polished, language: .english) }
+        let task = Task { try await rewriter.rewrite(long, level: .polished, language: .english, style: .formal) }
         try await Task.sleep(for: .milliseconds(150))
         task.cancel()
         _ = try? await task.value
@@ -69,12 +69,27 @@ struct FoundationModelsRewriterTests {
     }
 
     @Test func instructionsNameTheLanguageAndItsFillers() {
-        let text = FoundationModelsRewriter.instructions(for: .light, language: .german)
+        let text = FoundationModelsRewriter.instructions(for: .light, language: .german, style: .formal)
         #expect(text.contains("Deutsch"))
         #expect(text.contains("ähm"))
     }
 
     @Test func reportsAvailability() {
         #expect(FoundationModelsRewriter().isAvailable == Self.modelAvailable)
+    }
+
+    @Test func instructionsCarryStyleAndNumbers() {
+        let casual = FoundationModelsRewriter.instructions(for: .polished, language: .english, style: .casual)
+        #expect(casual.contains("conversational"))
+        #expect(casual.contains("digits"))
+        let formal = FoundationModelsRewriter.instructions(for: .light, language: nil, style: .formal)
+        #expect(formal.contains("complete sentences"))
+        #expect(formal.contains("digits"))
+    }
+
+    @Test(.enabled(if: modelAvailable), .timeLimit(.minutes(1)))
+    func spokenNumbersBecomeDigits() async throws {
+        let output = try await polished("we could meet at three thirty on the fifth of May if that works for you")
+        #expect(output.contains { $0.isNumber }, "\(output)")
     }
 }

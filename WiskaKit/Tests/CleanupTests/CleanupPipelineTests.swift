@@ -14,12 +14,14 @@ final class FakeRewriter: TextRewriter {
     private(set) var calls: [String] = []
     private(set) var prewarmed: [CleanupLevel] = []
     private(set) var languages: [Language?] = []
+    private(set) var styles: [WritingStyle] = []
 
     func prewarm(level: CleanupLevel) { prewarmed.append(level) }
 
-    func rewrite(_ text: String, level: CleanupLevel, language: Language?) async throws -> String {
+    func rewrite(_ text: String, level: CleanupLevel, language: Language?, style: WritingStyle) async throws -> String {
         calls.append(text)
         languages.append(language)
+        styles.append(style)
         if delay > .zero {
             if ignoresCancellation {
                 let end = ContinuousClock.now + delay
@@ -44,6 +46,78 @@ struct CleanupPipelineTests {
     func clean(_ text: String, _ p: CleanupPipeline,
                context: DictationContext = DictationContext()) async throws -> String {
         try await p.clean(text, context: context)
+    }
+
+    func pipeline(style: WritingStyle, dictionary: PersonalDictionary = PersonalDictionary()) -> CleanupPipeline {
+        CleanupPipeline(level: { .polished }, rewriter: rewriter, dictionary: { dictionary },
+                        style: { _ in style }, timeout: .seconds(5))
+    }
+
+    @Test func theStyleReachesTheModelAndTheText() async throws {
+        rewriter.transform = { _ in "hi Anna, I'll be there at 3." }
+        let output = try await pipeline(style: .casual)
+            .clean("hi anna i'll be there at three", context: DictationContext(category: .personal))
+        #expect(output == "Hi Anna, I'll be there at 3")
+        #expect(rewriter.styles == [.casual])
+    }
+
+    @Test func defaultStyleFollowsTheCategory() async throws {
+        rewriter.transform = { _ in "see you at 3." }
+        let p = CleanupPipeline(level: { .polished }, rewriter: rewriter, timeout: .seconds(5))
+        #expect(try await p.clean("see you at three okay", context: DictationContext(category: .work)) == "See you at 3")
+        #expect(try await p.clean("see you at three okay", context: DictationContext(category: .email)) == "See you at 3.")
+    }
+
+    @Test func codeSkipsTheModel() async throws {
+        let output = try await pipeline(style: .formal)
+            .clean("Git commit dash m fix.", context: DictationContext(category: .code))
+        #expect(output == "git commit dash m fix")
+        #expect(rewriter.calls.isEmpty)
+    }
+
+    @Test func codeKeepsDictionaryCapital() async throws {
+        let output = try await pipeline(style: .formal, dictionary: PersonalDictionary(words: ["Wiska"]))
+            .clean("Wiska build.", context: DictationContext(category: .code))
+        #expect(output == "Wiska build")
+    }
+
+    @Test func offInCodeStaysRaw() async throws {
+        let p = CleanupPipeline(level: { .off }, rewriter: rewriter, timeout: .seconds(5))
+        #expect(try await p.clean("Git status.", context: DictationContext(category: .code)) == "Git status.")
+    }
+
+    @Test func offSkipsFormatting() async throws {
+        let p = CleanupPipeline(level: { .off }, rewriter: rewriter, timeout: .seconds(5))
+        #expect(try await p.clean("First eggs, second milk.", context: DictationContext()) == "First eggs, second milk.")
+    }
+
+    @Test func spokenListBecomesLines() async throws {
+        rewriter.transform = { _ in "We need: first eggs, second milk, third bread." }
+        let output = try await pipeline(style: .formal)
+            .clean("we need first eggs second milk third bread", context: DictationContext(language: .english))
+        #expect(output == "We need:\n1. Eggs\n2. Milk\n3. Bread")
+    }
+
+    @Test func emailCategoryLaysOutTheEmail() async throws {
+        rewriter.transform = { _ in "Hi Anna, the report is done. Best regards, Johan." }
+        let output = try await pipeline(style: .formal)
+            .clean("hi anna the report is done best regards johan",
+                   context: DictationContext(language: .english, category: .email))
+        #expect(output == "Hi Anna,\n\nThe report is done.\n\nBest regards,\nJohan")
+    }
+
+    @Test func emailLayoutOnlyInEmail() async throws {
+        rewriter.transform = { _ in "Hi Anna, the report is done." }
+        let output = try await pipeline(style: .formal)
+            .clean("hi anna the report is done", context: DictationContext(language: .english, category: .other))
+        #expect(output == "Hi Anna, the report is done.")
+    }
+
+    @Test func ruleFallbackGetsTheStyleToo() async throws {
+        rewriter.isAvailable = false
+        let output = try await pipeline(style: .veryCasual)
+            .clean("um Okay see you Tomorrow", context: DictationContext(language: .english))
+        #expect(output == "okay see you tomorrow")
     }
 
     @Test func rulesFollowTheSpokenLanguage() async throws {
