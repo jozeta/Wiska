@@ -92,6 +92,12 @@ public protocol TextInjector {
 public protocol SelectionReader {
     /// The selection, or nil when nothing (or only whitespace) is selected.
     func selectedText() async -> String?
+    /// The text around the cursor (`CursorContext.window`), or nil when the app doesn't expose it.
+    func surroundingText() async -> String?
+}
+
+public extension SelectionReader {
+    func surroundingText() async -> String? { nil }
 }
 
 public enum EditError: Error, Equatable, Sendable {

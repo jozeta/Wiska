@@ -8,15 +8,18 @@ import Core
 public final class AXSelectionReader: SelectionReader {
     private let pasteboard: NSPasteboard
     private let accessibilitySelection: @MainActor () -> String?
+    private let accessibilityContext: @MainActor () -> (text: String, cursor: Int)?
     private let sendCopy: @MainActor () throws -> Void
     private let copyTimeout: Duration
 
     public init(pasteboard: NSPasteboard = .general,
                 accessibilitySelection: @escaping @MainActor () -> String? = AXSelectionReader.focusedSelection,
+                accessibilityContext: @escaping @MainActor () -> (text: String, cursor: Int)? = AXSelectionReader.focusedTextAroundCursor,
                 sendCopy: @escaping @MainActor () throws -> Void = { try CGEventKeySender().sendCopy() },
                 copyTimeout: Duration = .milliseconds(300)) {
         self.pasteboard = pasteboard
         self.accessibilitySelection = accessibilitySelection
+        self.accessibilityContext = accessibilityContext
         self.sendCopy = sendCopy
         self.copyTimeout = copyTimeout
     }
@@ -89,5 +92,31 @@ public final class AXSelectionReader: SelectionReader {
         guard AXUIElementCopyAttributeValue(focused as! AXUIElement, kAXSelectedTextAttribute as CFString,
                                             &selected) == .success else { return nil }
         return selected as? String
+    }
+
+    /// Read on-device for the model only; never stored or logged.
+    public func surroundingText() async -> String? {
+        guard let found = accessibilityContext() else { return nil }
+        let window = CursorContext.window(text: found.text, cursor: found.cursor)
+        return window.isEmpty ? nil : window
+    }
+
+    /// The focused element's text and cursor (start of its selected range), via Accessibility.
+    public static func focusedTextAroundCursor() -> (text: String, cursor: Int)? {
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString,
+                                            &focused) == .success, let focused,
+              CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
+        let element = focused as! AXUIElement
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success,
+              let text = value as? String else { return nil }
+        var rangeValue: CFTypeRef?
+        var range = CFRange(location: text.utf16.count, length: 0)   // no range reported: the end
+        if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeValue) == .success,
+           let rangeValue, CFGetTypeID(rangeValue) == AXValueGetTypeID() {
+            AXValueGetValue(rangeValue as! AXValue, .cfRange, &range)
+        }
+        return (text, range.location)
     }
 }

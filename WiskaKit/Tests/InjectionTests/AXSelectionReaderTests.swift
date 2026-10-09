@@ -91,4 +91,19 @@ struct AXSelectionReaderTests {
         try await Task.sleep(for: .milliseconds(300))
         #expect(pasteboard.string(forType: .string) == "dictated text")
     }
+
+    @Test func surroundingTextIsTheWindowAroundTheCursor() async {
+        let reader = AXSelectionReader(pasteboard: pasteboard, accessibilitySelection: { nil },
+                                       accessibilityContext: { ("Hi Anna, see you", 9) }, sendCopy: {})
+        #expect(await reader.surroundingText() == "Hi Anna, [cursor]see you")
+    }
+
+    @Test func noReadableTextMeansNoContext() async {
+        let none = AXSelectionReader(pasteboard: pasteboard, accessibilitySelection: { nil },
+                                     accessibilityContext: { nil }, sendCopy: {})
+        #expect(await none.surroundingText() == nil)
+        let blank = AXSelectionReader(pasteboard: pasteboard, accessibilitySelection: { nil },
+                                      accessibilityContext: { ("  ", 1) }, sendCopy: {})
+        #expect(await blank.surroundingText() == nil)
+    }
 }
