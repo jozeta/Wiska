@@ -138,22 +138,6 @@ public enum DictionaryCorrector {
 
     /// Levenshtein distance with two rolling rows; stops early once every value exceeds `limit`.
     static func editDistance(_ a: String, _ b: String, limit: Int = .max) -> Int {
-        let a = Array(a), b = Array(b)
-        if a.isEmpty { return b.count }
-        if b.isEmpty { return a.count }
-        var previous = Array(0...b.count)
-        var current = Array(repeating: 0, count: b.count + 1)
-        for i in 1...a.count {
-            current[0] = i
-            var rowMin = current[0]
-            for j in 1...b.count {
-                let cost = a[i - 1] == b[j - 1] ? 0 : 1
-                current[j] = min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost)
-                rowMin = min(rowMin, current[j])
-            }
-            if rowMin > limit { return rowMin }
-            swap(&previous, &current)
-        }
-        return previous[b.count]
+        PhraseMatcher.editDistance(a, b, limit: limit)
     }
 }

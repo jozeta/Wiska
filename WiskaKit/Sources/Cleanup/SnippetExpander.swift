@@ -19,7 +19,7 @@ enum SnippetExpander {
     static func extract(_ text: String, snippets: [Snippet]) -> (text: String, slots: [String: Snippet]) {
         let phrases = snippets
             .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            .flatMap { snippet in snippet.spokenPhrases.map { (words: words($0), snippet: snippet) } }
+            .flatMap { snippet in snippet.spokenPhrases.map { (words: PhraseMatcher.bareWords($0), snippet: snippet) } }
             .filter { !$0.words.isEmpty }
             .sorted { $0.words.count > $1.words.count }   // the longest phrase wins
         guard !phrases.isEmpty else { return (text, [:]) }
@@ -27,14 +27,14 @@ enum SnippetExpander {
         var lines: [String] = []
         for line in text.components(separatedBy: "\n") {
             let tokens = line.split(whereSeparator: \.isWhitespace).map(String.init)
-            let bareTokens = tokens.map(bare)
+            let bareTokens = tokens.map(PhraseMatcher.bare)
             var current: [String] = []
             var index = 0
             var changed = false
             while index < tokens.count {
                 guard let found = phrases.first(where: { phrase in
                     index + phrase.words.count <= tokens.count
-                        && matches(bareTokens[index..<index + phrase.words.count], phrase.words)
+                        && PhraseMatcher.matches(bareTokens[index..<index + phrase.words.count], phrase.words)
                 }) else {
                     current.append(tokens[index])
                     index += 1
@@ -96,23 +96,5 @@ enum SnippetExpander {
         guard let regex = try? NSRegularExpression(pattern: "(?i)\(placeholderStem)\\d+") else { return [] }
         let range = NSRange(text.startIndex..., in: text)
         return Set(regex.matches(in: text, range: range).compactMap { Range($0.range, in: text).map { text[$0].lowercased() } })
-    }
-
-    // MARK: Matching
-
-    private static func matches(_ spoken: ArraySlice<String>, _ name: [String]) -> Bool {
-        guard spoken.count == name.count else { return false }
-        return zip(spoken, name).allSatisfy { said, word in
-            said == word || said == word + "s" || said == word + "es"
-                || (word.count >= 5 && DictionaryCorrector.editDistance(said, word, limit: 1) <= 1)
-        }
-    }
-
-    private static func words(_ text: String) -> [String] {
-        text.split(whereSeparator: \.isWhitespace).map { bare(String($0)) }.filter { !$0.isEmpty }
-    }
-
-    private static func bare(_ token: String) -> String {
-        token.lowercased().trimmingCharacters(in: .punctuationCharacters)
     }
 }
