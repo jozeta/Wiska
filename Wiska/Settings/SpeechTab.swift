@@ -17,7 +17,7 @@ struct SpeechTab: View {
                 switch settings.engineMode {
                 case .same:
                     Picker("Engine", selection: $settings.engine) {
-                        ForEach(SpeechEngine.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                        ForEach(SpeechEngine.selectable, id: \.self) { Text($0.displayName).tag($0) }
                     }
                 case .perLanguage:
                     ForEach(settings.enabledLanguages, id: \.self) { language in
@@ -25,7 +25,7 @@ struct SpeechTab: View {
                                selection: Binding(get: { settings.engine(for: language) },
                                                   set: { settings.setEngine($0, for: language)
                                                          model.warmUpParakeetIfSelected() })) {
-                            ForEach(SpeechEngine.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                            ForEach(SpeechEngine.selectable, id: \.self) { Text($0.displayName).tag($0) }
                         }
                     }
                 }

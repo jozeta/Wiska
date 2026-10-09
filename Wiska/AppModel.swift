@@ -266,7 +266,8 @@ final class AppModel {
     private func transcriber(for choice: LanguageChoice) -> any Transcriber {
         if settings.usesParakeet && !parakeet.isReady { warmUpParakeetIfSelected() }
         switch plan(for: choice) {
-        case .single(.apple): return apple
+        // KB-Whisper is never a primary engine (a Swedish second pass), so a stray setting means Apple.
+        case .single(.apple), .single(.kbWhisper): return apple
         // Parakeet sometimes hears a short phrase in another alphabet ("Кит статус"): Apple retries.
         case .single(.parakeet): return ScriptFallbackTranscriber(primary: parakeet, fallback: apple)
         case .hybrid(let appleLanguages):

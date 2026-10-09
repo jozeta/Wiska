@@ -25,6 +25,7 @@ public final class SettingsStore {
         static let outputMode = "outputMode"
         static let languageModel = "languageModel"
         static let fixGrammar = "fixGrammar"
+        static let useKBWhisper = "useKBWhisper"
         static let modelUpdateInterval = "modelUpdateInterval"
         static let lastModelUpdateCheck = "lastModelUpdateCheck"
         static let categoryStyles = "categoryStyles"
@@ -142,6 +143,8 @@ public final class SettingsStore {
     }
     /// Light and Polished also fix grammar mistakes.
     public var fixGrammar: Bool { didSet { defaults.set(fixGrammar, forKey: Key.fixGrammar) } }
+    /// Swedish dictations are re-transcribed by KB-Whisper (when downloaded).
+    public var useKBWhisper: Bool { didSet { defaults.set(useKBWhisper, forKey: Key.useKBWhisper) } }
 
     public static let modelUpdateIntervals = [0, 1, 7, 30]
     /// Days between automatic checks for a newer Parakeet model; 0 = never.
@@ -222,6 +225,7 @@ public final class SettingsStore {
         outputMode = Self.read(defaults, Key.outputMode, OutputMode.insert)
         languageModel = Self.read(defaults, Key.languageModel, LanguageModelChoice.apple)
         fixGrammar = defaults.object(forKey: Key.fixGrammar) as? Bool ?? true
+        useKBWhisper = defaults.object(forKey: Key.useKBWhisper) as? Bool ?? false
         modelUpdateInterval = defaults.object(forKey: Key.modelUpdateInterval) as? Int ?? 7
         lastModelUpdateCheck = defaults.object(forKey: Key.lastModelUpdateCheck) as? Date
         let storedStyles = defaults.dictionary(forKey: Key.categoryStyles) as? [String: String] ?? [:]

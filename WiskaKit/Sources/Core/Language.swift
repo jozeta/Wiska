@@ -106,11 +106,16 @@ public enum LanguageMode: String, Sendable, CaseIterable, Codable {
 public enum SpeechEngine: String, Sendable, CaseIterable, Codable {
     case apple
     case parakeet
+    case kbWhisper
+
+    /// What the per-language engine pickers offer: KB-Whisper is a Swedish second pass, not a choice.
+    public static let selectable: [SpeechEngine] = [.apple, .parakeet]
 
     public var displayName: String {
         switch self {
         case .apple: "Apple SpeechAnalyzer"
         case .parakeet: "Parakeet"
+        case .kbWhisper: "KB-Whisper"
         }
     }
 
@@ -119,6 +124,7 @@ public enum SpeechEngine: String, Sendable, CaseIterable, Codable {
         switch self {
         case .apple: "Apple"
         case .parakeet: "Parakeet"
+        case .kbWhisper: "KB-Whisper"
         }
     }
 }

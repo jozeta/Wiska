@@ -234,6 +234,13 @@ final class SettingsStoreTests {
         #expect(LanguageModelChoice.apple.displayName == "Apple Intelligence")
     }
 
+    @Test func useKBWhisperDefaultsOffAndPersists() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(!store.useKBWhisper)
+        store.useKBWhisper = true
+        #expect(SettingsStore(defaults: defaults).useKBWhisper)
+    }
+
     @Test func outputModeDefaultsToInsertAndPersists() {
         let store = SettingsStore(defaults: defaults)
         #expect(store.outputMode == .insert)

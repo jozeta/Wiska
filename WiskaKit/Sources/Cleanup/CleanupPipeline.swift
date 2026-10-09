@@ -1,6 +1,5 @@
 import Core
 import Foundation
-import Synchronization
 
 struct CleanupTimeout: Error {}
 
@@ -152,21 +151,5 @@ public final class CleanupPipeline: TextCleaner {
             result = String(inner).trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return result
-    }
-}
-
-/// Resumes a continuation exactly once, from whichever racer gets there first.
-final class ResumeOnce: Sendable {
-    private let continuation: Mutex<CheckedContinuation<String, Error>?>
-
-    init(_ continuation: CheckedContinuation<String, Error>) {
-        self.continuation = Mutex(continuation)
-    }
-
-    func resume(_ result: Result<String, Error>) {
-        continuation.withLock { pending in
-            pending?.resume(with: result)
-            pending = nil
-        }
     }
 }

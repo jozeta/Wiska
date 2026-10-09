@@ -3,6 +3,12 @@ import Testing
 @testable import Core
 
 struct LanguageTests {
+    @Test func kbWhisperIsAnEngineButNotAPickerChoice() {
+        #expect(SpeechEngine.kbWhisper.displayName == "KB-Whisper")
+        #expect(SpeechEngine.kbWhisper.shortName == "KB-Whisper")
+        #expect(SpeechEngine.selectable == [.apple, .parakeet])
+    }
+
     @Test func nineLanguagesInDisplayOrder() {
         #expect(Language.allCases.map(\.badge) == ["EN", "SV", "DE", "FR", "ES", "IT", "PT", "DA", "NL"])
         #expect(Language.allCases.map(\.locale.identifier)
