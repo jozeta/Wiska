@@ -162,4 +162,17 @@ struct HybridTranscriberTests {
         #expect(transcript.engine == .parakeet)
         #expect(transcript.language == .english)
     }
+
+    @Test func hybridPreviewFollowsTheFallbackAppleSession() async {
+        let parakeet = FakeSession()
+        let english = PreviewSession()
+        let swedish = PreviewSession()
+        let session = HybridSession(parakeet: parakeet, apple: [.english: english, .swedish: swedish],
+                                    fallbackLanguage: .swedish)
+        swedish.previewInput.yield("hej")
+        swedish.previewInput.finish()
+        var seen: [String] = []
+        for await text in session.preview { seen.append(text) }
+        #expect(seen == ["hej"])
+    }
 }

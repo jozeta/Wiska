@@ -10,10 +10,13 @@ final class AppleTranscriptionSession: TranscriptionSession {
     private let input: AsyncStream<AnalyzerInput>.Continuation
     private let converter: PCMConverter
     private let collector: Task<[AttributedString], Error>
+    let preview: AsyncStream<String>
 
     private init(language: Language, analyzer: SpeechAnalyzer,
                  input: AsyncStream<AnalyzerInput>.Continuation,
-                 converter: PCMConverter, collector: Task<[AttributedString], Error>) {
+                 converter: PCMConverter, collector: Task<[AttributedString], Error>,
+                 preview: AsyncStream<String>) {
+        self.preview = preview
         self.language = language
         self.analyzer = analyzer
         self.input = input
@@ -21,8 +24,9 @@ final class AppleTranscriptionSession: TranscriptionSession {
         self.collector = collector
     }
 
-    static func start(language: Language, vocabulary: [String]) async throws -> AppleTranscriptionSession {
-        let apple = AppleModule.make(language)
+    static func start(language: Language, vocabulary: [String],
+                      volatile: Bool = false) async throws -> AppleTranscriptionSession {
+        let apple = AppleModule.make(language, volatile: volatile)
         guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [apple.module]) else {
             throw TranscriptionError.noCompatibleAudioFormat
         }
@@ -35,17 +39,25 @@ final class AppleTranscriptionSession: TranscriptionSession {
         }
         try await analyzer.prepareToAnalyze(in: format)
 
-        let collector = Task<[AttributedString], Error> { try await apple.collect() }
+        // Only the newest text matters to the HUD: older previews are dropped if it lags behind.
+        let (preview, previewInput) = AsyncStream.makeStream(of: String.self,
+                                                             bufferingPolicy: .bufferingNewest(1))
+        let collector = Task<[AttributedString], Error> {
+            defer { previewInput.finish() }
+            return try await apple.collect { previewInput.yield($0) }
+        }
         let (stream, continuation) = AsyncStream.makeStream(of: AnalyzerInput.self)
         do {
             try await analyzer.start(inputSequence: stream)
             return AppleTranscriptionSession(
                 language: language, analyzer: analyzer, input: continuation,
-                converter: try PCMConverter(from: .speech16kMono, to: format), collector: collector
+                converter: try PCMConverter(from: .speech16kMono, to: format), collector: collector,
+                preview: preview
             )
         } catch {
             // Don't leak the collector or the analyzer (minor a).
             continuation.finish()
+            previewInput.finish()
             collector.cancel()
             await analyzer.cancelAndFinishNow()
             throw error

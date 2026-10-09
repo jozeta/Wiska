@@ -45,6 +45,61 @@ struct AppleTranscriberTests {
     }
 
     @Test(.timeLimit(.minutes(2)))
+    func livePreviewShowsWordsBeforeTheFinalText() async throws {
+        let samples = try spokenSamples("Can you send me the quarterly report before lunch tomorrow")
+        let session = try await AppleTranscriber(languages: { [.english] }, livePreview: { true })
+            .makeSession(language: .fixed(.english))
+        let previews = Task { @MainActor in
+            var seen: [String] = []
+            for await text in session.preview { seen.append(text) }
+            return seen
+        }
+        for start in stride(from: 0, to: samples.count, by: 1_600) {
+            session.append(AudioChunk(samples: Array(samples[start..<min(start + 1_600, samples.count)])))
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let transcript = try await session.finish()
+        let seen = await previews.value
+        #expect(seen.count >= 2, "previews: \(seen)")
+        let heardWords = seen.contains { !$0.isEmpty }
+        #expect(heardWords)
+        #expect(transcript.text.lowercased().contains("quarterly report"))
+    }
+
+    /// Swedish runs on DictationTranscriber, which never marks results final.
+    @Test(.timeLimit(.minutes(2)))
+    func swedishLivePreviewGrowsAndTheFinalTextSurvives() async throws {
+        let samples = try spokenSamples("Kan du skicka rapporten till mig innan lunch imorgon", voice: "Alva")
+        let session = try await AppleTranscriber(languages: { [.swedish] }, livePreview: { true })
+            .makeSession(language: .fixed(.swedish))
+        let previews = Task { @MainActor in
+            var seen: [String] = []
+            for await text in session.preview { seen.append(text) }
+            return seen
+        }
+        for start in stride(from: 0, to: samples.count, by: 1_600) {
+            session.append(AudioChunk(samples: Array(samples[start..<min(start + 1_600, samples.count)])))
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let transcript = try await session.finish()
+        let seen = await previews.value
+        #expect(seen.count >= 2, "previews: \(seen)")
+        #expect(transcript.text.lowercased().contains("rapporten"))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func previewOffYieldsOnlyFinishedSegments() async throws {
+        let session = try await AppleTranscriber(languages: { [.english] }, livePreview: { false })
+            .makeSession(language: .fixed(.english))
+        session.append(AudioChunk(samples: Array(repeating: 0, count: 16_000)))
+        _ = try await session.finish()
+        var seen: [String] = []
+        for await text in session.preview { seen.append(text) }
+        let allEmpty = seen.allSatisfy(\.isEmpty)
+        #expect(allEmpty, "previews: \(seen)")
+    }
+
+    @Test(.timeLimit(.minutes(2)))
     func transcribesSpokenSwedish() async throws {
         let samples = try spokenSamples("Kan du skicka rapporten till mig innan lunch imorgon", voice: "Alva")
         let transcript = try await transcribe(samples, .fixed(.swedish))

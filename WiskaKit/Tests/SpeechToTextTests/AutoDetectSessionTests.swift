@@ -10,7 +10,12 @@ final class StubSession: TranscriptionSession {
     let outcome: Result<Transcript, StubError>
     private(set) var appended: [[Float]] = []
     private(set) var cancelled = false
-    init(_ outcome: Result<Transcript, StubError>) { self.outcome = outcome }
+    let preview: AsyncStream<String>
+    let previewInput: AsyncStream<String>.Continuation
+    init(_ outcome: Result<Transcript, StubError>) {
+        self.outcome = outcome
+        (preview, previewInput) = AsyncStream.makeStream(of: String.self)
+    }
     func append(_ chunk: AudioChunk) { appended.append(chunk.samples) }
     func finish() async throws -> Transcript { try outcome.get() }
     func cancel() { cancelled = true }
@@ -59,5 +64,27 @@ struct AutoDetectSessionTests {
         let b = StubSession(.success(t("b", .swedish, 0.9)))
         AutoDetectSession(sessions: [a, b], fallback: .english).cancel()
         #expect(a.cancelled && b.cancelled)
+    }
+
+    @Test func autoDetectPreviewFollowsPreferredSessionButPickIsUnchanged() async throws {
+        let a = StubSession(.success(t("hello there", .english, 0.9)))
+        let b = StubSession(.success(t("hej där", .swedish, 0.2)))
+        let session = AutoDetectSession(sessions: [a, b], fallback: .swedish, previewIndex: 1)
+        b.previewInput.yield("hej")
+        b.previewInput.finish()
+        var seen: [String] = []
+        for await text in session.preview { seen.append(text) }
+        #expect(seen == ["hej"])
+        #expect(try await session.finish().language == .english)
+    }
+
+    @Test func previewDefaultsToTheFirstSession() async {
+        let a = StubSession(.success(t("a", .english, 0.9)))
+        let b = StubSession(.success(t("b", .swedish, 0.1)))
+        a.previewInput.yield("a")
+        a.previewInput.finish()
+        var seen: [String] = []
+        for await text in AutoDetectSession(sessions: [a, b], fallback: .english).preview { seen.append(text) }
+        #expect(seen == ["a"])
     }
 }

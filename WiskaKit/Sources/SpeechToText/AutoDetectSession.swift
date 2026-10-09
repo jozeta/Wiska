@@ -6,10 +6,17 @@ final class AutoDetectSession: TranscriptionSession {
     private static let log = Log.logger("SpeechToText")
     private let sessions: [any TranscriptionSession]
     private let fallback: Language
+    private let previewIndex: Int
 
-    init(sessions: [any TranscriptionSession], fallback: Language) {
+    init(sessions: [any TranscriptionSession], fallback: Language, previewIndex: Int = 0) {
         self.sessions = sessions
         self.fallback = fallback
+        self.previewIndex = sessions.indices.contains(previewIndex) ? previewIndex : 0
+    }
+
+    /// One session's words: the language Wiska expects (the last one detected).
+    var preview: AsyncStream<String> {
+        sessions.isEmpty ? AsyncStream { $0.finish() } : sessions[previewIndex].preview
     }
 
     func append(_ chunk: AudioChunk) {

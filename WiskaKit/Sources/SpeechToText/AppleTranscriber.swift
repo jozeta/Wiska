@@ -18,6 +18,8 @@ public final class AppleTranscriber: Transcriber {
     /// The ticked languages: only these get assets (Apple reserves at most 5 per app).
     @ObservationIgnored private let languages: @MainActor () -> [Language]
     @ObservationIgnored private let vocabulary: @MainActor () -> [String]
+    /// Ask Apple for in-progress results so the HUD can show the words as they're heard.
+    @ObservationIgnored private let livePreview: @MainActor () -> Bool
 
     /// True once assets for every ticked language are installed (drives the "Downloading…" HUD state).
     public var isReady: Bool { Set(languages()).isSubset(of: installed) }
@@ -36,10 +38,12 @@ public final class AppleTranscriber: Transcriber {
     public init(languages: @escaping @MainActor () -> [Language] = { [.english, .swedish] },
                 fallbackLanguage: @escaping @MainActor () -> Language = { .english },
                 vocabulary: @escaping @MainActor () -> [String] = { [] },
+                livePreview: @escaping @MainActor () -> Bool = { false },
                 installer: @escaping @MainActor (Language) async throws -> Void = AppleTranscriber.installAssets) {
         self.languages = languages
         self.fallbackLanguage = fallbackLanguage
         self.vocabulary = vocabulary
+        self.livePreview = livePreview
         self.installer = installer
     }
 
@@ -98,7 +102,8 @@ public final class AppleTranscriber: Transcriber {
         switch language {
         case .fixed(let fixed):
             try await prepare(fixed)
-            return try await AppleTranscriptionSession.start(language: fixed, vocabulary: words)
+            return try await AppleTranscriptionSession.start(language: fixed, vocabulary: words,
+                                                             volatile: livePreview())
         case .automatic:
             // A language that can't start is left out rather than failing the dictation:
             // with one language left, that language is used as-is.
@@ -109,12 +114,19 @@ public final class AppleTranscriber: Transcriber {
             for missing in ticked where !ready.isEmpty && !installed.contains(missing) {
                 Task { try? await self.prepare(missing) }
             }
+            // Only the session the HUD previews asks for in-progress results.
+            let preferred = fallbackLanguage()
+            let candidates = ready.isEmpty ? ticked : ready
+            let previewed = candidates.contains(preferred) ? preferred : candidates.first
             var sessions: [any TranscriptionSession] = []
+            var started: [Language] = []
             var firstError: Error?
-            for language in ready.isEmpty ? ticked : ready {
+            for language in candidates {
                 do {
                     try await prepare(language)
-                    sessions.append(try await AppleTranscriptionSession.start(language: language, vocabulary: words))
+                    sessions.append(try await AppleTranscriptionSession.start(
+                        language: language, vocabulary: words, volatile: livePreview() && language == previewed))
+                    started.append(language)
                 } catch {
                     Self.log.error("auto-detect without \(language.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
                     firstError = firstError ?? error
@@ -122,7 +134,8 @@ public final class AppleTranscriber: Transcriber {
             }
             if let only = sessions.first, sessions.count == 1 { return only }
             guard !sessions.isEmpty else { throw firstError ?? TranscriptionError.noCompatibleAudioFormat }
-            return AutoDetectSession(sessions: sessions, fallback: fallbackLanguage())
+            return AutoDetectSession(sessions: sessions, fallback: preferred,
+                                     previewIndex: previewed.flatMap(started.firstIndex(of:)) ?? 0)
         }
     }
 }

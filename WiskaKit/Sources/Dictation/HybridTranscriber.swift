@@ -98,6 +98,12 @@ final class HybridSession: TranscriptionSession {
         for session in apple.values { session.cancel() }
     }
 
+    /// Parakeet has no partial results: preview the Apple session for the expected language.
+    var preview: AsyncStream<String> {
+        let source = apple[fallbackLanguage] ?? Language.allCases.lazy.compactMap { self.apple[$0] }.first
+        return source?.preview ?? parakeet.preview
+    }
+
     private func cancelApple(_ results: [Language: Task<Transcript, Error>]) {
         for (language, task) in results {
             task.cancel()
@@ -141,4 +147,6 @@ final class LabeledSession: TranscriptionSession {
     }
 
     func cancel() { inner.cancel() }
+
+    var preview: AsyncStream<String> { inner.preview }
 }

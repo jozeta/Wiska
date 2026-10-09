@@ -109,3 +109,17 @@ final class FakeInjector: TextInjector {
         injected.append(text)
     }
 }
+
+/// A session whose preview the test drives.
+@MainActor
+final class PreviewSession: TranscriptionSession {
+    let preview: AsyncStream<String>
+    let previewInput: AsyncStream<String>.Continuation
+    var text = "hello world"
+    init() { (preview, previewInput) = AsyncStream.makeStream(of: String.self) }
+    func append(_ chunk: AudioChunk) {}
+    func finish() async throws -> Transcript {
+        Transcript(text: text, locale: Locale(identifier: "en_US"), language: .english)
+    }
+    func cancel() { previewInput.finish() }
+}

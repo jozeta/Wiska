@@ -58,6 +58,13 @@ public protocol TranscriptionSession: AnyObject, Sendable {
     func append(_ chunk: AudioChunk)
     func finish() async throws -> Transcript
     func cancel()
+    /// The words heard so far, while listening (for the HUD). Ends when the session does.
+    /// Engines without partial results (Parakeet) report nothing.
+    var preview: AsyncStream<String> { get }
+}
+
+public extension TranscriptionSession {
+    var preview: AsyncStream<String> { AsyncStream { $0.finish() } }
 }
 
 @MainActor
