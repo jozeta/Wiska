@@ -52,11 +52,13 @@ public final class HistoryStore {
     }
 
     /// Reads only the stats window, so it stays fast with Forever retention.
-    public func stats(now: Date = Date()) -> DictationStats {
-        let start = now.addingTimeInterval(-DictationStats.window)
+    /// The same 7 calendar days as the Stats tab's "7 days" (today and the 6 days before).
+    public func stats(now: Date = Date(), calendar: Calendar = .current) -> DictationStats {
+        let start = HistoryPeriod.week.start(now: now, calendar: calendar)
+            ?? now.addingTimeInterval(-DictationStats.window)
         let descriptor = FetchDescriptor<HistoryEntry>(predicate: #Predicate { $0.date >= start })
         let records = ((try? context.fetch(descriptor)) ?? []).map(\.record)
-        return DictationStats.compute(records, now: now)
+        return DictationStats.compute(records, now: now, window: now.timeIntervalSince(start))
     }
 
     public func delete(_ id: PersistentIdentifier) {

@@ -111,4 +111,18 @@ struct HistoryStoreTests {
         store.add(r, retention: .forever)
         #expect(store.stats(now: now).words == 4)
     }
+
+    /// "This week" in the menu matches the Stats tab's 7 days: today and the 6 calendar days before.
+    @Test func weeklyStatsUseCalendarDays() {
+        let calendar = HistoryFilterTests.calendar
+        let now = HistoryFilterTests.now   // Thursday 12:00
+        let sevenDaysAgoAfternoon = calendar.date(byAdding: .day, value: -7, to: now)!.addingTimeInterval(2 * 3_600)
+        let sixDaysAgoMorning = calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: now))!
+            .addingTimeInterval(3_600)
+        for (date, text) in [(sevenDaysAgoAfternoon, "old words"), (sixDaysAgoMorning, "kept")] {
+            store.add(DictationRecord(date: date, appBundleID: nil, language: .english, engine: .apple,
+                                      rawText: text, finalText: text, pasted: true), retention: .forever)
+        }
+        #expect(store.stats(now: now, calendar: calendar).words == 1)
+    }
 }
