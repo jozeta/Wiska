@@ -35,7 +35,7 @@ public final class AXSelectionReader: SelectionReader {
             undoLateCopy(after: before, restoring: snapshot)
             return nil
         }
-        let text = Self.nonBlank(pasteboard.string(forType: .string))
+        let text = Self.isLineCopy(pasteboard) ? nil : Self.nonBlank(pasteboard.string(forType: .string))
         snapshot.restore(to: pasteboard)
         return text
     }
@@ -57,6 +57,14 @@ public final class AXSelectionReader: SelectionReader {
     }
 
     static let lateCopyWindow: Duration = .seconds(1)
+
+    /// VS Code (and Cursor) copy the whole line when nothing is selected, and say so inside Chromium's
+    /// custom clipboard data (UTF-16): `"isFromEmptySelection":true`.
+    static func isLineCopy(_ pasteboard: NSPasteboard) -> Bool {
+        guard let data = pasteboard.data(forType: .init("org.chromium.web-custom-data")),
+              let text = String(data: data, encoding: .utf16LittleEndian) else { return false }
+        return text.contains(#""isFromEmptySelection":true"#)
+    }
 
     private static func nonBlank(_ text: String?) -> String? {
         guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }

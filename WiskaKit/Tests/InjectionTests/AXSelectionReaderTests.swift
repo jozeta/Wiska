@@ -64,4 +64,21 @@ struct AXSelectionReaderTests {
         #expect(await reader(ax: nil, copies: nil).selectedText() == nil)
         #expect(pasteboard.changeCount == before)
     }
+
+    /// VS Code (and Cursor) copy the whole line when nothing is selected; they mark it inside
+    /// Chromium's custom clipboard data (UTF-16) — that's no selection.
+    @Test func editorLineCopyIsNoSelection() async {
+        pasteboard.clearContents()
+        pasteboard.setString("clipboard", forType: .string)
+        let marker = #"vscode-editor-data{"version":1,"isFromEmptySelection":true,"mode":"swift"}"#
+        let reader = AXSelectionReader(pasteboard: pasteboard, accessibilitySelection: { "" }, sendCopy: { [pasteboard] in
+            pasteboard.clearContents()
+            let item = NSPasteboardItem()
+            item.setString("let x = 1\n", forType: .string)
+            item.setData(marker.data(using: .utf16LittleEndian)!, forType: .init("org.chromium.web-custom-data"))
+            pasteboard.writeObjects([item])
+        }, copyTimeout: .milliseconds(100))
+        #expect(await reader.selectedText() == nil)
+        #expect(pasteboard.string(forType: .string) == "clipboard")
+    }
 }
