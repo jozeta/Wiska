@@ -56,7 +56,7 @@ struct SnippetsTab: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 520)
+        .frame(height: 720)
         // Snippets left with neither a phrase nor text don't stay behind.
         .onDisappear {
             for snippet in store.snippets { store.removeIfEmpty(id: snippet.id) }

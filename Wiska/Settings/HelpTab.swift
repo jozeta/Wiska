@@ -57,7 +57,7 @@ struct HelpTab: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 520)   // scrolls instead of stretching the Settings window
+        .frame(height: 720)   // tall enough for most of it; scrolls past that
     }
 
     static let editExamples = [

@@ -15,6 +15,6 @@ struct SettingsView: View {
             Tab("Appearance", systemImage: "paintpalette") { AppearanceTab(model: model) }
             Tab("Help", systemImage: "questionmark.circle") { HelpTab(model: model) }
         }
-        .frame(width: 520)
+        .frame(width: 700)   // wide enough that captions and examples rarely wrap
     }
 }
