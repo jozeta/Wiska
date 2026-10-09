@@ -15,13 +15,17 @@ final class FakeRewriter: TextRewriter {
     private(set) var prewarmed: [CleanupLevel] = []
     private(set) var languages: [Language?] = []
     private(set) var styles: [WritingStyle] = []
+    private(set) var grammars: [Bool] = []
+    private(set) var prewarmedGrammar: [Bool] = []
 
-    func prewarm(level: CleanupLevel) { prewarmed.append(level) }
+    func prewarm(level: CleanupLevel, grammar: Bool) { prewarmed.append(level); prewarmedGrammar.append(grammar) }
 
-    func rewrite(_ text: String, level: CleanupLevel, language: Language?, style: WritingStyle) async throws -> String {
+    func rewrite(_ text: String, level: CleanupLevel, language: Language?, style: WritingStyle,
+                 grammar: Bool) async throws -> String {
         calls.append(text)
         languages.append(language)
         styles.append(style)
+        grammars.append(grammar)
         if delay > .zero {
             if ignoresCancellation {
                 let end = ContinuousClock.now + delay
@@ -37,6 +41,15 @@ final class FakeRewriter: TextRewriter {
 
 @MainActor
 struct CleanupPipelineTests {
+    @Test func grammarSettingReachesTheModel() async throws {
+        let rewriter = FakeRewriter()
+        let pipeline = CleanupPipeline(level: { .light }, rewriter: rewriter, grammar: { true })
+        pipeline.prewarm()
+        _ = try await pipeline.clean("he go to the store yesterday", context: DictationContext(language: .english))
+        #expect(rewriter.grammars == [true])
+        #expect(rewriter.prewarmedGrammar == [true])
+    }
+
     let rewriter = FakeRewriter()
 
     func pipeline(_ level: CleanupLevel = .polished, timeout: Duration = .seconds(5)) -> CleanupPipeline {

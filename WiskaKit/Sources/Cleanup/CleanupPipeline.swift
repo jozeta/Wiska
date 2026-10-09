@@ -20,12 +20,14 @@ public final class CleanupPipeline: TextCleaner {
     private let isKnownWord: @MainActor (String) -> Bool
     private let style: @MainActor (AppCategory) -> WritingStyle
     private let snippets: @MainActor () -> [Snippet]
+    private let grammar: @MainActor () -> Bool
 
     public init(level: @escaping @MainActor () -> CleanupLevel, rewriter: any TextRewriter,
                 dictionary: @escaping @MainActor () -> PersonalDictionary = { PersonalDictionary() },
                 isKnownWord: @escaping @MainActor (String) -> Bool = { _ in false },
                 style: @escaping @MainActor (AppCategory) -> WritingStyle = { $0.defaultStyle ?? .formal },
                 snippets: @escaping @MainActor () -> [Snippet] = { [] },
+                grammar: @escaping @MainActor () -> Bool = { false },
                 timeout: Duration = CleanupPipeline.defaultTimeout) {
         self.level = level
         self.rewriter = rewriter
@@ -33,13 +35,14 @@ public final class CleanupPipeline: TextCleaner {
         self.isKnownWord = isKnownWord
         self.style = style
         self.snippets = snippets
+        self.grammar = grammar
         self.timeout = timeout
     }
 
     public func prewarm() {
         let level = level()
         guard level != .off, rewriter.isAvailable else { return }
-        rewriter.prewarm(level: level)
+        rewriter.prewarm(level: level, grammar: grammar())
     }
 
     public func clean(_ text: String, context: DictationContext) async throws -> String {
@@ -60,6 +63,7 @@ public final class CleanupPipeline: TextCleaner {
                                         slots: slots)
         }
         let style = style(context.category)
+        let grammar = grammar()
         let deadline = ContinuousClock.now + timeout
         var lines: [FormattedLine] = []
         for segment in corrected.components(separatedBy: "\n") {
@@ -69,7 +73,7 @@ public final class CleanupPipeline: TextCleaner {
                 continue
             }
             let cleaned = await cleanSegment(segment, level: level, dictionary: dictionary, rules: rules,
-                                             language: context.language, style: style, deadline: deadline)
+                                             language: context.language, style: style, grammar: grammar, deadline: deadline)
             if let list = ListFormatter.format(cleaned, rules: format) {
                 lines += list.map { FormattedLine(text: $0, isPlain: false) }
             } else {
@@ -86,7 +90,7 @@ public final class CleanupPipeline: TextCleaner {
 
     private func cleanSegment(_ raw: String, level: CleanupLevel, dictionary: PersonalDictionary,
                               rules: LanguageRules, language: Language?, style: WritingStyle,
-                              deadline: ContinuousClock.Instant) async -> String {
+                              grammar: Bool, deadline: ContinuousClock.Instant) async -> String {
         let segment = raw.trimmingCharacters(in: .whitespaces)
         guard !segment.isEmpty else { return "" }
         let wordCount = segment.split(whereSeparator: \.isWhitespace).count
@@ -95,7 +99,7 @@ public final class CleanupPipeline: TextCleaner {
         }
         do {
             // The segment is one line; line breaks only come from voice commands, not the model.
-            let output = Self.stripWrappingQuotes(try await rewrite(segment, level: level, language: language, style: style, deadline: deadline))
+            let output = Self.stripWrappingQuotes(try await rewrite(segment, level: level, language: language, style: style, grammar: grammar, deadline: deadline))
                 .split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
                 .joined(separator: " ")
             switch CleanupGuard.check(original: segment, cleaned: output, level: level, rules: rules) {
@@ -120,13 +124,13 @@ public final class CleanupPipeline: TextCleaner {
 
     /// Races the model against the deadline without waiting for the model to honour
     /// cancellation: whichever finishes first resumes, the other is ignored.
-    private func rewrite(_ segment: String, level: CleanupLevel, language: Language?, style: WritingStyle,
+    private func rewrite(_ segment: String, level: CleanupLevel, language: Language?, style: WritingStyle, grammar: Bool,
                          deadline: ContinuousClock.Instant) async throws -> String {
         let rewriter = rewriter
         return try await withCheckedThrowingContinuation { continuation in
             let once = ResumeOnce(continuation)
             let work = Task { @MainActor in
-                do { once.resume(.success(try await rewriter.rewrite(segment, level: level, language: language, style: style))) }
+                do { once.resume(.success(try await rewriter.rewrite(segment, level: level, language: language, style: style, grammar: grammar))) }
                 catch { once.resume(.failure(error)) }
             }
             Task {

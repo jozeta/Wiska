@@ -53,7 +53,7 @@ struct FoundationModelsRewriterTests {
         let rewriter = FoundationModelsRewriter()
         let long = String(repeating: "um so I think we should uh talk about the quarterly report ", count: 12)
         let start = ContinuousClock.now
-        let task = Task { try await rewriter.rewrite(long, level: .polished, language: .english, style: .formal) }
+        let task = Task { try await rewriter.rewrite(long, level: .polished, language: .english, style: .formal, grammar: false) }
         try await Task.sleep(for: .milliseconds(150))
         task.cancel()
         _ = try? await task.value
@@ -63,13 +63,13 @@ struct FoundationModelsRewriterTests {
     @Test func prewarmKeepsOnlyTheCurrentLevel() {
         let rewriter = FoundationModelsRewriter()
         guard rewriter.isAvailable else { return }
-        rewriter.prewarm(level: .light)
-        rewriter.prewarm(level: .polished)
+        rewriter.prewarm(level: .light, grammar: false)
+        rewriter.prewarm(level: .polished, grammar: false)
         #expect(rewriter.warmLevels == [.polished])
     }
 
     @Test func instructionsNameTheLanguageAndItsFillers() {
-        let text = FoundationModelsRewriter.instructions(for: .light, language: .german, style: .formal)
+        let text = CleanupPrompts.instructions(for: .light, language: .german, style: .formal)
         #expect(text.contains("Deutsch"))
         #expect(text.contains("ähm"))
     }
@@ -79,10 +79,10 @@ struct FoundationModelsRewriterTests {
     }
 
     @Test func instructionsCarryStyleAndNumbers() {
-        let casual = FoundationModelsRewriter.instructions(for: .polished, language: .english, style: .casual)
+        let casual = CleanupPrompts.instructions(for: .polished, language: .english, style: .casual)
         #expect(casual.contains("conversational"))
         #expect(casual.contains("digits"))
-        let formal = FoundationModelsRewriter.instructions(for: .light, language: nil, style: .formal)
+        let formal = CleanupPrompts.instructions(for: .light, language: nil, style: .formal)
         #expect(formal.contains("complete sentences"))
         #expect(formal.contains("digits"))
     }
@@ -91,5 +91,17 @@ struct FoundationModelsRewriterTests {
     func spokenNumbersBecomeDigits() async throws {
         let output = try await polished("we could meet at three thirty on the fifth of May if that works for you")
         #expect(output.contains { $0.isNumber }, "\(output)")
+    }
+
+    /// The prewarmed session must carry the same instructions as the dictation: with grammar on,
+    /// a session warmed without it isn't used.
+    @Test func prewarmMatchesGrammar() {
+        let rewriter = FoundationModelsRewriter()
+        guard rewriter.isAvailable else { return }
+        rewriter.prewarm(level: .light, grammar: false)
+        #expect(rewriter.warmGrammar == false)
+        rewriter.prewarm(level: .light, grammar: true)
+        #expect(rewriter.warmGrammar == true)
+        #expect(rewriter.warmLevels == [.light])
     }
 }

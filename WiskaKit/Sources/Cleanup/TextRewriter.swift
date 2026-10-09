@@ -4,8 +4,10 @@ import Core
 @MainActor
 public protocol TextRewriter: AnyObject, Sendable {
     var isAvailable: Bool { get }
-    func prewarm(level: CleanupLevel)
+    /// `grammar`: the Fix grammar setting, so a warmed session matches the dictation.
+    func prewarm(level: CleanupLevel, grammar: Bool)
     /// `language`: the dictation's language when known, so the model is told which one it is.
-    /// `style`: how formal the wording should be.
-    func rewrite(_ text: String, level: CleanupLevel, language: Language?, style: WritingStyle) async throws -> String
+    /// `style`: how formal the wording should be. `grammar`: fix grammar mistakes too.
+    func rewrite(_ text: String, level: CleanupLevel, language: Language?, style: WritingStyle,
+                 grammar: Bool) async throws -> String
 }
