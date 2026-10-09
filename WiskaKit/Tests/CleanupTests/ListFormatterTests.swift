@@ -38,8 +38,21 @@ struct ListFormatterTests {
     }
 
     @Test func questionMarkStays() {
-        #expect(ListFormatter.format("Firstly, is it ready? Secondly, who pays?", rules: english)
-                == ["1. Is it ready?", "2. Who pays?"])
+        #expect(ListFormatter.format("Firstly, is it ready, secondly, who pays?", rules: english)
+                == ["1. Is it ready", "2. Who pays?"])
+    }
+
+    /// Later items follow a comma or "and", never a sentence end: separate sentences are prose.
+    @Test func sentencesAreNotAList() {
+        #expect(ListFormatter.format("First prize went to Anna. Second place went to Bob.", rules: english) == nil)
+        #expect(ListFormatter.format("Primeiro, obrigado. Segundo o João, a reunião é amanhã.",
+                                     rules: Language.portuguese.formatRules) == nil)
+    }
+
+    @Test func markerUsedAsAnotherWordIsProse() {
+        #expect(ListFormatter.format("Innanzitutto grazie mille, secondo me è perfetto.",
+                                     rules: Language.italian.formatRules) == nil)
+        #expect(ListFormatter.format("First, thanks, second place is fine too.", rules: english) == nil)
     }
 
     @Test(arguments: [

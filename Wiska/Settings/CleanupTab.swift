@@ -38,7 +38,7 @@ struct CleanupTab: View {
                 LabeledContent("Code") {
                     Text("Exactly what you say (no rewrite)").foregroundStyle(.secondary)
                 }
-                Text("Spoken lists (“first … second …”) become numbered lines; in Email, the greeting and sign-off get their own lines.")
+                Text("Lists said with a short pause between items (“first eggs, second milk”) become numbered lines; in Email, the greeting and sign-off get their own lines.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {

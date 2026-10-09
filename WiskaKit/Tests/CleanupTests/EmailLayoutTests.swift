@@ -45,4 +45,23 @@ struct EmailLayoutTests {
                                         FormattedLine(text: "1. Eggs", isPlain: false)], rules: english)
         #expect(lines.map(\.isPlain) == [false, false, true, false])
     }
+
+    @Test func greetingStopsBeforeI() {
+        #expect(layout("Hi Anna I wanted to ask about the report.")
+                == ["Hi Anna,", "", "I wanted to ask about the report."])
+    }
+
+    @Test func earlyCommaInASentenceIsNotAName() {
+        #expect(layout("Hey can you, if possible, send the file today.")
+                == ["Hey,", "", "Can you, if possible, send the file today."])
+        #expect(layout("Hi everyone, the build is green.") == ["Hi everyone,", "", "The build is green."])
+    }
+
+    @Test func emailDictatedLineByLine() {
+        let lines = EmailLayout.format([FormattedLine(text: "Hi Anna.", isPlain: true),
+                                        FormattedLine(text: "Thanks for the help.", isPlain: true),
+                                        FormattedLine(text: "Best regards Johan.", isPlain: true)], rules: english)
+        #expect(lines.map(\.text) == ["Hi Anna,", "", "Thanks for the help.", "", "Best regards,", "Johan"])
+        #expect(lines.map(\.isPlain) == [false, false, true, false, false, false])
+    }
 }

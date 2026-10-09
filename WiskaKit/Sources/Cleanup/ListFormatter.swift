@@ -17,7 +17,8 @@ enum ListFormatter {
     static func format(_ line: String, rules: FormatRules) -> [String]? {
         let tokens = line.split(whereSeparator: \.isWhitespace).map(String.init)
         let hits = markerHits(tokens, rules: rules)
-        guard hits.count >= 2, hits.map(\.item) == Array(1...hits.count) else { return nil }
+        guard hits.count >= 2, hits.map(\.item) == Array(1...hits.count),
+              hits.dropFirst().allSatisfy({ continuesTheList($0.index, tokens, rules: rules) }) else { return nil }
 
         var lines: [String] = []
         let intro = trimmedItem(tokens[0..<hits[0].index], rules: rules, dropTrailingConjunctions: true)
@@ -53,6 +54,14 @@ enum ListFormatter {
         return rules.conjunctions.contains(bare(previous))
     }
 
+    /// Items after the first follow a comma, semicolon, colon or conjunction — never a sentence
+    /// end: "First prize went to Anna. Second place went to Bob." is two sentences, not a list.
+    private static func continuesTheList(_ index: Int, _ tokens: [String], rules: FormatRules) -> Bool {
+        let previous = tokens[index - 1]
+        if let last = previous.last, ",;:".contains(last) { return true }
+        return rules.conjunctions.contains(bare(previous))
+    }
+
     /// The longest marker form starting at `index`.
     private static func match(at index: Int, _ tokens: [String], rules: FormatRules) -> Hit? {
         var best: Hit?
@@ -62,6 +71,9 @@ enum ListFormatter {
                 guard index + words.count <= tokens.count,
                       tokens[index..<index + words.count].map(bare) == words,
                       words.count > (best?.length ?? 0) else { continue }
+                // "second place", "secondo me": a one-word marker used as an ordinary word.
+                if words.count == 1, index + 1 < tokens.count, !tokens[index].hasSuffix(","),
+                   rules.markerBlockers.contains(bare(tokens[index + 1])) { continue }
                 best = Hit(index: index, length: words.count, item: item + 1)
             }
         }

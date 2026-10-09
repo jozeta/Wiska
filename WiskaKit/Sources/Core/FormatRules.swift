@@ -10,14 +10,18 @@ public struct FormatRules: Sendable, Equatable {
     public var signOffs: [[String]]
     /// Ordinals and the percent word: spoken numbers that may legitimately become digits.
     public var numberExtras: Set<String>
+    /// Words that, right after a one-word marker, show it is an ordinary word ("second place",
+    /// Italian "secondo me" = "in my opinion", Portuguese "segundo o João" = "according to João").
+    public var markerBlockers: Set<String>
 
     public init(listMarkers: [[String]], conjunctions: Set<String>, greetings: [[String]],
-                signOffs: [[String]], numberExtras: Set<String>) {
+                signOffs: [[String]], numberExtras: Set<String>, markerBlockers: Set<String> = []) {
         self.listMarkers = listMarkers
         self.conjunctions = conjunctions
         self.greetings = greetings
         self.signOffs = signOffs
         self.numberExtras = numberExtras
+        self.markerBlockers = markerBlockers
     }
 
     /// Every listed language's words at once — for text whose language is unknown.
@@ -30,6 +34,7 @@ public struct FormatRules: Sendable, Equatable {
             all.greetings += rules.greetings
             all.signOffs += rules.signOffs
             all.numberExtras.formUnion(rules.numberExtras)
+            all.markerBlockers.formUnion(rules.markerBlockers)
         }
         return all
     }
@@ -54,7 +59,9 @@ extension Language {
                 signOffs: phrases(["best", "best regards", "kind regards", "regards", "thanks", "thank you",
                                    "cheers", "all the best", "sincerely"]),
                 numberExtras: ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth",
-                               "ninth", "tenth", "eleventh", "twelfth", "percent"])
+                               "ninth", "tenth", "eleventh", "twelfth", "percent"],
+                markerBlockers: ["place", "prize", "time", "hand", "half", "class", "floor", "round", "thought",
+                                 "person", "row", "of", "best", "language", "opinion", "chance"])
         case .swedish:
             FormatRules(
                 listMarkers: [["först", "för det första", "nummer ett"], ["för det andra", "nummer två"],
@@ -109,7 +116,8 @@ extension Language {
                 greetings: phrases(["hola", "querido", "querida", "estimado", "estimada", "buenos días"]),
                 signOffs: phrases(["un saludo", "saludos", "atentamente", "gracias", "un abrazo"]),
                 numberExtras: ["primero", "primera", "segundo", "segunda", "tercero", "tercera", "cuarto", "quinto",
-                               "sexto", "séptimo", "octavo", "noveno", "décimo", "ciento"])
+                               "sexto", "séptimo", "octavo", "noveno", "décimo", "ciento"],
+                markerBlockers: ["lugar", "plato", "piso"])
         case .italian:
             FormatRules(
                 listMarkers: [["primo", "innanzitutto", "numero uno"], ["secondo", "numero due"],
@@ -120,7 +128,9 @@ extension Language {
                 greetings: phrases(["ciao", "salve", "caro", "cara", "gentile", "buongiorno"]),
                 signOffs: phrases(["cordiali saluti", "un saluto", "saluti", "grazie", "a presto"]),
                 numberExtras: ["primo", "secondo", "terzo", "quarto", "quinto", "sesto", "settimo", "ottavo", "nono",
-                               "decimo"])
+                               "decimo"],
+                markerBlockers: ["me", "te", "lui", "lei", "noi", "voi", "loro", "il", "la", "lo", "i", "gli", "le",
+                                 "piatto", "posto", "tempo"])
         case .portuguese:
             FormatRules(
                 listMarkers: [["primeiro", "primeira", "em primeiro lugar", "número um"],
@@ -133,7 +143,8 @@ extension Language {
                 greetings: phrases(["olá", "oi", "caro", "cara", "prezado", "prezada", "bom dia"]),
                 signOffs: phrases(["atenciosamente", "cumprimentos", "obrigado", "obrigada", "um abraço", "abraços"]),
                 numberExtras: ["primeiro", "primeira", "segundo", "terceiro", "quarto", "quinto", "sexto", "sétimo",
-                               "oitavo", "nono", "décimo"])
+                               "oitavo", "nono", "décimo"],
+                markerBlockers: ["o", "a", "os", "as", "ele", "ela", "eles", "elas", "lugar"])
         case .danish:
             FormatRules(
                 listMarkers: [["først", "for det første", "nummer et"], ["for det andet", "nummer to"],

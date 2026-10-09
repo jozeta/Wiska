@@ -11,45 +11,57 @@ struct FormattedLine: Equatable, Sendable {
 /// Email category: the greeting and the sign-off go on their own lines.
 enum EmailLayout {
     private static let nameEnders: Set<Character> = [",", ".", "!"]
+    /// Lower-case words that still address people ("Hi everyone,", "Hej alla,").
+    private static let groupWords: Set<String> = ["team", "all", "everyone", "everybody", "there", "folks", "guys",
+                                                  "alla", "allihop", "zusammen", "alle", "tous", "todos", "todas",
+                                                  "tutti", "allemaal", "iedereen"]
 
     static func format(_ lines: [FormattedLine], rules: FormatRules) -> [FormattedLine] {
         var result = lines
-        if let first = result.first, first.isPlain, let (greeting, body) = splitGreeting(first.text, rules: rules) {
-            result.replaceSubrange(0...0, with: [FormattedLine(text: greeting, isPlain: false),
-                                                 FormattedLine(text: "", isPlain: false),
-                                                 FormattedLine(text: body, isPlain: true)])
+        // A greeting or sign-off may stand on its own line when the email has other lines ("new line").
+        let multiline = lines.count > 1
+        if let first = result.first, first.isPlain,
+           let (greeting, body) = splitGreeting(first.text, rules: rules, alone: multiline) {
+            var replacement = [FormattedLine(text: greeting, isPlain: false), FormattedLine(text: "", isPlain: false)]
+            if !body.isEmpty { replacement.append(FormattedLine(text: body, isPlain: true)) }
+            result.replaceSubrange(0...0, with: replacement)
         }
-        if let last = result.last, last.isPlain, let (body, signOff) = splitSignOff(last.text, rules: rules) {
+        if let last = result.last, last.isPlain,
+           let (body, signOff) = splitSignOff(last.text, rules: rules, alone: multiline) {
             result.removeLast()
-            result.append(FormattedLine(text: body, isPlain: true))
+            if !body.isEmpty { result.append(FormattedLine(text: body, isPlain: true)) }
             result.append(FormattedLine(text: "", isPlain: false))
             result += signOff.map { FormattedLine(text: $0, isPlain: false) }
         }
         return result
     }
 
-    /// "Hi Anna, thanks…" → ("Hi Anna,", "Thanks…"); nil without a greeting or without a body.
-    private static func splitGreeting(_ text: String, rules: FormatRules) -> (String, String)? {
+    /// "Hi Anna, thanks…" → ("Hi Anna,", "Thanks…"); nil without a greeting, or without a body
+    /// unless the greeting may stand `alone` on its line.
+    private static func splitGreeting(_ text: String, rules: FormatRules, alone: Bool) -> (String, String)? {
         let tokens = words(text)
         guard let phrase = rules.greetings.filter({ startsWith(tokens, $0, at: 0) }).max(by: { $0.count < $1.count })
         else { return nil }
         var end = phrase.count   // tokens [0, end) form the greeting
         if let punctuated = (phrase.count - 1..<min(tokens.count, phrase.count + 3))
-            .first(where: { tokens[$0].last.map(nameEnders.contains) ?? false }) {
+            .first(where: { tokens[$0].last.map(nameEnders.contains) ?? false }),
+           tokens[phrase.count..<punctuated + 1].allSatisfy(isNameWord) {
             end = punctuated + 1
         } else {
-            while end < min(tokens.count, phrase.count + 3), tokens[end].first?.isUppercase == true { end += 1 }
+            while end < min(tokens.count, phrase.count + 3), tokens[end].first?.isUppercase == true,
+                  !isI(tokens[end]) { end += 1 }
         }
         let body = tokens[end...].joined(separator: " ")
-        guard !body.isEmpty else { return nil }
+        guard !body.isEmpty || alone else { return nil }
         let greeting = tokens[..<end].joined(separator: " ").trimmingCharacters(in: .punctuationCharacters)
         return (capitalized(greeting) + ",", capitalized(body))
     }
 
-    /// "…tonight. Best regards, Johan." → ("…tonight.", ["Best regards,", "Johan"]).
-    private static func splitSignOff(_ text: String, rules: FormatRules) -> (String, [String])? {
+    /// "…tonight. Best regards, Johan." → ("…tonight.", ["Best regards,", "Johan"]); the body may be
+    /// empty only when the sign-off may stand `alone` on its line.
+    private static func splitSignOff(_ text: String, rules: FormatRules, alone: Bool) -> (String, [String])? {
         let (body, sentence) = lastSentence(text)
-        guard !body.isEmpty else { return nil }
+        guard !body.isEmpty || alone else { return nil }
         let tokens = words(sentence)
         guard let phrase = rules.signOffs.filter({ startsWith(tokens, $0, at: 0) }).max(by: { $0.count < $1.count })
         else { return nil }
@@ -74,6 +86,17 @@ enum EmailLayout {
         let body = String(trimmed[...boundary])
         let sentence = String(trimmed[trimmed.index(after: boundary)...]).trimmingCharacters(in: .whitespaces)
         return (body, sentence)
+    }
+
+    /// A word in a greeting's name: capitalised ("Anna"), but not "I"; or a group ("everyone").
+    private static func isNameWord(_ token: String) -> Bool {
+        let bare = token.trimmingCharacters(in: .punctuationCharacters)
+        return (bare.first?.isUppercase == true && !isI(bare)) || groupWords.contains(bare.lowercased())
+    }
+
+    private static func isI(_ token: String) -> Bool {
+        let bare = token.trimmingCharacters(in: .punctuationCharacters)
+        return bare == "I" || bare.hasPrefix("I'") || bare.hasPrefix("I’")
     }
 
     private static func words(_ text: String) -> [String] {
