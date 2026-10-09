@@ -39,6 +39,7 @@ public final class HUDPanelController {
 
     public func show(_ content: HUDContent) {
         guard content != requested else { return }
+        let previous = requested
         requested = content
         generation += 1
         guard content != .hidden else { return hide() }
@@ -49,7 +50,7 @@ public final class HUDPanelController {
         } else {
             withAnimation(.easeInOut(duration: 0.12)) { model.content = content }
         }
-        let expanded = Self.expands(model.expanded, for: content)
+        let expanded = Self.expands(model.expanded, for: content, after: previous)
         if expanded != model.expanded {
             withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) { model.expanded = expanded }
         }
@@ -82,12 +83,15 @@ public final class HUDPanelController {
         }
     }
 
-    /// The capsule grows a row when the first words arrive and keeps it until it hides.
-    static func expands(_ current: Bool, for content: HUDContent) -> Bool {
+    /// The capsule grows a row when the first words arrive and keeps it until it hides. Coming back
+    /// from hidden (even while the hide is still animating) starts collapsed again.
+    static func expands(_ current: Bool, for content: HUDContent, after previous: HUDContent? = nil) -> Bool {
+        let grown: Bool
+        if case .hidden? = previous { grown = false } else { grown = current }
         switch content {
-        case .hidden: false
-        case .listening(_, _, let preview, _): current || !preview.isEmpty
-        default: current
+        case .hidden: return false
+        case .listening(_, _, let preview, _): return grown || !preview.isEmpty
+        default: return grown
         }
     }
 

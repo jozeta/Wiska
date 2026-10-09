@@ -37,4 +37,13 @@ struct HUDPanelControllerTests {
         #expect(HUDPanelController.expands(true, for: .working("Transcribing…")))
         #expect(!HUDPanelController.expands(true, for: .hidden))
     }
+
+    /// A dictation started while the capsule was still hiding starts with one row again.
+    @Test func aNewDictationStartsCollapsed() {
+        let quiet = HUDContent.listening(audio: .silent, badge: "EN", preview: "", handsFree: false)
+        let afterHide = HUDPanelController.expands(true, for: quiet, after: HUDContent.hidden)
+        let meanwhile = HUDPanelController.expands(true, for: quiet, after: quiet)
+        #expect(afterHide == false)
+        #expect(meanwhile == true)
+    }
 }
