@@ -22,6 +22,7 @@ final class AppModel {
     let history: HistoryStore?
     @ObservationIgnored private var retentionTask: Task<Void, Never>?
     @ObservationIgnored private var updateTask: Task<Void, Never>?
+    @ObservationIgnored private var holdHideUntil = Date.distantPast
     /// Checks whether a newer Parakeet model has been published (Settings → Speech).
     let modelUpdates: ModelUpdateChecker
     private(set) var missingPermissions: [Permission] = []
@@ -97,7 +98,8 @@ final class AppModel {
                 hotkey.endHandsFree()
             }
             if state != .idle { flashTask?.cancel() }
-            hud.show(hudContent(for: state, audio: audio))
+            hud.show(hudContent(for: state, audio: audio),
+                     hideAfter: Date() < holdHideUntil ? .milliseconds(450) : .zero)
             // Copy-only: nothing appeared in the app, so say where the text went.
             if finishedCopy { flash("Copied — press ⌘V to paste", for: .milliseconds(1_500)) }
         }
@@ -354,6 +356,8 @@ final class AppModel {
             canStart: missingPermissions.isEmpty   // minor d
         )
         let mapped = CommandMapper.map(event, context: context)
+        // A quick tap may be the first half of a double-tap: keep the capsule up meanwhile.
+        if case .tapped = event { holdHideUntil = Date().addingTimeInterval(0.45) }
         if let command = mapped.command {
             switch command {
             case .start(let choice), .switchLanguage(let choice): badge = badgeText(for: choice)

@@ -46,4 +46,24 @@ struct HUDPanelControllerTests {
         #expect(afterHide == false)
         #expect(meanwhile == true)
     }
+
+    /// A double-tap's first tap cancels: the capsule waits before hiding, so the second press
+    /// doesn't make it blink.
+    @Test(.enabled(if: !NSScreen.screens.isEmpty))
+    func delayedHideIsCancelledByTheNextShow() async throws {
+        let hud = HUDPanelController()
+        let listening = HUDContent.listening(audio: .silent, badge: "EN", preview: "", handsFree: false)
+        hud.show(listening)
+        hud.show(.hidden, hideAfter: .milliseconds(300))
+        try await Task.sleep(for: .milliseconds(100))
+        let stillShown = hud.revealForTesting
+        #expect(stillShown == 1)   // a plain hide would already be gliding away
+        hud.show(listening)
+        try await Task.sleep(for: .milliseconds(500))
+        let visible = hud.panel.isVisible
+        let reveal = hud.revealForTesting
+        #expect(visible)
+        #expect(reveal == 1)
+        hud.show(.hidden)
+    }
 }

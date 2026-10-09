@@ -37,12 +37,25 @@ public final class HUDPanelController {
         set { model.highlight = newValue }
     }
 
-    public func show(_ content: HUDContent) {
+    var revealForTesting: Double { model.reveal }
+
+    /// `hideAfter`: wait before hiding, so a show arriving meanwhile (the second press of a
+    /// double-tap) keeps the capsule up instead of making it blink.
+    public func show(_ content: HUDContent, hideAfter delay: Duration = .zero) {
         guard content != requested else { return }
         let previous = requested
         requested = content
         generation += 1
-        guard content != .hidden else { return hide() }
+        guard content != .hidden else {
+            guard delay > .zero else { return hide() }
+            let token = generation
+            Task { [weak self] in
+                try? await Task.sleep(for: delay)
+                guard let self, self.generation == token else { return }
+                self.hide()
+            }
+            return
+        }
         if !panel.isVisible { place() }
         // Waveform frames update ~60×/s: only a change of kind (listening → transcribing) cross-fades.
         if Self.kind(model.content) == Self.kind(content) {
