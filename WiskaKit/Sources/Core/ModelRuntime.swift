@@ -63,11 +63,38 @@ public actor ModelRuntime<Model: Sendable> {
         return model ?? loaded
     }
 
-    /// Loads if needed, runs `body` on the model, and restarts the idle clock.
+    /// Loads if needed, runs `body` on the model, and restarts the idle clock. Calls take turns:
+    /// a model may not run twice at once (whisper.cpp crashes), and a request cancelled meanwhile
+    /// (its dictation timed out) never runs.
     public func use<T: Sendable>(from directory: URL, _ body: @Sendable (Model) async throws -> T) async throws -> T {
         let loaded = try await load(from: directory)
-        defer { scheduleUnload() }
+        try Task.checkCancellation()
+        await waitForTurn()
+        defer {
+            endTurn()
+            scheduleUnload()
+        }
+        try Task.checkCancellation()
         return try await body(loaded)
+    }
+
+    private var busy = false
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+
+    private func waitForTurn() async {
+        guard busy else {
+            busy = true
+            return
+        }
+        await withCheckedContinuation { waiting.append($0) }   // the turn is handed over by endTurn
+    }
+
+    private func endTurn() {
+        if waiting.isEmpty {
+            busy = false
+        } else {
+            waiting.removeFirst().resume()
+        }
     }
 
     public func unload() {

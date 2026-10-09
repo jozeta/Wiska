@@ -10,8 +10,8 @@ struct WhisperError: Error, CustomStringConvertible {
     let description: String
 }
 
-/// whisper.cpp's context: the GGML file loaded with Metal. Only used from its runtime actor,
-/// one call at a time (whisper_full isn't safe in parallel on one context).
+/// whisper.cpp's context: the GGML file loaded with Metal. `ModelRuntime.use` runs one call at
+/// a time: whisper_full isn't safe in parallel on one context.
 final class WhisperContext: WhisperModel, @unchecked Sendable {
     private let context: OpaquePointer
 
