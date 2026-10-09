@@ -89,3 +89,17 @@ public final class KBWhisperRecognizer: BatchRecognizer {
         }
     }
 }
+
+/// Update checks (Settings → Models): through the recognizer, so replacing the model also lets
+/// the old one go from memory.
+extension KBWhisperRecognizer: UpdatableModelStore {
+    public var isInstalled: Bool { store.isInstalled }
+    public var isDownloading: Bool {
+        if case .downloading = store.status { true } else { false }
+    }
+    public var installedRevision: String? { store.installedRevision }
+    public var installedAt: Date? { store.installedAt }
+    public var installedComponents: Set<String> { store.installedComponents }
+    public func recordRevision(_ fingerprint: String) { store.recordRevision(fingerprint) }
+    public func startDownload() { store.download() }
+}

@@ -111,6 +111,11 @@ public enum SpeechEngine: String, Sendable, CaseIterable, Codable {
     /// What the per-language engine pickers offer: KB-Whisper is a Swedish second pass, not a choice.
     public static let selectable: [SpeechEngine] = [.apple, .parakeet]
 
+    /// What the pickers offer: only downloaded models (more in Settings → Models).
+    public static func offered(parakeetInstalled: Bool) -> [SpeechEngine] {
+        parakeetInstalled ? [.apple, .parakeet] : [.apple]
+    }
+
     public var displayName: String {
         switch self {
         case .apple: "Apple SpeechAnalyzer"

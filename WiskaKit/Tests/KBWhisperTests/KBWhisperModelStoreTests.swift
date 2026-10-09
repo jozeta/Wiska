@@ -20,7 +20,8 @@ struct KBWhisperModelStoreTests {
     let sha = SHA256.hash(data: Data("ggml".utf8)).map { String(format: "%02x", $0) }.joined()
 
     func store(_ downloader: FakeFileDownloader = FakeFileDownloader(), free: Int64? = nil, sha: String? = nil) -> KBWhisperModelStore {
-        KBWhisperModelStore(directory: directory, downloader: downloader, freeSpace: { free }, expectedSHA256: sha ?? self.sha)
+        let file = KBWhisperFile(url: URL(string: "https://example.com/ggml-model-q5_0.bin")!, sha256: sha ?? self.sha)
+        return KBWhisperModelStore(directory: directory, downloader: downloader, freeSpace: { free }, latestFile: { file })
     }
 
     func waitWhileDownloading(_ store: KBWhisperModelStore) async {
@@ -79,8 +80,9 @@ struct KBWhisperModelStoreTests {
 
     /// Cancel while the 1.1 GB file is being checked: nothing is installed.
     @Test func cancelDuringTheChecksumInstallsNothing() async throws {
+        let file = KBWhisperFile(url: URL(string: "https://example.com/ggml-model-q5_0.bin")!, sha256: sha)
         let store = KBWhisperModelStore(directory: directory, downloader: FakeFileDownloader(), freeSpace: { nil },
-                                        expectedSHA256: sha, hash: { url in
+                                        latestFile: { file }, hash: { url in
             Thread.sleep(forTimeInterval: 0.3)
             return try KBWhisperModelStore.sha256(of: url)
         })
@@ -92,10 +94,25 @@ struct KBWhisperModelStoreTests {
         #expect(!FileManager.default.fileExists(atPath: directory.path))
     }
 
-    @Test func pinnedModelFile() {
-        #expect(KBWhisperModelStore.fileURL.absoluteString
-                == "https://huggingface.co/KBLab/kb-whisper-large/resolve/d5d5984b4d8f7c4847a8ea203f1976285fb28300/ggml-model-q5_0.bin")
-        #expect(KBWhisperModelStore.sha256 == "6d2863812d7410322bb7d8647a5c7260761300fa946714c9ed66d22bb30bcb19")
+    /// The newest version, as Hugging Face lists it: the file at the repo's commit, with its SHA-256.
+    @Test func latestFileComesFromTheListing() throws {
+        let json = #"{"sha":"abc123","siblings":[{"rfilename":"model.bin"},{"rfilename":"ggml-model-q5_0.bin","lfs":{"sha256":"ff00"}}]}"#
+        let file = try KBWhisperModelStore.decodeLatest(Data(json.utf8))
+        #expect(file.url.absoluteString == "https://huggingface.co/KBLab/kb-whisper-large/resolve/abc123/ggml-model-q5_0.bin")
+        #expect(file.sha256 == "ff00")
+        #expect(throws: (any Error).self) { try KBWhisperModelStore.decodeLatest(Data(#"{"sha":"x","siblings":[]}"#.utf8)) }
+    }
+
+    /// Update checks: the installed version is remembered, like Parakeet and Gemma.
+    @Test func remembersTheInstalledVersion() async {
+        let store = store()
+        store.download()
+        await waitWhileDownloading(store)
+        #expect(store.installedRevision == nil)
+        #expect(store.installedComponents == ["ggml-model-q5_0.bin"])
+        #expect(store.installedAt != nil)
+        store.recordRevision("files:1")
+        #expect(store.installedRevision == "files:1")
     }
 }
 

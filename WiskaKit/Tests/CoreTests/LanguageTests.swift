@@ -3,6 +3,14 @@ import Testing
 @testable import Core
 
 struct LanguageTests {
+    /// Pickers only offer downloaded models.
+    @Test func pickersOfferOnlyDownloadedModels() {
+        #expect(SpeechEngine.offered(parakeetInstalled: false) == [.apple])
+        #expect(SpeechEngine.offered(parakeetInstalled: true) == [.apple, .parakeet])
+        #expect(LanguageModelChoice.offered(gemmaInstalled: false) == [.apple])
+        #expect(LanguageModelChoice.offered(gemmaInstalled: true) == [.apple, .gemma])
+    }
+
     @Test func kbWhisperIsAnEngineButNotAPickerChoice() {
         #expect(SpeechEngine.kbWhisper.displayName == "KB-Whisper")
         #expect(SpeechEngine.kbWhisper.shortName == "KB-Whisper")

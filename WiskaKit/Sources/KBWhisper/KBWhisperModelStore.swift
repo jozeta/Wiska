@@ -3,8 +3,19 @@ import CryptoKit
 import Foundation
 import Observation
 
-/// KB-Whisper Large (KBLab's quantized whisper.cpp file): downloaded on request, checked against
-/// its published SHA-256, never half-installed.
+/// One version of the model file: where to fetch it and the SHA-256 Hugging Face publishes for it.
+public struct KBWhisperFile: Equatable, Sendable {
+    public let url: URL
+    public let sha256: String
+
+    public init(url: URL, sha256: String) {
+        self.url = url
+        self.sha256 = sha256
+    }
+}
+
+/// KB-Whisper Large (KBLab's quantized whisper.cpp file): the newest version, downloaded on request,
+/// checked against its published SHA-256, never half-installed.
 @MainActor @Observable
 public final class KBWhisperModelStore {
     public enum Status: Equatable {
@@ -15,9 +26,7 @@ public final class KBWhisperModelStore {
     }
 
     private static let log = Log.logger("Whisper")
-    public nonisolated static let fileURL = URL(string:
-        "https://huggingface.co/KBLab/kb-whisper-large/resolve/d5d5984b4d8f7c4847a8ea203f1976285fb28300/ggml-model-q5_0.bin")!
-    public nonisolated static let sha256 = "6d2863812d7410322bb7d8647a5c7260761300fa946714c9ed66d22bb30bcb19"
+    public nonisolated static let repo = "KBLab/kb-whisper-large"
     nonisolated static let fileName = "ggml-model-q5_0.bin"
     nonisolated static let completionMarker = ".wiska-complete"
     public nonisolated static let requiredFreeBytes: Int64 = 2_000_000_000
@@ -31,7 +40,7 @@ public final class KBWhisperModelStore {
     public let directory: URL
     @ObservationIgnored private let downloader: any FileDownloader
     @ObservationIgnored private let freeSpace: @MainActor () -> Int64?
-    @ObservationIgnored private let expectedSHA256: String
+    @ObservationIgnored private let latestFile: @Sendable () async throws -> KBWhisperFile
     @ObservationIgnored private let hash: @Sendable (URL) throws -> String
     @ObservationIgnored private var task: Task<Void, Never>?
     /// Called after a download completes (the toggle is switched on).
@@ -43,13 +52,13 @@ public final class KBWhisperModelStore {
     public init(directory: URL = KBWhisperModelStore.defaultDirectory,
                 downloader: any FileDownloader = URLSessionFileDownloader(),
                 freeSpace: @escaping @MainActor () -> Int64? = KBWhisperModelStore.availableSpace,
-                expectedSHA256: String = KBWhisperModelStore.sha256,
+                latestFile: @escaping @Sendable () async throws -> KBWhisperFile = { try await KBWhisperModelStore.fetchLatest() },
                 hash: @escaping @Sendable (URL) throws -> String = { try KBWhisperModelStore.sha256(of: $0) }) {
         self.hash = hash
         self.directory = directory
         self.downloader = downloader
         self.freeSpace = freeSpace
-        self.expectedSHA256 = expectedSHA256
+        self.latestFile = latestFile
         let marker = directory.appendingPathComponent(Self.completionMarker)
         if FileManager.default.fileExists(atPath: marker.path),
            FileManager.default.fileExists(atPath: directory.appendingPathComponent(Self.fileName).path) {
@@ -80,7 +89,7 @@ public final class KBWhisperModelStore {
         status = .downloading(0)
         let directory = directory
         let downloader = downloader
-        let expected = expectedSHA256
+        let latestFile = latestFile
         let hash = hash
         let partial = directory.appendingPathComponent(Self.fileName + ".partial")
         let final = modelFile
@@ -92,7 +101,9 @@ public final class KBWhisperModelStore {
         }
         task = Task { [weak self] in
             do {
-                try await downloader.download(from: Self.fileURL, to: partial, progress: report)
+                let file = try await latestFile()
+                let expected = file.sha256
+                try await downloader.download(from: file.url, to: partial, progress: report)
                 try Task.checkCancellation()
                 let actual = try await Task.detached { try hash(partial) }.value
                 try Task.checkCancellation()   // Cancel pressed while the file was being checked
@@ -120,6 +131,57 @@ public final class KBWhisperModelStore {
         var hasher = SHA256()
         while let data = try handle.read(upToCount: 8 << 20), !data.isEmpty { hasher.update(data: data) }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// The newest version on Hugging Face: one small request, nothing about the user is sent.
+    public nonisolated static func fetchLatest() async throws -> KBWhisperFile {
+        let api = URL(string: "https://huggingface.co/api/models/\(repo)?blobs=true")!
+        let (data, response) = try await URLSession.shared.data(from: api)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        return try decodeLatest(data)
+    }
+
+    nonisolated static func decodeLatest(_ data: Data) throws -> KBWhisperFile {
+        struct Listing: Decodable {
+            struct File: Decodable {
+                struct LFS: Decodable { let sha256: String }
+                let rfilename: String
+                let lfs: LFS?
+            }
+            let sha: String
+            let siblings: [File]
+        }
+        let listing = try JSONDecoder().decode(Listing.self, from: data)
+        guard let file = listing.siblings.first(where: { $0.rfilename == fileName }), let sha256 = file.lfs?.sha256 else {
+            throw URLError(.cannotParseResponse)
+        }
+        let url = URL(string: "https://huggingface.co")!.appendingPathComponent(repo)
+            .appendingPathComponent("resolve").appendingPathComponent(listing.sha).appendingPathComponent(fileName)
+        return KBWhisperFile(url: url, sha256: sha256)
+    }
+
+    private var markerURL: URL { directory.appendingPathComponent(Self.completionMarker) }
+
+    /// The installed file's fingerprint, recorded by an update check; nil before the first one.
+    public var installedRevision: String? {
+        guard isInstalled, let text = try? String(contentsOf: markerURL, encoding: .utf8) else { return nil }
+        let revision = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return revision.isEmpty ? nil : revision
+    }
+
+    public var installedAt: Date? {
+        guard isInstalled else { return nil }
+        return (try? FileManager.default.attributesOfItem(atPath: markerURL.path))?[.modificationDate] as? Date
+    }
+
+    /// Only the model file: other files in the repo (ONNX, PyTorch) changing isn't an update.
+    public var installedComponents: Set<String> { isInstalled ? [Self.fileName] : [] }
+
+    public func recordRevision(_ revision: String) {
+        guard isInstalled else { return }
+        try? Data(revision.utf8).write(to: markerURL)
     }
 
     public func cancelDownload() {

@@ -29,6 +29,7 @@ public final class SettingsStore {
         static let modelUpdateInterval = "modelUpdateInterval"
         static let lastModelUpdateCheck = "lastModelUpdateCheck"
         static let lastGemmaUpdateCheck = "lastGemmaUpdateCheck"
+        static let lastKBWhisperUpdateCheck = "lastKBWhisperUpdateCheck"
         static let categoryStyles = "categoryStyles"
         static let appCategories = "appCategories"
         static let recentApps = "recentApps"
@@ -159,6 +160,17 @@ public final class SettingsStore {
     public var lastGemmaUpdateCheck: Date? {
         didSet { defaults.set(lastGemmaUpdateCheck, forKey: Key.lastGemmaUpdateCheck) }
     }
+    public var lastKBWhisperUpdateCheck: Date? {
+        didSet { defaults.set(lastKBWhisperUpdateCheck, forKey: Key.lastKBWhisperUpdateCheck) }
+    }
+
+    /// Parakeet was removed: every choice of it goes back to Apple.
+    public func stopUsingParakeet() {
+        if engine == .parakeet { engine = .apple }
+        for language in Language.allCases where engine(for: language) == .parakeet {
+            setEngine(.apple, for: language)
+        }
+    }
 
     /// Styles the user picked per app category; missing ones use the category's default.
     public private(set) var categoryStyles: [AppCategory: WritingStyle]
@@ -234,6 +246,7 @@ public final class SettingsStore {
         modelUpdateInterval = defaults.object(forKey: Key.modelUpdateInterval) as? Int ?? 7
         lastModelUpdateCheck = defaults.object(forKey: Key.lastModelUpdateCheck) as? Date
         lastGemmaUpdateCheck = defaults.object(forKey: Key.lastGemmaUpdateCheck) as? Date
+        lastKBWhisperUpdateCheck = defaults.object(forKey: Key.lastKBWhisperUpdateCheck) as? Date
         let storedStyles = defaults.dictionary(forKey: Key.categoryStyles) as? [String: String] ?? [:]
         categoryStyles = Dictionary(uniqueKeysWithValues: storedStyles.compactMap { key, value in
             guard let category = AppCategory(rawValue: key), let style = WritingStyle(rawValue: value) else { return nil }

@@ -250,6 +250,18 @@ final class SettingsStoreTests {
         #expect(SettingsStore(defaults: defaults).lastModelUpdateCheck == nil)
     }
 
+    /// Removing Parakeet: every choice of it goes back to Apple.
+    @Test func removedParakeetIsNoLongerChosen() {
+        let store = SettingsStore(defaults: defaults)
+        store.engine = .parakeet
+        store.engineMode = .perLanguage
+        store.setEngine(.parakeet, for: .swedish)
+        store.stopUsingParakeet()
+        #expect(store.engine == .apple)
+        #expect(store.engine(for: .swedish) == .apple)
+        #expect(store.lastKBWhisperUpdateCheck == nil)
+    }
+
     @Test func outputModeDefaultsToInsertAndPersists() {
         let store = SettingsStore(defaults: defaults)
         #expect(store.outputMode == .insert)
