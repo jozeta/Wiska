@@ -67,11 +67,13 @@ final class AppModel {
             transcriber: { [weak self] choice in self?.transcriber(for: choice) ?? AppleTranscriber() },
             cleaner: CleanupPipeline(level: { settings.cleanupLevel }, rewriter: rewriter,
                                      dictionary: { dictionaryStore.dictionary },
-                                     isKnownWord: { lexicon.isKnown($0) }),
+                                     isKnownWord: { lexicon.isKnown($0) },
+                                     style: { settings.style(for: $0) }),
             injector: PasteboardInjector(),
             contextProvider: {
-                DictationContext(appBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
-                                 enabledLanguages: settings.enabledLanguages)
+                let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+                return DictationContext(appBundleID: bundleID, enabledLanguages: settings.enabledLanguages,
+                                        category: AppCatalog.category(for: bundleID, overrides: settings.appCategories))
             },
             handsFreeSilence: { settings.handsFreeSilence },
             showPreview: { settings.livePreview }
@@ -95,6 +97,9 @@ final class AppModel {
             guard let self else { return }
             if record.pasted && !settings.firstDictationDone { settings.firstDictationDone = true }
             history?.add(record, retention: settings.historyRetention)
+            if !record.finalText.isEmpty, let app = record.appBundleID, app != Bundle.main.bundleIdentifier {
+                settings.noteRecentApp(app)
+            }
         }
         applyHighlight()
     }
