@@ -63,51 +63,85 @@ private struct DictationsList: View {
 
     var body: some View {
         let records = items.map(\.record)
-        let now = Date()
-        let shown = items.filter { filter.matches($0.record, now: now) }
-        List(shown) { item in
-            DictationRow(item: item, expanded: expanded == item.id, highlight: highlight, store: store) {
-                expanded = expanded == item.id ? nil : item.id
+        let apps = HistoryFilter.apps(in: records)
+        let languages = HistoryFilter.languages(in: records)
+        // Re-render every minute, so "Today" rolls over at midnight while the window stays open.
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            let shown = items.filter { filter.matches($0.record, now: context.date) }
+            List(shown) { item in
+                DictationRow(item: item, expanded: expanded == item.id, highlight: highlight, store: store) {
+                    expanded = expanded == item.id ? nil : item.id
+                }
             }
-        }
-        .overlay {
-            if shown.isEmpty {
-                ContentUnavailableView(items.isEmpty ? "No dictations yet" : "No matches",
-                                       systemImage: "clock.arrow.circlepath")
+            .overlay {
+                if shown.isEmpty {
+                    ContentUnavailableView(items.isEmpty ? "No dictations yet" : "No matches",
+                                           systemImage: "clock.arrow.circlepath")
+                }
             }
         }
         .searchable(text: $filter.query, prompt: "Search history")
+        .onChange(of: records.count) {
+            // A filter for an app or language that is no longer in history would leave a blank menu.
+            filter = filter.validated(apps: apps, languages: languages)
+        }
         .toolbar {
-            ToolbarItemGroup {
-                Picker("App", selection: $filter.app) {
-                    Text("All apps").tag(String?.none)
-                    ForEach(HistoryFilter.apps(in: records), id: \.self) { app in
-                        Text(AppInfo.name(app)).tag(String?.some(app))
+            ToolbarItem {
+                // One menu for every filter: four separate pickers overflow a narrow window.
+                Menu {
+                    Picker("App", selection: $filter.app) {
+                        Text("All apps").tag(String?.none)
+                        ForEach(apps, id: \.self) { app in
+                            Label {
+                                Text(AppInfo.name(app))
+                            } icon: {
+                                if let icon = AppInfo.icon(app) { Image(nsImage: icon) }
+                            }
+                            .tag(String?.some(app))
+                        }
                     }
-                }
-                Picker("Language", selection: $filter.language) {
-                    Text("All languages").tag(Language?.none)
-                    ForEach(HistoryFilter.languages(in: records), id: \.self) { language in
-                        Text("\(language.flag) \(language.displayName)").tag(Language?.some(language))
+                    Picker("Language", selection: $filter.language) {
+                        Text("All languages").tag(Language?.none)
+                        ForEach(languages, id: \.self) { language in
+                            Text("\(language.flag) \(language.displayName)").tag(Language?.some(language))
+                        }
                     }
-                }
-                Picker("Period", selection: $filter.period) {
-                    ForEach(HistoryPeriod.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                }
-                Picker("Pasted", selection: $filter.notPastedOnly) {
-                    Text("All").tag(false)
-                    Text("Not pasted only").tag(true)
-                }
-                if !filter.isDefault {
+                    Picker("Period", selection: $filter.period) {
+                        ForEach(HistoryPeriod.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    }
+                    Picker("Pasted", selection: $filter.notPastedOnly) {
+                        Text("All").tag(false)
+                        Text("Not pasted only").tag(true)
+                    }
+                    Divider()
                     Button("Clear filters") { filter = filter.cleared() }
+                        .disabled(filter.isDefault)
+                } label: {
+                    Label(filterTitle, systemImage: filter.isDefault ? "line.3.horizontal.decrease.circle"
+                                                                     : "line.3.horizontal.decrease.circle.fill")
                 }
-                Button("Clear All", role: .destructive) { confirmClear = true }
-                    .disabled(items.isEmpty)
+                .help("Filter")
+            }
+            ToolbarItem {
+                // Kept apart from the filters: deleting everything is a different kind of action.
+                Menu {
+                    Button("Clear All…", role: .destructive) { confirmClear = true }
+                        .disabled(items.isEmpty)
+                } label: {
+                    Label("More", systemImage: "ellipsis.circle")
+                }
             }
         }
         .confirmationDialog("Delete all dictation history?", isPresented: $confirmClear) {
             Button("Delete All", role: .destructive) { store.deleteAll() }
         }
+    }
+
+    /// "Filter", or "Filter (2)" with two filters on.
+    private var filterTitle: String {
+        let active = [filter.app != nil, filter.language != nil, filter.period != .all, filter.notPastedOnly]
+            .filter { $0 }.count
+        return active == 0 ? "Filter" : "Filter (\(active))"
     }
 }
 
@@ -234,7 +268,20 @@ private struct StatsPane: View {
                                                                                shares: report.shares))
                     if !split.isEmpty {
                         section("Languages") {
-                            Text(split.map { "\($0.language.flag) \($0.percent)%" }.joined(separator: "  ·  "))
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(split.map { "\($0.language.flag) \($0.percent)%" }.joined(separator: "  ·  "))
+                                GeometryReader { proxy in
+                                    HStack(spacing: 0) {
+                                        ForEach(Array(split.enumerated()), id: \.offset) { index, entry in
+                                            AuroraTheme.color(highlight, at: split.count == 1 ? 0
+                                                                  : Double(index) / Double(split.count - 1))
+                                                .frame(width: proxy.size.width * Double(entry.percent) / 100)
+                                        }
+                                    }
+                                }
+                                .frame(height: 6)
+                                .clipShape(Capsule())
+                            }
                         }
                     }
                 }

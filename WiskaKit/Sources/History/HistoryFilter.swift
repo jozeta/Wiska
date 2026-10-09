@@ -51,6 +51,14 @@ public struct HistoryFilter: Equatable, Sendable {
     /// True when no filter narrows the list (the search text has its own clear button).
     public var isDefault: Bool { app == nil && language == nil && period == .all && !notPastedOnly }
 
+    /// Drops an app or language filter whose choice is no longer in history (its menu would be blank).
+    public func validated(apps: [String], languages: [Language]) -> HistoryFilter {
+        var filter = self
+        if let app, !apps.contains(app) { filter.app = nil }
+        if let language, !languages.contains(language) { filter.language = nil }
+        return filter
+    }
+
     /// The filters reset, the search kept.
     public func cleared() -> HistoryFilter { HistoryFilter(query: query) }
 

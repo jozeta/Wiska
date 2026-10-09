@@ -82,4 +82,13 @@ struct HistoryFilterTests {
         #expect(HistoryFilter.apps(in: records) == ["b", "a"])
         #expect(HistoryFilter.languages(in: records) == [.english, .swedish])
     }
+
+    /// A filter for an app or language no longer in history resets, instead of leaving a blank menu.
+    @Test func vanishedChoicesReset() {
+        let filter = HistoryFilter(query: "x", app: "gone", language: .danish, period: .week)
+        let valid = filter.validated(apps: ["com.apple.mail"], languages: [.english])
+        #expect(valid == HistoryFilter(query: "x", period: .week))
+        let kept = HistoryFilter(app: "com.apple.mail", language: .english)
+        #expect(kept.validated(apps: ["com.apple.mail"], languages: [.english]) == kept)
+    }
 }
