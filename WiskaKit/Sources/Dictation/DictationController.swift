@@ -23,6 +23,8 @@ public final class DictationController {
     public private(set) var lastLatency: Duration?
     public private(set) var currentTask: Task<Void, Never>?
     public private(set) var currentChoice: LanguageChoice?
+    /// The dictation in progress was locked with a double-tap (no fn to hold).
+    public private(set) var isHandsFree = false { didSet { if oldValue != isHandsFree { notify() } } }
     public var onChange: (@MainActor (State, [Float]) -> Void)?
     public var onLanguageDetected: (@MainActor (Language) -> Void)?
     /// A finished dictation (pasted, or paste failed) for history. Never for secure input.
@@ -33,6 +35,8 @@ public final class DictationController {
     private let cleaner: any TextCleaner
     private let injector: any TextInjector
     private let contextProvider: @MainActor () -> DictationContext
+    /// Seconds of silence after which a hands-free dictation finishes (0 = never).
+    private let handsFreeSilence: @MainActor () -> TimeInterval
     private let maxDuration: Duration
     private let noticeDuration: Duration
     private let releaseTail: Duration
@@ -44,6 +48,7 @@ public final class DictationController {
     private var levelTask: Task<Void, Never>?
     private var timeoutTask: Task<Void, Never>?
     private var resetTask: Task<Void, Never>?
+    private var silence: SilenceWatch?
 
     public init(
         audio: any AudioSource,
@@ -51,6 +56,7 @@ public final class DictationController {
         cleaner: any TextCleaner,
         injector: any TextInjector,
         contextProvider: @escaping @MainActor () -> DictationContext = { DictationContext() },
+        handsFreeSilence: @escaping @MainActor () -> TimeInterval = { 30 },
         maxDuration: Duration = .seconds(300),
         noticeDuration: Duration = .milliseconds(1_500),
         releaseTail: Duration = .milliseconds(150)
@@ -60,6 +66,7 @@ public final class DictationController {
         self.cleaner = cleaner
         self.injector = injector
         self.contextProvider = contextProvider
+        self.handsFreeSilence = handsFreeSilence
         self.maxDuration = maxDuration
         self.noticeDuration = noticeDuration
         self.releaseTail = releaseTail
@@ -78,13 +85,16 @@ public final class DictationController {
             let ready = activeTranscriber.map { transcriber in
                 currentChoice.map { transcriber.isReady(for: $0) } ?? transcriber.isReady
             } ?? true
+            endHandsFree()
             state = ready ? .transcribing : .preparingModel
             currentTask = Task { await finishDictation() }
         case .cancel:
             guard state == .listening else { return }
             cancelListening()
         case .lockHandsFree:
-            break   // Task 4
+            guard state == .listening, !isHandsFree else { return }
+            silence = SilenceWatch(timeout: handsFreeSilence())
+            isHandsFree = true
         case .switchLanguage(let choice):
             guard state == .listening, choice != currentChoice else { return }
             // Stay in .listening throughout so the HUD doesn't collapse and reopen.
@@ -102,6 +112,7 @@ public final class DictationController {
 
     private func startListening(_ choice: LanguageChoice) {
         resetTask?.cancel()
+        endHandsFree()
         context = contextProvider()
         let capture: AudioCapture
         do {
@@ -211,6 +222,7 @@ public final class DictationController {
     }
 
     private func cancelListening(endState: State = .idle) {
+        endHandsFree()
         stopCapture()
         let pending = sessionTask
         sessionTask = nil
@@ -235,6 +247,15 @@ public final class DictationController {
         next.append(level)
         if next.count > Self.levelHistory { next.removeFirst(next.count - Self.levelHistory) }
         levels = next
+        if silence?.feed(level: level, time: ProcessInfo.processInfo.systemUptime) == true {
+            Self.log.notice("hands-free: silence; auto-finishing")
+            handle(.finish)
+        }
+    }
+
+    private func endHandsFree() {
+        silence = nil
+        isHandsFree = false
     }
 
     private func fail(_ failure: DictationFailure) {

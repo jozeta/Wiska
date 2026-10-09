@@ -1,4 +1,5 @@
 import Core
+import Foundation
 import Testing
 @testable import Dictation
 
@@ -10,11 +11,13 @@ struct DictationControllerTests {
     let injector = FakeInjector()
 
     func makeController(maxDuration: Duration = .seconds(300), releaseTail: Duration = .zero,
+                        silence: TimeInterval = 30,
                         provider: (@MainActor (LanguageChoice) -> any Transcriber)? = nil) -> DictationController {
         let transcriber = transcriber
         return DictationController(
             audio: audio, transcriber: provider ?? { _ in transcriber }, cleaner: cleaner, injector: injector,
             contextProvider: { DictationContext(appBundleID: "com.apple.TextEdit") },
+            handsFreeSilence: { silence },
             maxDuration: maxDuration, noticeDuration: .seconds(60), releaseTail: releaseTail
         )
     }
@@ -411,5 +414,75 @@ struct DictationControllerTests {
         controller.handle(.finish)
         await controller.currentTask?.value
         #expect(records.value.first?.duration == 1.5)
+    }
+
+    // MARK: Hands-free
+
+    @Test func lockOutsideListeningIsIgnored() {
+        let controller = makeController()
+        controller.handle(.lockHandsFree)
+        #expect(!controller.isHandsFree)
+        #expect(controller.state == .idle)
+    }
+
+    @Test func lockMarksTheDictationHandsFreeAndNotifies() {
+        let controller = makeController()
+        let changes = Box(0)
+        controller.onChange = { _, _ in changes.value += 1 }
+        controller.handle(en)
+        let before = changes.value
+        controller.handle(.lockHandsFree)
+        #expect(controller.isHandsFree)
+        #expect(changes.value > before)
+        controller.handle(.cancel)
+    }
+
+    @Test(.timeLimit(.minutes(1))) func handsFreeSilenceFinishesAndPastes() async throws {
+        let controller = makeController(silence: 0.05)
+        controller.handle(en)
+        controller.handle(.lockHandsFree)
+        audio.emit([0.1])
+        audio.emitLevel(0.05)
+        try await Task.sleep(for: .milliseconds(100))
+        audio.emitLevel(0.05)
+        while controller.currentTask == nil { try await Task.sleep(for: .milliseconds(10)) }
+        await controller.currentTask?.value
+        #expect(injector.injected == ["cleaned: hello world"])
+        #expect(!controller.isHandsFree)
+    }
+
+    @Test func holdToTalkIgnoresSilence() async throws {
+        let controller = makeController(silence: 0.05)
+        controller.handle(en)
+        audio.emitLevel(0.05)
+        try await Task.sleep(for: .milliseconds(100))
+        audio.emitLevel(0.05)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(controller.state == .listening)
+        controller.handle(.cancel)
+    }
+
+    @Test func silenceOffNeverFinishes() async throws {
+        let controller = makeController(silence: 0)
+        controller.handle(en)
+        controller.handle(.lockHandsFree)
+        audio.emitLevel(0.05)
+        try await Task.sleep(for: .milliseconds(100))
+        audio.emitLevel(0.05)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(controller.state == .listening)
+        controller.handle(.cancel)
+        #expect(!controller.isHandsFree)
+    }
+
+    @Test func aNewDictationStartsNotHandsFree() async {
+        let controller = makeController()
+        controller.handle(en)
+        controller.handle(.lockHandsFree)
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        controller.handle(en)
+        #expect(!controller.isHandsFree)
+        controller.handle(.cancel)
     }
 }
