@@ -36,6 +36,12 @@ struct HelpTab: View {
                     Label(example, systemImage: "text.cursor").foregroundStyle(.secondary)
                 }
             }
+            Section("Snippets") {
+                tip("Insert saved text", "Say “insert my signature” (Swedish: “infoga min signatur”) anywhere in a dictation. Add snippets in the Snippets tab.")
+                ForEach(model.snippetStore.snippets.filter { !$0.name.isEmpty }) { snippet in
+                    LabeledContent(snippet.name, value: "“insert my \(snippet.name)”")
+                }
+            }
             Section("Styles") {
                 tip("Per kind of app", "Messages and work chat are Casual, email is Formal, terminals and editors get exactly what you say. Change it in Cleanup → Styles.")
                 tip("Numbers", "“three thirty” becomes 3:30, “twenty five percent” becomes 25%.")

@@ -20,6 +20,7 @@ final class AppModel {
     let settings: SettingsStore
     let parakeetStore: ParakeetModelStore
     let dictionaryStore: DictionaryStore
+    let snippetStore: SnippetStore
     let history: HistoryStore?
     @ObservationIgnored private var retentionTask: Task<Void, Never>?
     @ObservationIgnored private var updateTask: Task<Void, Never>?
@@ -52,6 +53,8 @@ final class AppModel {
         let lexicon = SpellCheckerLexicon(languages: { settings.enabledLanguages })
         let dictionaryStore = DictionaryStore()
         self.dictionaryStore = dictionaryStore
+        let snippetStore = SnippetStore()
+        self.snippetStore = snippetStore
         do {
             history = try HistoryStore()
         } catch {
@@ -77,7 +80,8 @@ final class AppModel {
             cleaner: CleanupPipeline(level: { settings.cleanupLevel }, rewriter: rewriter,
                                      dictionary: { dictionaryStore.dictionary },
                                      isKnownWord: { lexicon.isKnown($0) },
-                                     style: { settings.style(for: $0) }),
+                                     style: { settings.style(for: $0) },
+                                     snippets: { snippetStore.snippets }),
             injector: SwitchingInjector(mode: { settings.outputMode }, insert: PasteboardInjector(),
                                         copy: ClipboardCopier()),
             contextProvider: {
