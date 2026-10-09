@@ -5,16 +5,22 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
-            Tab("General", systemImage: "gearshape") { GeneralTab(model: model) }
-            Tab("Speech", systemImage: "waveform") { SpeechTab(model: model) }
-            Tab("Languages", systemImage: "globe") { LanguagesTab(model: model) }
-            Tab("Cleanup", systemImage: "sparkles") { CleanupTab(model: model) }
-            Tab("Dictionary", systemImage: "character.book.closed") { DictionaryTab(store: model.dictionaryStore) }
-            Tab("Snippets", systemImage: "text.badge.plus") { SnippetsTab(store: model.snippetStore) }
-            Tab("Commands", systemImage: "command") { CommandsTab(store: model.commandStore) }
-            Tab("History", systemImage: "clock") { HistoryTab(model: model) }
-            Tab("Appearance", systemImage: "paintpalette") { AppearanceTab(model: model) }
-            Tab("Help", systemImage: "questionmark.circle") { HelpTab(model: model) }
+            // Two groups: a builder block takes at most ten tabs.
+            Group {
+                Tab("General", systemImage: "gearshape") { GeneralTab(model: model) }
+                Tab("Speech", systemImage: "waveform") { SpeechTab(model: model) }
+                Tab("Models", systemImage: "arrow.down.circle") { ModelsTab(model: model) }
+                Tab("Languages", systemImage: "globe") { LanguagesTab(model: model) }
+                Tab("Cleanup", systemImage: "sparkles") { CleanupTab(model: model) }
+                Tab("Dictionary", systemImage: "character.book.closed") { DictionaryTab(store: model.dictionaryStore) }
+                Tab("Snippets", systemImage: "text.badge.plus") { SnippetsTab(store: model.snippetStore) }
+                Tab("Commands", systemImage: "command") { CommandsTab(store: model.commandStore) }
+            }
+            Group {
+                Tab("History", systemImage: "clock") { HistoryTab(model: model) }
+                Tab("Appearance", systemImage: "paintpalette") { AppearanceTab(model: model) }
+                Tab("Help", systemImage: "questionmark.circle") { HelpTab(model: model) }
+            }
         }
         // 700 wide so captions and examples rarely wrap; 780 tall (fits a 982 pt screen with the
         // menu bar and title bar) so the long tabs need little scrolling.

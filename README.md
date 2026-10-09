@@ -15,8 +15,8 @@ Private, on-device dictation for macOS. Hold **fn**, speak, release — your wor
 - **Edit by voice** — select text, hold **fn+⌃**, say "make this more formal" or "translate to Swedish", and the selection is rewritten in place (⌘Z undoes it).
 - **Write with nothing selected** — hold fn+⌃ with the cursor in a text field and say what to write ("reply that I'll be there at three"). Wiska uses the text around the cursor (read on your Mac, never stored) as context.
 - **Saved commands** — name instructions you use often ("formal", "fix", "shorter", "bullets" ship by default) and start a command with the name. Settings → Commands.
-- **Local model (optional)** — download Gemma 4 E4B (5.2 GB) in Settings → Cleanup for better grammar and Swedish, also on Macs without Apple Intelligence. *Fix grammar* corrects mistakes like "I has a apple". *Compare models…* shows how it does against Apple Intelligence on your Mac.
-- **KB-Whisper for Swedish (optional)** — download the National Library of Sweden's Whisper (1.1 GB) in Settings → Speech; Swedish dictations are re-transcribed by it for fewer mishearings. *Compare on my voice…* measures each engine on your own reading.
+- **Local model (optional)** — download Gemma 4 E4B (5.2 GB) in Settings → Models, then choose it in Settings → Cleanup, for better grammar and Swedish, also on Macs without Apple Intelligence. *Fix grammar* corrects mistakes like "I has a apple". *Compare models…* shows how it does against Apple Intelligence on your Mac.
+- **KB-Whisper for Swedish (optional)** — download the National Library of Sweden's Whisper (1.1 GB) in Settings → Models and switch it on in Settings → Speech; Swedish dictations are re-transcribed by it for fewer mishearings. *Compare on my voice…* measures each engine on your own reading.
 - **Personal dictionary** — names and terms spelled your way, plus custom replacements.
 - **History** — search and filter past dictations, see exactly what cleanup changed, and track words per day, time saved, top apps and languages. Kept for as long as you choose (or not at all).
 - **Insert or copy** — paste into the active app, or only copy to the clipboard.
@@ -45,7 +45,7 @@ Settings has a **Help** tab with examples, voice commands for each of your langu
 
 ## Privacy
 
-Speech recognition, cleanup and editing all run on your Mac. Wiska makes no network requests except downloading speech models when you ask for them (Apple's language assets, or the Parakeet model from Hugging Face) and, if Parakeet is installed, a small check whether a newer Parakeet model exists (weekly by default; daily, monthly or never in Settings) — turn it off with Settings → Speech → Check for model updates → Never. History is stored locally in `~/Library/Application Support/Wiska` and can be turned off.
+Speech recognition, cleanup and editing all run on your Mac. Wiska makes no network requests except downloading models when you ask for them (Apple's language assets, or Parakeet, KB-Whisper and Gemma from Hugging Face in Settings → Models) and, for downloaded models, a small check whether a newer version exists (weekly by default) — turn it off with Settings → Models → Check for model updates → Never. History is stored locally in `~/Library/Application Support/Wiska` and can be turned off.
 
 ## Building from source
 

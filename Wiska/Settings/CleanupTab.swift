@@ -7,15 +7,25 @@ struct CleanupTab: View {
     let model: AppModel
     @State private var comparing = false
 
+    /// Downloaded models only — plus the current choice while Gemma is being updated.
+    private func languageModels(including current: LanguageModelChoice) -> [LanguageModelChoice] {
+        let offered = LanguageModelChoice.offered(gemmaInstalled: model.gemmaStore.isInstalled)
+        return offered.contains(current) ? offered : offered + [current]
+    }
+
+
     var body: some View {
         @Bindable var settings = model.settings
         Form {
             Section("Language model") {
                 Picker("Model", selection: Binding(get: { settings.languageModel },
                                                    set: { model.chooseLanguageModel($0) })) {
-                    ForEach(LanguageModelChoice.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    ForEach(languageModels(including: settings.languageModel), id: \.self) { Text($0.displayName).tag($0) }
                 }
-                GemmaCard(model: model)
+                if !model.gemmaStore.isInstalled {
+                    Text("Download Gemma 4 E4B in the Models tab for better grammar and Swedish, also without Apple Intelligence.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Toggle("Fix grammar", isOn: $settings.fixGrammar)
                 Text("Light and Polished also fix grammar mistakes — “He go… buyed” → “He went… bought”, “en stort hus” → “ett stort hus”.")
                     .font(.caption).foregroundStyle(.secondary)

@@ -36,6 +36,8 @@ final class AppModel {
     let gemmaUpdates: ModelUpdateChecker
     let kbWhisperStore: KBWhisperModelStore
     let kbWhisper: KBWhisperRecognizer
+    /// Checks whether a newer KB-Whisper has been published (Settings → Models).
+    let kbWhisperUpdates: ModelUpdateChecker
     @ObservationIgnored private var cleanupRewriter: SwitchingRewriter!
     @ObservationIgnored private var appleEditor: FoundationModelsEditor!
     @ObservationIgnored private var localRewriter: LocalRewriter!
@@ -101,7 +103,13 @@ final class AppModel {
                                           setLastCheck: { settings.lastGemmaUpdateCheck = $0 })
         let kbWhisperStore = KBWhisperModelStore()
         self.kbWhisperStore = kbWhisperStore
-        self.kbWhisper = KBWhisperRecognizer(store: kbWhisperStore)
+        let kbWhisper = KBWhisperRecognizer(store: kbWhisperStore)
+        self.kbWhisper = kbWhisper
+        kbWhisperUpdates = ModelUpdateChecker(store: kbWhisper,
+                                              source: HuggingFaceRevisionSource(repo: KBWhisperModelStore.repo),
+                                              interval: { settings.modelUpdateInterval },
+                                              lastCheck: { settings.lastKBWhisperUpdateCheck },
+                                              setLastCheck: { settings.lastKBWhisperUpdateCheck = $0 })
         let localRewriter = LocalRewriter(generator: gemma)
         let cleanupRewriter = SwitchingRewriter(choice: { settings.languageModel }, apple: rewriter, local: localRewriter)
         let appleEditor = FoundationModelsEditor()
@@ -213,6 +221,9 @@ final class AppModel {
                 if let self, await gemmaUpdates.checkIfDue() {
                     flash("Gemma update available", for: .seconds(2))
                 }
+                if let self, await kbWhisperUpdates.checkIfDue() {
+                    flash("KB-Whisper update available", for: .seconds(2))
+                }
                 try? await Task.sleep(for: .seconds(3_600))
             }
         }
@@ -277,10 +288,25 @@ final class AppModel {
         return engines
     }
 
-    /// Picking Gemma before it's downloaded starts the download.
+    /// Settings → Models → Remove: the model goes, and every choice of it goes back to Apple.
+    func removeParakeet() {
+        parakeetStore.remove()
+        settings.stopUsingParakeet()
+    }
+
+    func removeGemma() {
+        gemma.remove()
+        if settings.languageModel == .gemma { settings.languageModel = .apple }
+    }
+
+    func removeKBWhisper() {
+        kbWhisper.remove()
+        settings.useKBWhisper = false
+    }
+
+    /// The Cleanup tab's model picker (only downloaded models are offered).
     func chooseLanguageModel(_ choice: LanguageModelChoice) {
         settings.languageModel = choice
-        if choice == .gemma, gemmaStore.status == .notDownloaded { gemmaStore.download() }
         if choice == .gemma { gemma.prepare() } else { gemma.unload() }   // ~5 GB back when not in use
     }
 

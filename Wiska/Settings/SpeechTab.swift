@@ -18,7 +18,7 @@ struct SpeechTab: View {
                 switch settings.engineMode {
                 case .same:
                     Picker("Engine", selection: $settings.engine) {
-                        ForEach(SpeechEngine.selectable, id: \.self) { Text($0.displayName).tag($0) }
+                        ForEach(engines(including: settings.engine), id: \.self) { Text($0.displayName).tag($0) }
                     }
                 case .perLanguage:
                     ForEach(settings.enabledLanguages, id: \.self) { language in
@@ -26,11 +26,16 @@ struct SpeechTab: View {
                                selection: Binding(get: { settings.engine(for: language) },
                                                   set: { settings.setEngine($0, for: language)
                                                          model.warmUpParakeetIfSelected() })) {
-                            ForEach(SpeechEngine.selectable, id: \.self) { Text($0.displayName).tag($0) }
+                            ForEach(engines(including: settings.engine(for: language)), id: \.self) {
+                                Text($0.displayName).tag($0)
+                            }
                         }
                     }
                 }
-                ParakeetCard(store: model.parakeetStore, updates: model.modelUpdates, settings: model.settings)
+                if !model.parakeetStore.isInstalled {
+                    Text("More speech models (Parakeet, KB-Whisper for Swedish) in the Models tab.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if model.parakeetUnavailable {
                     Text("Parakeet is selected but not ready — Apple is used until it is.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -38,10 +43,19 @@ struct SpeechTab: View {
             }
             .onChange(of: settings.engine) { model.warmUpParakeetIfSelected() }
             .onChange(of: settings.engineMode) { model.warmUpParakeetIfSelected() }
-            // Also shown when installed without Swedish ticked, so it can still be removed.
-            if model.settings.enabledLanguages.contains(.swedish) || model.kbWhisperStore.status != .notDownloaded {
+            if settings.enabledLanguages.contains(.swedish) {
                 Section("Swedish") {
-                    KBWhisperCard(model: model)
+                    if model.kbWhisperStore.isInstalled {
+                        Toggle("Use KB-Whisper for Swedish", isOn: Binding(get: { settings.useKBWhisper }, set: { on in
+                            settings.useKBWhisper = on
+                            if on { model.kbWhisper.prepare() } else { model.kbWhisper.unload() }
+                        }))
+                        Text("Swedish dictations are transcribed again by KB-Whisper after you release fn; the live preview still comes from your engine.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Text("For fewer Swedish mishearings, download KB-Whisper in the Models tab.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     Button("Compare on my voice…") { comparingVoice = true }
                 }
             }
@@ -49,69 +63,11 @@ struct SpeechTab: View {
         .formStyle(.grouped)
         .sheet(isPresented: $comparingVoice) { VoiceCompareView(model: model) }
     }
-}
 
-private struct ParakeetCard: View {
-    let store: ParakeetModelStore
-    let updates: ModelUpdateChecker
-    let settings: SettingsStore
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Parakeet TDT 0.6B v3")
-                Text("On-device, 25 languages. About 470 MB, downloaded from Hugging Face only when you click Download.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            switch store.status {
-            case .notDownloaded:
-                Button("Download") { store.download() }
-            case .downloading(let fraction):
-                ProgressView(value: fraction).frame(width: 90)
-                Button("Cancel") { store.cancelDownload() }
-            case .ready:
-                Label("Ready", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                Button("Remove") { store.remove() }
-            case .failed(let message):
-                Text(message).font(.caption).foregroundStyle(.red).lineLimit(2)
-                Button("Retry") { store.download() }
-            }
-        }
-        if store.status == .ready {
-            @Bindable var settings = settings
-            HStack {
-                Text(updateStatus).font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                if case .updateAvailable = updates.state {
-                    Button("Download update") { updates.downloadUpdate() }
-                }
-                Button("Check now") { Task { await updates.checkNow() } }
-                    .disabled(updates.state == .checking)
-            }
-            if case .updateAvailable = updates.state {
-                Text("Downloading replaces the current model; Apple is used until the download finishes.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Picker("Check for model updates", selection: $settings.modelUpdateInterval) {
-                ForEach(SettingsStore.modelUpdateIntervals, id: \.self) { days in
-                    Text(Self.intervalLabel(days)).tag(days)
-                }
-            }
-        }
-        }
-    }
-
-    private var updateStatus: String {
-        ModelUpdateChecker.statusText(updates.state, lastCheck: settings.lastModelUpdateCheck)
-    }
-
-    static func intervalLabel(_ days: Int) -> String {
-        switch days {
-        case 0: "Never"
-        case 1: "Every day"
-        default: "Every \(days) days"
-        }
+    /// Downloaded engines only — plus the current choice, so the picker never shows a blank while
+    /// Parakeet is being updated.
+    private func engines(including current: SpeechEngine) -> [SpeechEngine] {
+        let offered = SpeechEngine.offered(parakeetInstalled: model.parakeetStore.isInstalled)
+        return offered.contains(current) || current == .kbWhisper ? offered : offered + [current]
     }
 }
