@@ -1,5 +1,7 @@
 # Wiska M15 — Voice snippets
 
+> **Revised after the user's first try (2026-10-09):** the "insert word + possessive + name" grammar was replaced by **exact phrases**. A snippet is *When I say <phrase(s)> → Insert <text>*; a phrase triggers anywhere in a dictation (case/punctuation-insensitive, one-letter mishearings and plurals on words of 5+ letters tolerated, longest phrase wins). The per-language insert words and possessives are removed. Settings shows each snippet as a card with labelled fields, warnings (no phrase, no text, one-word phrase), a "Try it" box (`SnippetPreview.expand`), and a how-to with an example. Old snippets (name/aliases) load as phrases. Sections below that describe the name/insert-word rules are superseded by this note.
+
 ## Goal
 
 Say "insert my signature" (or "infoga min adress") anywhere in a dictation and get saved text, exactly as written, at that spot.

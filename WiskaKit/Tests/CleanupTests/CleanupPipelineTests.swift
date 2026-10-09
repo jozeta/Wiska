@@ -48,8 +48,8 @@ struct CleanupPipelineTests {
         try await p.clean(text, context: context)
     }
 
-    static let signature = Snippet(name: "signature", text: "Best regards,\nJohan")
-    static let address = Snippet(name: "address", text: "Storgatan 1, 111 22 Stockholm")
+    static let signature = Snippet(phrases: ["insert my signature"], text: "Best regards,\nJohan")
+    static let address = Snippet(phrases: ["insert my address"], text: "Storgatan 1, 111 22 Stockholm")
 
     func snippetPipeline(_ level: CleanupLevel = .polished, style: WritingStyle = .formal) -> CleanupPipeline {
         CleanupPipeline(level: { level }, rewriter: rewriter, style: { _ in style },

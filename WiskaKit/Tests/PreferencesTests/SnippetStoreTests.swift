@@ -9,7 +9,7 @@ struct SnippetStoreTests {
 
     @Test func addsUpdatesRemovesAndPersists() {
         let store = SnippetStore(url: url)
-        let snippet = Snippet(name: "signature", aliases: ["signatur"], text: "Best regards,\nJohan")
+        let snippet = Snippet(phrases: ["insert my signature", "infoga min signatur"], text: "Best regards,\nJohan")
         store.add(snippet)
         var edited = snippet
         edited.text = "Cheers,\nJohan"
@@ -26,16 +26,12 @@ struct SnippetStoreTests {
         #expect(FileManager.default.fileExists(atPath: aside.path))
     }
 
-    @Test func spokenNamesSkipBlanks() {
-        let snippet = Snippet(name: " Address ", aliases: ["", "adress"], text: "x")
-        #expect(snippet.spokenNames == ["Address", "adress"])
-    }
 
     /// A snippet left without a name and text (an abandoned "Add Snippet") is removed.
     @Test func emptySnippetIsRemoved() {
         let store = SnippetStore(url: url)
-        let blank = Snippet(name: "", text: "")
-        let kept = Snippet(name: "sig", text: "x")
+        let blank = Snippet(phrases: [], text: "")
+        let kept = Snippet(phrases: ["insert sig"], text: "x")
         store.add(blank)
         store.add(kept)
         store.removeIfEmpty(id: blank.id)

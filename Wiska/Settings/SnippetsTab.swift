@@ -1,98 +1,140 @@
+import Cleanup
 import Core
 import Preferences
 import SwiftUI
 
-/// Saved texts inserted by voice ("insert my signature").
+/// Saved texts inserted by voice: "When I say <phrase> → Insert <text>".
 struct SnippetsTab: View {
     let store: SnippetStore
-    @State private var selection: UUID?
+    @State private var trial = ""
 
     var body: some View {
         Form {
-            Section {
+            Section("How snippets work") {
+                Text("Save a phrase and the text it stands for. Say the phrase anywhere in a dictation, and the text is inserted exactly as you wrote it — in any app, line breaks included.")
+                    .font(.callout)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Example").font(.caption.bold()).foregroundStyle(.secondary)
+                    Text("When I say  **insert my signature**  →  Insert  **Best regards, Johan**")
+                    Text("Dictate “thanks for the help, insert my signature” and you get the sentence, then your signature on its own lines.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Text("Tip: use a phrase you wouldn't say by accident, like “insert my …”. Add a second phrase for another language, like “infoga min signatur”.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("Try it") {
+                TextField("Type what you would say, e.g. “thanks, insert my signature”", text: $trial)
+                if !trial.isEmpty {
+                    let result = SnippetPreview.expand(trial, snippets: store.snippets)
+                    if result == trial {
+                        Text("No snippet phrase in this sentence — it would be typed as you said it.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Wiska would insert:").font(.caption).foregroundStyle(.secondary)
+                            Text(result).textSelection(.enabled)
+                        }
+                    }
+                }
+            }
+
+            Section("Your snippets") {
                 if store.snippets.isEmpty {
-                    Text("No snippets yet.").foregroundStyle(.secondary)
+                    Text("No snippets yet — add one below.").foregroundStyle(.secondary)
                 }
                 ForEach(store.snippets) { snippet in
-                    Button {
-                        selection = selection == snippet.id ? nil : snippet.id
-                    } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(snippet.name.isEmpty ? "Untitled" : snippet.name)
-                            Text(snippet.text.components(separatedBy: "\n").first ?? "")
-                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    if selection == snippet.id {
-                        SnippetEditor(snippet: snippet, store: store) { selection = nil }
-                    }
+                    SnippetCard(store: store, id: snippet.id)
                 }
-                Button("Add Snippet") {
-                    let snippet = Snippet(name: "", text: "")
-                    store.add(snippet)
-                    selection = snippet.id
+                Button {
+                    store.add(Snippet(phrases: [""], text: ""))
+                } label: {
+                    Label("Add Snippet", systemImage: "plus")
                 }
-            } header: {
-                Text("Snippets")
-            } footer: {
-                Text("Say “insert my <name>” — in Swedish “infoga min <name>” — anywhere in a dictation. The text is inserted exactly as written.")
-                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
-        .frame(height: 440)
+        .frame(height: 520)
+        // Snippets left with neither a phrase nor text don't stay behind.
+        .onDisappear {
+            for snippet in store.snippets { store.removeIfEmpty(id: snippet.id) }
+        }
     }
 }
 
-private struct SnippetEditor: View {
-    let snippet: Snippet
+/// One snippet, edited in place; every change is saved straight away.
+private struct SnippetCard: View {
     let store: SnippetStore
-    let close: () -> Void
-    @State private var name = ""
-    @State private var aliases = ""
-    @State private var text = ""
+    let id: UUID
+
+    private var snippet: Snippet? { store.snippets.first { $0.id == id } }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            TextField("Name (what you say)", text: $name)
-            TextField("Other names, comma-separated", text: $aliases)
-            TextEditor(text: $text)
-                .font(.body)
-                .frame(minHeight: 80)
-                .overlay(RoundedRectangle(cornerRadius: 4).stroke(.quaternary))
-            HStack {
-                Button("Delete", role: .destructive) {
-                    store.remove(id: snippet.id)
-                    close()
+        if let snippet {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("When I say").font(.caption.bold()).foregroundStyle(.secondary)
+                ForEach(snippet.phrases.indices, id: \.self) { index in
+                    HStack {
+                        TextField("e.g. insert my signature", text: phraseBinding(index))
+                        if snippet.phrases.count > 1 {
+                            Button {
+                                change { $0.phrases.remove(at: index) }
+                            } label: { Image(systemName: "minus.circle") }
+                            .buttonStyle(.borderless).help("Remove this phrase")
+                        }
+                    }
                 }
-                Spacer()
-                Button("Done") { close() }
-                    .keyboardShortcut(.defaultAction)
+                Button("Add another phrase") { change { $0.phrases.append("") } }
+                    .buttonStyle(.link).font(.caption)
+
+                Text("Insert").font(.caption.bold()).foregroundStyle(.secondary)
+                TextEditor(text: textBinding)
+                    .font(.body)
+                    .frame(minHeight: 70)
+                    .overlay(alignment: .topLeading) {
+                        if snippet.text.isEmpty {
+                            Text("e.g. Best regards,\nJohan Zetterström")
+                                .foregroundStyle(.tertiary).padding(.leading, 5).padding(.top, 1)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(.quaternary))
+
+                ForEach(Array(snippet.problems.enumerated()), id: \.offset) { _, problem in
+                    Label(Self.message(problem), systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+                HStack {
+                    Spacer()
+                    Button("Delete Snippet", role: .destructive) { store.remove(id: id) }
+                        .font(.caption)
+                }
             }
+            .padding(.vertical, 4)
         }
-        .onAppear {
-            name = snippet.name
-            aliases = snippet.aliases.joined(separator: ", ")
-            text = snippet.text
-        }
-        // Saved as you type: closing the editor any way (another row, another tab) keeps the edits.
-        .onChange(of: name) { save() }
-        .onChange(of: aliases) { save() }
-        .onChange(of: text) { save() }
-        // An abandoned "Add Snippet" doesn't leave an empty row behind.
-        .onDisappear { store.removeIfEmpty(id: snippet.id) }
     }
 
-    private func save() {
-        var edited = snippet
-        edited.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        edited.aliases = aliases.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        edited.text = text
-        guard edited != snippet else { return }
+    static func message(_ problem: Snippet.Problem) -> String {
+        switch problem {
+        case .noPhrase: "Add a phrase to say — without one, this snippet can't be used."
+        case .noText: "Add the text to insert."
+        case .oneWordPhrase(let word):
+            "“\(word)” is a single word, so it would also fire in ordinary sentences. Try “insert my \(word)”."
+        }
+    }
+
+    private func change(_ edit: (inout Snippet) -> Void) {
+        guard var edited = snippet else { return }
+        edit(&edited)
         store.update(edited)
+    }
+
+    private func phraseBinding(_ index: Int) -> Binding<String> {
+        Binding(get: { snippet.flatMap { $0.phrases.indices.contains(index) ? $0.phrases[index] : nil } ?? "" },
+                set: { value in change { if $0.phrases.indices.contains(index) { $0.phrases[index] = value } } })
+    }
+
+    private var textBinding: Binding<String> {
+        Binding(get: { snippet?.text ?? "" }, set: { value in change { $0.text = value } })
     }
 }

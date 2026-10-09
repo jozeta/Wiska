@@ -37,9 +37,12 @@ struct HelpTab: View {
                 }
             }
             Section("Snippets") {
-                tip("Insert saved text", "Say “insert my signature” (Swedish: “infoga min signatur”) anywhere in a dictation. Add snippets in the Snippets tab.")
-                ForEach(model.snippetStore.snippets.filter { !$0.name.isEmpty }) { snippet in
-                    LabeledContent(snippet.name, value: "“insert my \(snippet.name)”")
+                tip("When I say … → Insert …", "In the Snippets tab, save a phrase (“insert my signature”) and the text it stands for. Say the phrase anywhere in a dictation and the text is inserted exactly as written.")
+                tip("Example", "“thanks for the help, insert my signature” → the sentence, then your signature on its own lines.")
+                tip("Check without dictating", "Type a sentence in Snippets → Try it to see what would be inserted.")
+                ForEach(model.snippetStore.snippets.filter { $0.problems.isEmpty }) { snippet in
+                    LabeledContent("“\(snippet.spokenPhrases.joined(separator: "” or “"))”",
+                                   value: snippet.text.components(separatedBy: "\n").first ?? "")
                 }
             }
             Section("Styles") {

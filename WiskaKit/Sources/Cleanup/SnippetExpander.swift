@@ -1,59 +1,67 @@
 import Core
 import Foundation
 
-/// Voice snippets: "insert my signature" becomes a placeholder word before cleanup, and the
-/// snippet's text replaces it after the style — so nothing ever rewrites the snippet.
+/// Shows what a dictation becomes with the user's snippets (Settings → Snippets → Try it).
+public enum SnippetPreview {
+    public static func expand(_ text: String, snippets: [Snippet]) -> String {
+        let extracted = SnippetExpander.extract(text, snippets: snippets)
+        return SnippetExpander.fill(extracted.text, slots: extracted.slots)
+    }
+}
+
+/// Voice snippets: a spoken phrase ("insert my signature") becomes a placeholder word before
+/// cleanup, and the snippet's text replaces it after the style — so nothing rewrites the snippet.
 enum SnippetExpander {
     static let placeholderStem = "wiskasnippet"
 
-    static func extract(_ text: String, snippets: [Snippet], rules: FormatRules) -> (text: String, slots: [String: Snippet]) {
-        let names = snippets.flatMap { snippet in
-            snippet.spokenNames.map { (words: words($0), snippet: snippet) }
-        }.filter { !$0.words.isEmpty }.sorted { $0.words.count > $1.words.count }
-        guard !names.isEmpty else { return (text, [:]) }
+    /// Replaces every spoken snippet phrase with a placeholder word. Text without a phrase comes
+    /// back untouched.
+    static func extract(_ text: String, snippets: [Snippet]) -> (text: String, slots: [String: Snippet]) {
+        let phrases = snippets
+            .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .flatMap { snippet in snippet.spokenPhrases.map { (words: words($0), snippet: snippet) } }
+            .filter { !$0.words.isEmpty }
+            .sorted { $0.words.count > $1.words.count }   // the longest phrase wins
+        guard !phrases.isEmpty else { return (text, [:]) }
         var slots: [String: Snippet] = [:]
-
-        func slot(for snippet: Snippet) -> String {
-            let key = "\(placeholderStem)\(slots.count + 1)"
-            slots[key] = snippet
-            return key
-        }
-
-        // Whole dictation: just "[my] address".
-        let all = text.split(whereSeparator: \.isWhitespace).map(String.init)
-        var rest = all.map(bare)
-        if let possessive = rules.possessives.first(where: { rest.starts(with: $0) }) { rest.removeFirst(possessive.count) }
-        if let match = names.first(where: { matches(rest[...], $0.words) && rest.count == $0.words.count }) {
-            return (slot(for: match.snippet), slots)
-        }
-
         var lines: [String] = []
         for line in text.components(separatedBy: "\n") {
             let tokens = line.split(whereSeparator: \.isWhitespace).map(String.init)
+            let bareTokens = tokens.map(bare)
             var current: [String] = []
             var index = 0
+            var changed = false
             while index < tokens.count {
-                guard let found = trigger(at: index, in: tokens, names: names, rules: rules) else {
+                guard let found = phrases.first(where: { phrase in
+                    index + phrase.words.count <= tokens.count
+                        && matches(bareTokens[index..<index + phrase.words.count], phrase.words)
+                }) else {
                     current.append(tokens[index])
                     index += 1
                     continue
                 }
-                let key = slot(for: found.snippet)
+                changed = true
+                let end = index + found.words.count
+                let key = "\(placeholderStem)\(slots.count + 1)"
+                slots[key] = found.snippet
                 if found.snippet.text.contains("\n") {
                     if !current.isEmpty { lines.append(current.joined(separator: " ")) }
                     lines.append(key)
                     current = []
                 } else {
-                    // Keep the sentence's punctuation after the name ("address." → "<slot>.").
-                    let last = tokens[found.end - 1]
-                    let trailing = String(last.reversed().prefix { $0.isPunctuation }.reversed())
+                    // Keep the sentence's punctuation after the phrase ("address." → "<slot>.").
+                    let trailing = String(tokens[end - 1].reversed().prefix { $0.isPunctuation }.reversed())
                     current.append(key + trailing)
                 }
-                index = found.end
+                index = end
             }
-            if !current.isEmpty || tokens.isEmpty { lines.append(current.joined(separator: " ")) }
+            if !changed {
+                lines.append(line)   // untouched, spacing and all
+            } else if !current.isEmpty {
+                lines.append(current.joined(separator: " "))
+            }
         }
-        return (lines.joined(separator: "\n"), slots)
+        return slots.isEmpty ? (text, [:]) : (lines.joined(separator: "\n"), slots)
     }
 
     static func fill(_ text: String, slots: [String: Snippet]) -> String {
@@ -91,24 +99,6 @@ enum SnippetExpander {
     }
 
     // MARK: Matching
-
-    private static func trigger(at index: Int, in tokens: [String], names: [(words: [String], snippet: Snippet)],
-                                rules: FormatRules) -> (snippet: Snippet, end: Int)? {
-        let bareTokens = tokens.map(bare)
-        guard let insert = rules.insertWords.first(where: { phrase in
-            index + phrase.count <= bareTokens.count && Array(bareTokens[index..<index + phrase.count]) == phrase
-        }) else { return nil }
-        var start = index + insert.count
-        if let possessive = rules.possessives.first(where: { phrase in
-            start + phrase.count <= bareTokens.count && Array(bareTokens[start..<start + phrase.count]) == phrase
-        }) { start += possessive.count }
-        for name in names where start + name.words.count <= bareTokens.count {
-            if matches(bareTokens[start..<start + name.words.count], name.words) {
-                return (name.snippet, start + name.words.count)
-            }
-        }
-        return nil
-    }
 
     private static func matches(_ spoken: ArraySlice<String>, _ name: [String]) -> Bool {
         guard spoken.count == name.count else { return false }

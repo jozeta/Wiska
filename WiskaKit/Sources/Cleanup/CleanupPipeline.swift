@@ -49,8 +49,7 @@ public final class CleanupPipeline: TextCleaner {
         let rules = context.language?.rules ?? LanguageRules.merged(context.enabledLanguages)
         let format = context.language?.formatRules ?? FormatRules.merged(context.enabledLanguages)
         // Snippets first: their text never passes through cleanup (placeholders stand in).
-        let extracted = SnippetExpander.extract(VoiceCommands.apply(text, rules: rules), snippets: snippets(),
-                                                rules: format)
+        let extracted = SnippetExpander.extract(VoiceCommands.apply(text, rules: rules), snippets: snippets())
         let slots = extracted.slots
         // The dictionary is spelling, not cleanup: it applies at every level.
         let corrected = DictionaryCorrector.apply(extracted.text, dictionary: dictionary, isKnownWord: isKnownWord)
