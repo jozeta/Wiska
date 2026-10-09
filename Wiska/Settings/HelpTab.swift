@@ -38,7 +38,7 @@ struct HelpTab: View {
             }
             Section("Writing and saved commands") {
                 tip("Write with nothing selected", "Click where the text should go, hold fn+⌃ and say what to write — “reply that I'll be there at three”. Wiska reads the text around the cursor on your Mac (never stored) and writes in its language. ⌘Z removes it.")
-                tip("Saved commands", "Start with a command's phrase — “formal” — and Wiska uses its instruction. Words after it are added: “formal, and a bit shorter”. Set them up in the Commands tab.")
+                tip("Saved commands", "Say a command's phrase — “formal” — and Wiska uses its instruction. Add more after a comma or “and”: “formal and a bit shorter”. A sentence that just starts with the word (“fix the second sentence”) is used as you said it. Set them up in the Commands tab.")
                 ForEach(model.commandStore.commands.filter { $0.problems.isEmpty }) { command in
                     LabeledContent("“\(command.spokenPhrases.joined(separator: "” or “"))”", value: command.instruction)
                 }

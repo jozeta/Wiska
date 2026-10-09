@@ -24,7 +24,9 @@ struct SavedCommandTests {
 
     @Test func extraWordsAreAppended() {
         #expect(CommandResolver.resolve("formal and shorter", commands: [formal])
-                == "Rewrite in a formal, polite tone. Also: and shorter")
+                == "Rewrite in a formal, polite tone. Also: shorter")
+        #expect(CommandResolver.resolve("Formal, then translate to Swedish", commands: [formal])
+                == "Rewrite in a formal, polite tone. Also: translate to Swedish")
         // An instruction without a final full stop still reads as two sentences.
         let bare = SavedCommand(phrases: ["swedish"], instruction: "Translate to Swedish")
         #expect(CommandResolver.resolve("Swedish, keep it short.", commands: [bare])
@@ -33,8 +35,19 @@ struct SavedCommandTests {
 
     @Test func misheardAndLongestPhraseWin() {
         #expect(CommandResolver.resolve("formel", commands: [formal]) == "Rewrite in a formal, polite tone.")
-        #expect(CommandResolver.resolve("Formal email please", commands: [formal, formalEmail])
+        #expect(CommandResolver.resolve("Formal email, please", commands: [formal, formalEmail])
                 == "Rewrite as a formal email. Also: please")
+    }
+
+    /// A command word that starts an ordinary instruction isn't the command: only the phrase
+    /// alone, or followed by a comma or "and"/"then", is.
+    @Test func phraseStartingASentenceIsNotACommand() {
+        let fix = SavedCommand(phrases: ["fix"], instruction: "Fix spelling and grammar. Change nothing else.")
+        #expect(CommandResolver.resolve("fix the second sentence and translate it", commands: [fix])
+                == "fix the second sentence and translate it")
+        #expect(CommandResolver.resolve("Formal email please", commands: [formal]) == "Formal email please")
+        #expect(CommandResolver.resolve("fix och gör den kortare", commands: [fix])
+                == "Fix spelling and grammar. Change nothing else. Also: gör den kortare")
     }
 
     @Test func noMatchKeepsTheSpokenWords() {

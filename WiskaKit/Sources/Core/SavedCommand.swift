@@ -37,8 +37,13 @@ public struct SavedCommand: Codable, Equatable, Identifiable, Sendable {
 
 /// Turns what was said with fn+⌃ into the model's instruction.
 public enum CommandResolver {
-    /// A command phrase at the start uses its instruction; words after it are added as
-    /// "Also: …". Anything else is used as said.
+    /// Words that join a command to more instructions ("formal and shorter").
+    static let connectors: Set<String> = ["and", "then", "also", "plus", "och", "sen", "sedan", "samt",
+                                          "und", "dann", "et", "puis", "y", "luego", "og", "så"]
+
+    /// A command phrase said alone, or followed by a comma (or other mark) or a connector word,
+    /// uses its instruction; words after it are added as "Also: …". Anything else — including
+    /// an ordinary sentence that happens to start with a command word — is used as said.
     public static func resolve(_ spoken: String, commands: [SavedCommand]) -> String {
         let tokens = spoken.split(whereSeparator: \.isWhitespace).map(String.init)
         let bareTokens = tokens.map(PhraseMatcher.bare)
@@ -47,12 +52,20 @@ public enum CommandResolver {
             .flatMap { command in command.spokenPhrases.map { (words: PhraseMatcher.bareWords($0), command: command) } }
             .filter { !$0.words.isEmpty }
             .sorted { $0.words.count > $1.words.count }   // the longest phrase wins
+        func separated(after count: Int) -> Bool {
+            count == tokens.count || tokens[count - 1].last?.isPunctuation == true || connectors.contains(bareTokens[count])
+        }
         guard let found = phrases.first(where: { phrase in
             phrase.words.count <= tokens.count && PhraseMatcher.matches(bareTokens[0..<phrase.words.count], phrase.words)
+                && separated(after: phrase.words.count)
         }) else { return spoken }
         var instruction = found.command.instruction.trimmingCharacters(in: .whitespacesAndNewlines)
-        let extra = tokens.dropFirst(found.words.count).joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+        var rest = tokens.dropFirst(found.words.count)
+        // "formal and shorter": the joining word itself isn't part of the extra instruction.
+        if let first = rest.first, connectors.contains(PhraseMatcher.bare(first)) {
+            rest = rest.dropFirst()
+        }
+        let extra = rest.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
         guard !extra.isEmpty else { return instruction }
         if let last = instruction.last, !".!?…".contains(last) { instruction += "." }
         return "\(instruction) Also: \(extra)"

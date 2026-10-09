@@ -16,7 +16,7 @@ Decided with the user: the model sees the **text around the cursor** (read on-de
 
 **Saved commands:**
 - Settings → **Commands**: cards of **When I say** (one or more phrases) → **Do this** (an instruction), with warnings for no phrase or no instruction (one-word phrases are fine: commands are only heard with fn+⌃) and a **Try it** box showing the instruction Wiska would use for a typed phrase.
-- With fn+⌃, if what you said starts with a command phrase (case/punctuation-insensitive; one-letter mishearings and plurals on words of 5+ letters; longest phrase wins), the instruction is the command's; any extra words you said after the phrase are appended as "Also: <extra words>" (e.g. "formal" + "and shorter" → "Rewrite in a formal, polite tone. Also: and shorter"). Otherwise your words are the instruction, as today.
+- With fn+⌃, a command phrase (case/punctuation-insensitive; one-letter mishearings and plurals on words of 5+ letters; longest phrase wins) said **alone, or followed by a comma (or other mark) or a joining word** (“and”, “then”, “och”, …) uses the command's instruction; words after it are appended as "Also: <extra words>", without the joining word (e.g. "formal and shorter" → "Rewrite in a formal, polite tone. Also: shorter"). A sentence that merely starts with a command word ("fix the second sentence and translate it") is used as said — decided with the user after the final review.
 - Applies to editing (text selected) and writing (nothing selected).
 - Shipped defaults (created when `commands.json` doesn't exist; editable and deletable):
   - "fix" → "Fix spelling and grammar. Change nothing else."

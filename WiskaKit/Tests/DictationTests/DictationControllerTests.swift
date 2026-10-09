@@ -594,10 +594,10 @@ struct DictationControllerTests {
         transcriber.session.result = .success("Hello, and shorter")
         let controller = makeController()
         await runCommand(controller)
-        #expect(editor.calls.map(\.instruction) == ["Say hello formally. Also: and shorter"])
+        #expect(editor.calls.map(\.instruction) == ["Say hello formally. Also: shorter"])
         selection.text = nil
         await runCommand(controller)
-        #expect(editor.writes.map(\.instruction) == ["Say hello formally. Also: and shorter"])
+        #expect(editor.writes.map(\.instruction) == ["Say hello formally. Also: shorter"])
     }
 
     @Test func writingInASecureFieldReadsNothing() async {

@@ -10,7 +10,7 @@ struct CommandsTab: View {
     var body: some View {
         Form {
             Section {
-                Text("Hold fn+⌃ and start with a command's phrase — with text selected to change it, or with nothing selected to write something new. Words after the phrase are added to the instruction. More in the Help tab.")
+                Text("Hold fn+⌃ and start with a command's phrase — with text selected to change it, or with nothing selected to write something new. Say the phrase alone, or add more after a comma or “and”: “formal and a bit shorter”. More in the Help tab.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Try it") {
