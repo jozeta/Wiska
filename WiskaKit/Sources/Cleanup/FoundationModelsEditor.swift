@@ -69,11 +69,22 @@ public final class FoundationModelsEditor: TextEditor {
         do {
             output = try await race(Self.prompt(text: text, instruction: instruction), within: timeout(words))
         } catch {
-            throw EditError.failed
+            throw Self.editError(for: error)
         }
         let edited = Self.rewrap(original: text, edited: output)
         guard !edited.isEmpty else { throw EditError.failed }
         return edited
+    }
+
+    /// What a model error means for the user: a refusal won't change on retry; a full context
+    /// means the selection is too long.
+    static func editError(for error: Error) -> EditError {
+        guard let generation = error as? LanguageModelSession.GenerationError else { return .failed }
+        switch generation {
+        case .guardrailViolation, .refusal: return .refused
+        case .exceededContextWindowSize: return .tooLong
+        default: return .failed
+        }
     }
 
     /// Whichever finishes first wins; never waits for the model to honour cancellation.

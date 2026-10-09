@@ -99,7 +99,9 @@ public enum EditError: Error, Equatable, Sendable {
     case unavailable
     /// The selection is longer than the model can take.
     case tooLong
-    /// Timeout, refusal, error or empty output.
+    /// Apple Intelligence declined (safety guardrails): retrying won't help.
+    case refused
+    /// Timeout, error or empty output.
     case failed
 }
 

@@ -75,4 +75,16 @@ struct FoundationModelsEditorTests {
         // A model that echoes the fence doesn't paste it.
         #expect(FoundationModelsEditor.rewrap(original: "hi", edited: "<<<\nHi.\n>>>") == "Hi.")
     }
+
+    /// A refusal isn't fixed by retrying: it gets its own error, and a too-long context is "too long".
+    @Test func refusalsAndContextOverflowAreNamed() async {
+        let refused = FoundationModelsEditor(isAvailable: { true }, respond: { _ in
+            throw LanguageModelSession.GenerationError.guardrailViolation(.init(debugDescription: "test"))
+        }, timeout: { _ in .seconds(5) })
+        await #expect(throws: EditError.refused) { try await refused.edit("x", instruction: "y", language: nil) }
+        let overflow = FoundationModelsEditor(isAvailable: { true }, respond: { _ in
+            throw LanguageModelSession.GenerationError.exceededContextWindowSize(.init(debugDescription: "test"))
+        }, timeout: { _ in .seconds(5) })
+        await #expect(throws: EditError.tooLong) { try await overflow.edit("x", instruction: "y", language: nil) }
+    }
 }

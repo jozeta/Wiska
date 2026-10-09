@@ -280,6 +280,8 @@ public final class DictationController {
             fail(.selectionTooLong); return
         } catch EditError.failed {
             fail(.editFailed); return
+        } catch EditError.refused {
+            fail(.editRefused); return
         } catch InjectionError.secureInputActive {
             fail(.secureInput); return
         } catch {

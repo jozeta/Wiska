@@ -559,7 +559,7 @@ struct DictationControllerTests {
     }
 
     @Test(arguments: [(EditError.unavailable, DictationFailure.editUnavailable),
-                      (.tooLong, .selectionTooLong), (.failed, .editFailed)])
+                      (.tooLong, .selectionTooLong), (.failed, .editFailed), (.refused, .editRefused)])
     func editErrorsBecomeFailures(error: EditError, failure: DictationFailure) async {
         editor.error = error
         let controller = makeController()

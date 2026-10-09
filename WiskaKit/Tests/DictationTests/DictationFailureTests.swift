@@ -7,5 +7,6 @@ struct DictationFailureTests {
         #expect(DictationFailure.editUnavailable.message == "Command mode needs Apple Intelligence")
         #expect(DictationFailure.selectionTooLong.message == "Selection too long")
         #expect(DictationFailure.editFailed.message == "Couldn't edit — try again")
+        #expect(DictationFailure.editRefused.message == "Apple Intelligence won't edit this text")
     }
 }

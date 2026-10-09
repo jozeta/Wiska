@@ -8,6 +8,7 @@ public enum DictationFailure: Equatable, Sendable {
     case editUnavailable
     case selectionTooLong
     case editFailed
+    case editRefused
 
     /// Short text for the HUD.
     public var message: String {
@@ -21,6 +22,7 @@ public enum DictationFailure: Equatable, Sendable {
         case .editUnavailable: "Command mode needs Apple Intelligence"
         case .selectionTooLong: "Selection too long"
         case .editFailed: "Couldn't edit — try again"
+        case .editRefused: "Apple Intelligence won't edit this text"
         }
     }
 }
