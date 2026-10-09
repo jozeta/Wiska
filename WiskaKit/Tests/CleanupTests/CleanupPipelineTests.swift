@@ -106,7 +106,22 @@ struct CleanupPipelineTests {
         let output = try await snippetPipeline()
             .clean("hi anna the report is done insert my signature",
                    context: DictationContext(language: .english, category: .email))
-        #expect(output == "Hi Anna,\n\nThe report is done.\nBest regards,\nJohan")
+        #expect(output == "Hi Anna,\n\nThe report is done.\n\nBest regards,\nJohan")   // a blank line before it
+    }
+
+    static let name = Snippet(phrases: ["insert my name"], text: "Johan Zetterström")
+    static let contact = Snippet(phrases: ["insert my contact"], text: "Johan\n070-123 45 67")
+
+    /// "Best regards" followed by a snippet is a sign-off: the snippet is the name under it.
+    @Test func signOffBeforeASnippetIsRecognised() async throws {
+        rewriter.transform = { $0.replacingOccurrences(of: "thanks for today best regards", with: "Thanks for today. Best regards,") + "." }
+        let pipeline = CleanupPipeline(level: { .polished }, rewriter: rewriter, style: { _ in .formal },
+                                       snippets: { [Self.name, Self.contact] }, timeout: .seconds(5))
+        let email = DictationContext(language: .english, category: .email)
+        #expect(try await pipeline.clean("thanks for today best regards insert my name", context: email)
+                == "Thanks for today.\n\nBest regards,\nJohan Zetterström")
+        #expect(try await pipeline.clean("thanks for today best regards insert my contact", context: email)
+                == "Thanks for today.\n\nBest regards,\nJohan\n070-123 45 67")
     }
 
     func pipeline(style: WritingStyle, dictionary: PersonalDictionary = PersonalDictionary()) -> CleanupPipeline {

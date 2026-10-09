@@ -26,9 +26,13 @@ enum SnippetExpander {
         var slots: [String: Snippet] = [:]
         var lines: [String] = []
         for line in text.components(separatedBy: "\n") {
-            let tokens = line.split(whereSeparator: \.isWhitespace).map(String.init)
+            // Words with their positions: the text between them is copied as it was (spacing kept).
+            let ranges = line.ranges(of: /\S+/)
+            let tokens = ranges.map { String(line[$0]) }
             let bareTokens = tokens.map(PhraseMatcher.bare)
-            var current: [String] = []
+            var current = ""
+            var copied = line.startIndex   // line[copied...] not yet in `current`
+            var startsFresh = false        // after a multi-line snippet: drop the next leading space
             var index = 0
             var changed = false
             while index < tokens.count {
@@ -36,7 +40,6 @@ enum SnippetExpander {
                     index + phrase.words.count <= tokens.count
                         && PhraseMatcher.matches(bareTokens[index..<index + phrase.words.count], phrase.words)
                 }) else {
-                    current.append(tokens[index])
                     index += 1
                     continue
                 }
@@ -44,21 +47,30 @@ enum SnippetExpander {
                 let end = index + found.words.count
                 let key = "\(placeholderStem)\(slots.count + 1)"
                 slots[key] = found.snippet
+                var before = String(line[copied..<ranges[index].lowerBound])
+                if startsFresh { before = String(before.drop { $0.isWhitespace }) }
                 if found.snippet.text.contains("\n") {
-                    if !current.isEmpty { lines.append(current.joined(separator: " ")) }
+                    let text = (current + before).replacing(/\s+$/, with: "")
+                    if !text.isEmpty { lines.append(text) }
                     lines.append(key)
-                    current = []
+                    current = ""
+                    startsFresh = true
                 } else {
                     // Keep the sentence's punctuation after the phrase ("address." → "<slot>.").
                     let trailing = String(tokens[end - 1].reversed().prefix { $0.isPunctuation }.reversed())
-                    current.append(key + trailing)
+                    current += before + key + trailing
+                    startsFresh = false
                 }
+                copied = ranges[end - 1].upperBound
                 index = end
             }
             if !changed {
                 lines.append(line)   // untouched, spacing and all
-            } else if !current.isEmpty {
-                lines.append(current.joined(separator: " "))
+            } else {
+                var rest = String(line[copied...])
+                if startsFresh { rest = String(rest.drop { $0.isWhitespace }) }
+                let text = current + rest
+                if !text.trimmingCharacters(in: .whitespaces).isEmpty { lines.append(text) }
             }
         }
         return slots.isEmpty ? (text, [:]) : (lines.joined(separator: "\n"), slots)

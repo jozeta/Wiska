@@ -75,4 +75,12 @@ struct SnippetExpanderTests {
     @Test func noTriggerLeavesTheTextExactly() {
         #expect(expand("a  b\tc") == "a  b\tc")
     }
+
+    /// Cleanup pass: the line around a snippet keeps its own spacing.
+    @Test func spacingAroundASnippetIsKept() {
+        let address = Snippet(phrases: ["insert my address"], text: "Storgatan 1")
+        #expect(SnippetPreview.expand("send it to  insert my address  please", snippets: [address])
+                == "send it to  Storgatan 1  please")
+        #expect(SnippetPreview.expand("a\tinsert my address\tb", snippets: [address]) == "a\tStorgatan 1\tb")
+    }
 }

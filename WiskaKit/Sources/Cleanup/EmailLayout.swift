@@ -26,6 +26,22 @@ enum EmailLayout {
             if !body.isEmpty { replacement.append(FormattedLine(text: body, isPlain: true)) }
             result.replaceSubrange(0...0, with: replacement)
         }
+        // A multi-line snippet (a signature) at the end: after a sign-off ("Best regards insert my
+        // contact") it's the name under it; otherwise it gets a blank line before it.
+        if let last = result.last, SnippetExpander.isPlaceholderLine(last.text), result.count >= 2 {
+            let snippet = result.removeLast()
+            if let previous = result.last, previous.isPlain,
+               let (body, signOff) = splitSignOff(previous.text, rules: rules, alone: true), signOff.count == 1 {
+                result.removeLast()
+                if !body.isEmpty { result.append(FormattedLine(text: body, isPlain: true)) }
+                result.append(FormattedLine(text: "", isPlain: false))
+                result.append(FormattedLine(text: signOff[0], isPlain: false))
+            } else if let previous = result.last, !previous.text.isEmpty {
+                result.append(FormattedLine(text: "", isPlain: false))
+            }
+            result.append(snippet)
+            return result
+        }
         if let last = result.last, last.isPlain,
            let (body, signOff) = splitSignOff(last.text, rules: rules, alone: multiline) {
             result.removeLast()
@@ -100,7 +116,9 @@ enum EmailLayout {
 
     private static func isSignOffName(_ token: String) -> Bool {
         let bare = token.trimmingCharacters(in: .punctuationCharacters)
-        return bare.first?.isUppercase == true && !capitalisedPronouns.contains(bare)
+        // A snippet as the name ("Best regards insert my name") counts too.
+        return (bare.first?.isUppercase == true && !capitalisedPronouns.contains(bare))
+            || SnippetExpander.isPlaceholderLine(bare)
     }
 
     private static func isI(_ token: String) -> Bool {
