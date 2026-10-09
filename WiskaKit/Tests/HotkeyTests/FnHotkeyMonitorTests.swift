@@ -26,4 +26,34 @@ struct FnHotkeyMonitorTests {
             break
         }
     }
+
+    @Test(.timeLimit(.minutes(1))) func escapeKeyCodeReachesTheMachine() async {
+        let monitor = FnHotkeyMonitor()
+        for (t, down) in [(10.0, true), (10.1, false), (10.3, true), (10.4, false)] {
+            monitor.receive(type: .flagsChanged, keyCode: 63, fnFlag: down, shiftFlag: false, time: t)
+        }
+        monitor.receive(type: .keyDown, keyCode: 53, fnFlag: false, shiftFlag: false, time: 11)
+        var events: [HotkeyEvent] = []
+        for await event in monitor.events {
+            events.append(event)
+            if events.count == 5 { break }
+        }
+        #expect(events.suffix(2) == [.locked, .cancelled])
+    }
+
+    @Test(.timeLimit(.minutes(1))) func endHandsFreeUnlocks() async {
+        let monitor = FnHotkeyMonitor()
+        for (t, down) in [(10.0, true), (10.1, false), (10.3, true), (10.4, false), (20.0, true)] {
+            monitor.receive(type: .flagsChanged, keyCode: 63, fnFlag: down, shiftFlag: false, time: t)
+        }
+        monitor.endHandsFree()
+        monitor.receive(type: .flagsChanged, keyCode: 63, fnFlag: true, shiftFlag: false, time: 30)
+        var events: [HotkeyEvent] = []
+        for await event in monitor.events {
+            events.append(event)
+            if events.count == 5 { break }
+        }
+        // fn down at 20 was swallowed by the lock; after endHandsFree the press at 30 starts.
+        #expect(events.last == .pressed(shifted: false))
+    }
 }

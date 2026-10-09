@@ -56,10 +56,15 @@ public final class FnHotkeyMonitor {
             guard keyCode == Self.fnKeyCode || Self.shiftKeyCodes.contains(keyCode) else { return }
             feed(.flagsChanged(fnDown: fnFlag, shift: shiftFlag, time: time))
         case .keyDown:
-            feed(.keyDown(time: time))
+            feed(.keyDown(keyCode: keyCode, time: time))
         default:
             break
         }
+    }
+
+    /// The hands-free dictation ended without an fn tap or Esc: the next fn press starts afresh.
+    public func endHandsFree() {
+        machine.unlock()
     }
 
     private func feed(_ input: KeyInput) {
