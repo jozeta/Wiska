@@ -24,7 +24,9 @@ struct SnippetsTab: View {
             }
 
             Section("Try it") {
-                TextField("Type what you would say, e.g. “thanks, insert my signature”", text: $trial)
+                TextField("Try it", text: $trial, prompt: Text("Type what you would say, e.g. “thanks, insert my signature”"))
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
                 if !trial.isEmpty {
                     let result = SnippetPreview.expand(trial, snippets: store.snippets)
                     if result == trial {
@@ -76,7 +78,11 @@ private struct SnippetCard: View {
                 // Always at least one field, even for a snippet without phrases yet.
                 ForEach(0..<max(1, snippet.phrases.count), id: \.self) { index in
                     HStack {
-                        TextField("e.g. insert my signature", text: phraseBinding(index))
+                        // A hidden label and a real placeholder: in a grouped Form the title would
+                        // otherwise become a row label, with a borderless field that's easy to miss.
+                        TextField("When I say", text: phraseBinding(index), prompt: Text("e.g. insert my signature"))
+                            .labelsHidden()
+                            .textFieldStyle(.roundedBorder)
                         if snippet.phrases.count > 1 {
                             Button {
                                 change { $0.phrases.remove(at: index) }
