@@ -129,8 +129,11 @@ final class PreviewSession: TranscriptionSession {
 @MainActor
 final class FakeSelection: SelectionReader {
     var text: String? = "hey can u send it"
+    var context: String? = "Can you come at 3?\n\n[cursor]"
     private(set) var reads = 0
+    private(set) var contextReads = 0
     func selectedText() async -> String? { reads += 1; return text }
+    func surroundingText() async -> String? { contextReads += 1; return context }
 }
 
 @MainActor

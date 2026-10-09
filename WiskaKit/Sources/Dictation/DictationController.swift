@@ -12,6 +12,7 @@ public final class DictationController {
         case transcribing
         case cleaning
         case editing
+        case writing
         case injecting
         case failed(DictationFailure)
     }
@@ -28,7 +29,7 @@ public final class DictationController {
     public private(set) var isHandsFree = false { didSet { if oldValue != isHandsFree { notify() } } }
     /// The words heard so far in this dictation (empty when the preview is off or not available).
     public private(set) var preview = "" { didSet { if oldValue != preview { notify() } } }
-    /// The recording in progress is an edit instruction for the selected text (fn+⌃).
+    /// The recording in progress is an instruction (fn+⌃): edit the selection, or write at the cursor.
     public private(set) var isCommand = false { didSet { if oldValue != isCommand { notify() } } }
     public var onChange: (@MainActor (State, AudioLevel) -> Void)?
     public var onLanguageDetected: (@MainActor (Language) -> Void)?
@@ -45,6 +46,7 @@ public final class DictationController {
     private let showPreview: @MainActor () -> Bool
     private let selection: (any SelectionReader)?
     private let editor: (any TextEditor)?
+    private let commands: @MainActor () -> [SavedCommand]
     /// A password field has focus: nothing may be read or pasted there.
     private let isSecureInput: @MainActor () -> Bool
     private let maxDuration: Duration
@@ -71,6 +73,7 @@ public final class DictationController {
         showPreview: @escaping @MainActor () -> Bool = { true },
         selection: (any SelectionReader)? = nil,
         editor: (any TextEditor)? = nil,
+        commands: @escaping @MainActor () -> [SavedCommand] = { [] },
         isSecureInput: @escaping @MainActor () -> Bool = { false },
         maxDuration: Duration = .seconds(300),
         noticeDuration: Duration = .milliseconds(1_500),
@@ -85,6 +88,7 @@ public final class DictationController {
         self.showPreview = showPreview
         self.selection = selection
         self.editor = editor
+        self.commands = commands
         self.isSecureInput = isSecureInput
         self.maxDuration = maxDuration
         self.noticeDuration = noticeDuration
@@ -217,7 +221,7 @@ public final class DictationController {
         }
         Self.log.debug("transcript: \(transcript.text, privacy: .private)")
         if isCommand {
-            await runCommand(instruction: transcript)
+            await runCommand(transcript)
             return
         }
 
@@ -252,12 +256,12 @@ public final class DictationController {
         }
     }
 
-    /// fn+⌃: the transcript is an instruction; the selection is edited and pasted over itself.
-    /// Not cleaned and not recorded (the selection may be anything).
-    private func runCommand(instruction transcript: Transcript) async {
+    /// fn+⌃: the transcript (or the saved command it starts with) is an instruction. With text
+    /// selected, the selection is edited and pasted over itself; with nothing selected, new text is
+    /// written at the cursor, with the text around it as context. Never cleaned or recorded.
+    private func runCommand(_ transcript: Transcript) async {
         isCommand = false
-        state = .editing
-        // Checked first: in a password field the selection can't (and mustn't) be read.
+        // Checked first: in a password field nothing may be read.
         guard !isSecureInput() else {
             fail(.secureInput)
             return
@@ -266,20 +270,27 @@ public final class DictationController {
             fail(.editUnavailable)
             return
         }
-        guard let text = await selection.selectedText() else {
-            fail(.noSelection)
-            return
-        }
+        let instruction = CommandResolver.resolve(transcript.text, commands: commands())
+        let selected = await selection.selectedText()
+        let writing = selected == nil
         do {
-            let edited = try await editor.edit(text, instruction: transcript.text, language: transcript.language)
+            let output: String
+            if let selected {
+                state = .editing
+                output = try await editor.edit(selected, instruction: instruction, language: transcript.language)
+            } else {
+                state = .writing
+                let context = await selection.surroundingText()
+                output = try await editor.write(instruction: instruction, context: context, language: transcript.language)
+            }
             state = .injecting
-            try await injector.inject(edited)
+            try await injector.inject(output)
         } catch EditError.unavailable {
             fail(.editUnavailable); return
         } catch EditError.tooLong {
-            fail(.selectionTooLong); return
+            fail(writing ? .writeFailed : .selectionTooLong); return
         } catch EditError.failed {
-            fail(.editFailed); return
+            fail(writing ? .writeFailed : .editFailed); return
         } catch EditError.refused {
             fail(.editRefused); return
         } catch InjectionError.secureInputActive {

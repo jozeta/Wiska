@@ -11,6 +11,7 @@ struct DictationControllerTests {
     let injector = FakeInjector()
     let selection = FakeSelection()
     let editor = FakeEditor()
+    let commandList = Box<[SavedCommand]>([])
 
     func makeController(maxDuration: Duration = .seconds(300), releaseTail: Duration = .zero,
                         silence: TimeInterval = 30, showPreview: Bool = true,
@@ -20,6 +21,7 @@ struct DictationControllerTests {
             audio: audio, transcriber: provider ?? { _ in transcriber }, cleaner: cleaner, injector: injector,
             contextProvider: { DictationContext(appBundleID: "com.apple.TextEdit") },
             handsFreeSilence: { silence }, showPreview: { showPreview }, selection: selection, editor: editor,
+            commands: { [commandList] in commandList.value },
             maxDuration: maxDuration, noticeDuration: .seconds(60), releaseTail: releaseTail
         )
     }
@@ -550,12 +552,64 @@ struct DictationControllerTests {
         #expect(recorder.states == [.listening, .transcribing, .editing, .injecting, .idle])
     }
 
-    @Test func commandWithoutSelectionFails() async {
+    @Test func commandWithoutSelectionWritesAtTheCursor() async {
         selection.text = nil
         let controller = makeController()
+        let recorder = StateRecorder()
+        controller.onChange = { state, _ in recorder.record(state) }
+        let finished = Box(0)
+        controller.onDictationFinished = { _ in finished.value += 1 }
         await runCommand(controller)
-        #expect(controller.state == .failed(.noSelection))
+        #expect(editor.writes.map(\.instruction) == ["hello world"])
+        #expect(editor.writes.map(\.context) == ["Can you come at 3?\n\n[cursor]"])
+        #expect(editor.calls.isEmpty)
+        #expect(injector.injected == ["written: hello world"])
+        #expect(finished.value == 0)   // never in History
+        #expect(recorder.states == [.listening, .transcribing, .writing, .injecting, .idle])
+    }
+
+    @Test func writingWithoutContextStillWrites() async {
+        selection.text = nil
+        selection.context = nil
+        let controller = makeController()
+        await runCommand(controller)
+        #expect(editor.writes.count == 1)
+        #expect(editor.writes.first?.context == nil)
+        #expect(injector.injected == ["written: hello world"])
+    }
+
+    @Test(arguments: [(EditError.unavailable, DictationFailure.editUnavailable), (.failed, .writeFailed),
+                      (.tooLong, .writeFailed), (.refused, .editRefused)])
+    func writeErrorsBecomeFailures(error: EditError, failure: DictationFailure) async {
+        selection.text = nil
+        editor.error = error
+        let controller = makeController()
+        await runCommand(controller)
+        #expect(controller.state == .failed(failure))
         #expect(injector.injected.isEmpty)
+    }
+
+    @Test func savedCommandBecomesTheInstruction() async {
+        commandList.value = [SavedCommand(phrases: ["hello"], instruction: "Say hello formally.")]
+        transcriber.session.result = .success("Hello, and shorter")
+        let controller = makeController()
+        await runCommand(controller)
+        #expect(editor.calls.map(\.instruction) == ["Say hello formally. Also: and shorter"])
+        selection.text = nil
+        await runCommand(controller)
+        #expect(editor.writes.map(\.instruction) == ["Say hello formally. Also: and shorter"])
+    }
+
+    @Test func writingInASecureFieldReadsNothing() async {
+        selection.text = nil
+        let controller = DictationController(
+            audio: audio, transcriber: { [transcriber] _ in transcriber }, cleaner: cleaner, injector: injector,
+            selection: selection, editor: editor, isSecureInput: { true }, noticeDuration: .seconds(60),
+            releaseTail: .zero)
+        await runCommand(controller)
+        #expect(controller.state == .failed(.secureInput))
+        #expect(selection.contextReads == 0)
+        #expect(editor.writes.isEmpty)
     }
 
     @Test(arguments: [(EditError.unavailable, DictationFailure.editUnavailable),
