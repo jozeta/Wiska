@@ -23,6 +23,8 @@ public final class SettingsStore {
         static let handsFreeSilence = "handsFreeSilence"
         static let livePreview = "livePreview"
         static let outputMode = "outputMode"
+        static let modelUpdateInterval = "modelUpdateInterval"
+        static let lastModelUpdateCheck = "lastModelUpdateCheck"
         static let categoryStyles = "categoryStyles"
         static let appCategories = "appCategories"
         static let recentApps = "recentApps"
@@ -133,6 +135,15 @@ public final class SettingsStore {
     /// Paste the finished text into the app, or only copy it.
     public var outputMode: OutputMode { didSet { defaults.set(outputMode.rawValue, forKey: Key.outputMode) } }
 
+    public static let modelUpdateIntervals = [0, 1, 7, 30]
+    /// Days between automatic checks for a newer Parakeet model; 0 = never.
+    public var modelUpdateInterval: Int {
+        didSet { defaults.set(modelUpdateInterval, forKey: Key.modelUpdateInterval) }
+    }
+    public var lastModelUpdateCheck: Date? {
+        didSet { defaults.set(lastModelUpdateCheck, forKey: Key.lastModelUpdateCheck) }
+    }
+
     /// Styles the user picked per app category; missing ones use the category's default.
     public private(set) var categoryStyles: [AppCategory: WritingStyle]
 
@@ -201,6 +212,8 @@ public final class SettingsStore {
         handsFreeSilence = defaults.object(forKey: Key.handsFreeSilence) as? TimeInterval ?? 30
         livePreview = defaults.object(forKey: Key.livePreview) as? Bool ?? true
         outputMode = Self.read(defaults, Key.outputMode, OutputMode.insert)
+        modelUpdateInterval = defaults.object(forKey: Key.modelUpdateInterval) as? Int ?? 7
+        lastModelUpdateCheck = defaults.object(forKey: Key.lastModelUpdateCheck) as? Date
         let storedStyles = defaults.dictionary(forKey: Key.categoryStyles) as? [String: String] ?? [:]
         categoryStyles = Dictionary(uniqueKeysWithValues: storedStyles.compactMap { key, value in
             guard let category = AppCategory(rawValue: key), let style = WritingStyle(rawValue: value) else { return nil }

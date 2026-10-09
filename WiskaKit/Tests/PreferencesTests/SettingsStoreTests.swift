@@ -227,4 +227,17 @@ final class SettingsStoreTests {
         store.outputMode = .clipboard
         #expect(SettingsStore(defaults: defaults).outputMode == .clipboard)
     }
+
+    @Test func modelUpdateSettings() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.modelUpdateInterval == 7)
+        #expect(store.lastModelUpdateCheck == nil)
+        let date = Date(timeIntervalSince1970: 1_000_000)
+        store.modelUpdateInterval = 30
+        store.lastModelUpdateCheck = date
+        let reloaded = SettingsStore(defaults: defaults)
+        #expect(reloaded.modelUpdateInterval == 30)
+        #expect(reloaded.lastModelUpdateCheck == date)
+        #expect(SettingsStore.modelUpdateIntervals == [0, 1, 7, 30])
+    }
 }
