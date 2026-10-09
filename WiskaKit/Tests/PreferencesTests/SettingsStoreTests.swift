@@ -221,6 +221,19 @@ final class SettingsStoreTests {
         #expect(SettingsStore(defaults: defaults).style(for: .personal) == .casual)
     }
 
+    @Test func languageModelAndGrammarDefaultsAndPersist() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.languageModel == .apple)
+        #expect(store.fixGrammar)
+        store.languageModel = .gemma
+        store.fixGrammar = false
+        let reloaded = SettingsStore(defaults: defaults)
+        #expect(reloaded.languageModel == .gemma)
+        #expect(!reloaded.fixGrammar)
+        #expect(LanguageModelChoice.gemma.displayName == "Gemma 4 E4B (on this Mac)")
+        #expect(LanguageModelChoice.apple.displayName == "Apple Intelligence")
+    }
+
     @Test func outputModeDefaultsToInsertAndPersists() {
         let store = SettingsStore(defaults: defaults)
         #expect(store.outputMode == .insert)

@@ -23,6 +23,8 @@ public final class SettingsStore {
         static let handsFreeSilence = "handsFreeSilence"
         static let livePreview = "livePreview"
         static let outputMode = "outputMode"
+        static let languageModel = "languageModel"
+        static let fixGrammar = "fixGrammar"
         static let modelUpdateInterval = "modelUpdateInterval"
         static let lastModelUpdateCheck = "lastModelUpdateCheck"
         static let categoryStyles = "categoryStyles"
@@ -135,6 +137,12 @@ public final class SettingsStore {
     /// Paste the finished text into the app, or only copy it.
     public var outputMode: OutputMode { didSet { defaults.set(outputMode.rawValue, forKey: Key.outputMode) } }
 
+    public var languageModel: LanguageModelChoice {
+        didSet { defaults.set(languageModel.rawValue, forKey: Key.languageModel) }
+    }
+    /// Light and Polished also fix grammar mistakes.
+    public var fixGrammar: Bool { didSet { defaults.set(fixGrammar, forKey: Key.fixGrammar) } }
+
     public static let modelUpdateIntervals = [0, 1, 7, 30]
     /// Days between automatic checks for a newer Parakeet model; 0 = never.
     public var modelUpdateInterval: Int {
@@ -212,6 +220,8 @@ public final class SettingsStore {
         handsFreeSilence = defaults.object(forKey: Key.handsFreeSilence) as? TimeInterval ?? 30
         livePreview = defaults.object(forKey: Key.livePreview) as? Bool ?? true
         outputMode = Self.read(defaults, Key.outputMode, OutputMode.insert)
+        languageModel = Self.read(defaults, Key.languageModel, LanguageModelChoice.apple)
+        fixGrammar = defaults.object(forKey: Key.fixGrammar) as? Bool ?? true
         modelUpdateInterval = defaults.object(forKey: Key.modelUpdateInterval) as? Int ?? 7
         lastModelUpdateCheck = defaults.object(forKey: Key.lastModelUpdateCheck) as? Date
         let storedStyles = defaults.dictionary(forKey: Key.categoryStyles) as? [String: String] ?? [:]
