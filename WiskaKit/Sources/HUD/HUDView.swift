@@ -4,10 +4,13 @@ import SwiftUI
 struct HUDView: View {
     let model: HUDModel
     static let contentHeight: CGFloat = 44
-    static let previewHeight: CGFloat = 20
+    /// The preview row: the text sits at its top, with a little room left below it.
+    static let previewHeight: CGFloat = 22
+    /// How far the preview row tucks up under the waveform row (tightens the gap between them).
+    static let previewOverlap: CGFloat = 4
 
     static func height(expanded: Bool) -> CGFloat {
-        contentHeight + (expanded ? previewHeight : 0)
+        contentHeight + (expanded ? previewHeight - previewOverlap : 0)
     }
 
     var body: some View {
@@ -38,7 +41,7 @@ struct HUDView: View {
         case .hidden:
             EmptyView()
         case .listening(let levels, let badge, let preview, let handsFree):
-            VStack(spacing: 0) {
+            VStack(spacing: -Self.previewOverlap) {
                 HStack(spacing: 10) {
                     HStack(spacing: 4) {
                         Text(badge)

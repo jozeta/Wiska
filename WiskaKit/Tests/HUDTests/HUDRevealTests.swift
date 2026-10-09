@@ -16,12 +16,12 @@ struct HUDRevealTests {
 
     @Test func previewRowAddsHeightOnlyWhenExpanded() {
         #expect(HUDView.height(expanded: false) == 44)
-        #expect(HUDView.height(expanded: true) == 64)
+        #expect(HUDView.height(expanded: true) == 62)
     }
 
     @Test func tickerStaysPutUntilTheTextOverflowsThenShowsTheNewestWords() {
-        #expect(PreviewTicker.offset(container: 300, text: 120) == 0)
-        #expect(PreviewTicker.offset(container: 300, text: 300) == 0)
-        #expect(PreviewTicker.offset(container: 300, text: 450) == -150)
+        #expect(PreviewTicker.scrollTarget(container: 300, text: 120) == 0)
+        #expect(PreviewTicker.scrollTarget(container: 300, text: 276) == 0)
+        #expect(PreviewTicker.scrollTarget(container: 300, text: 450) == 174)
     }
 }
