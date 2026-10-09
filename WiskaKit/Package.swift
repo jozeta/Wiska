@@ -5,7 +5,7 @@ let package = Package(
     name: "WiskaKit",
     platforms: [.macOS("26.0")],
     products: [
-        .library(name: "WiskaKit", targets: ["Core", "Hotkey", "Audio", "SpeechToText", "Cleanup", "Injection", "Dictation", "HUD", "Preferences", "Parakeet", "History", "LocalModel"]),
+        .library(name: "WiskaKit", targets: ["Core", "Hotkey", "Audio", "SpeechToText", "Cleanup", "Injection", "Dictation", "HUD", "Preferences", "Parakeet", "History", "LocalModel", "Whisper"]),
     ],
     dependencies: [
         .package(url: "https://github.com/FluidInference/FluidAudio", exact: "0.17.7"),
@@ -34,6 +34,11 @@ let package = Package(
             .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
             .product(name: "Tokenizers", package: "swift-transformers"),
         ]),
+        .binaryTarget(name: "whisper",
+                      url: "https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-b5454-xcframework.zip",
+                      checksum: "e57f8c48933000acabc13bb913fbe82805d483a2deff692cc6738836bd92393b"),
+        .target(name: "Whisper", dependencies: ["Core", "whisper"]),
+        .testTarget(name: "WhisperTests", dependencies: ["Whisper"]),
         .testTarget(name: "LocalModelTests", dependencies: ["LocalModel", "Cleanup"]),
         .testTarget(name: "CoreTests", dependencies: ["Core"]),
         .testTarget(name: "HotkeyTests", dependencies: ["Hotkey"]),
