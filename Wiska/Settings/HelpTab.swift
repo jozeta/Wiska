@@ -36,6 +36,13 @@ struct HelpTab: View {
                     Label(example, systemImage: "text.cursor").foregroundStyle(.secondary)
                 }
             }
+            Section("Writing and saved commands") {
+                tip("Write with nothing selected", "Click where the text should go, hold fn+⌃ and say what to write — “reply that I'll be there at three”. Wiska reads the text around the cursor on your Mac (never stored) and writes in its language. ⌘Z removes it.")
+                tip("Saved commands", "Start with a command's phrase — “formal” — and Wiska uses its instruction. Words after it are added: “formal, and a bit shorter”. Set them up in the Commands tab.")
+                ForEach(model.commandStore.commands.filter { $0.problems.isEmpty }) { command in
+                    LabeledContent("“\(command.spokenPhrases.joined(separator: "” or “"))”", value: command.instruction)
+                }
+            }
             Section("Snippets") {
                 Text("Save a phrase and the text it stands for in the Snippets tab. Say the phrase anywhere in a dictation, and the text is inserted exactly as you wrote it — in any app, line breaks included.")
                 tip("Example", "When I say “insert my signature” → Insert “Best regards, Johan”. Dictating “thanks for the help, insert my signature” gives the sentence, then your signature on its own lines.")

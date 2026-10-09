@@ -13,6 +13,8 @@ Private, on-device dictation for macOS. Hold **fn**, speak, release — your wor
 - **Styles per app** — Casual in Messages and Slack, Formal in Mail, exactly-what-you-said in terminals and code editors. Spoken lists become numbered lists, emails get their greeting and sign-off on their own lines, and numbers become digits ("three thirty" → 3:30).
 - **Voice commands** — "new line", "new paragraph" and "scratch that", in every language.
 - **Edit by voice** — select text, hold **fn+⌃**, say "make this more formal" or "translate to Swedish", and the selection is rewritten in place (⌘Z undoes it).
+- **Write with nothing selected** — hold fn+⌃ with the cursor in a text field and say what to write ("reply that I'll be there at three"). Wiska uses the text around the cursor (read on your Mac, never stored) as context.
+- **Saved commands** — name instructions you use often ("formal", "fix", "shorter", "bullets" ship by default) and start a command with the name. Settings → Commands.
 - **Personal dictionary** — names and terms spelled your way, plus custom replacements.
 - **History** — search and filter past dictations, see exactly what cleanup changed, and track words per day, time saved, top apps and languages. Kept for as long as you choose (or not at all).
 - **Insert or copy** — paste into the active app, or only copy to the clipboard.
@@ -32,6 +34,8 @@ Private, on-device dictation for macOS. Hold **fn**, speak, release — your wor
 | Double-tap fn · tap fn | Start / finish hands-free |
 | Esc, or any other key while holding fn | Cancel |
 | Select text, hold fn+⌃, say an instruction | Edit the selection |
+| Nothing selected, hold fn+⌃, say what to write | Write at the cursor |
+| Hold fn+⌃, start with a saved command ("formal") | Use its instruction |
 
 Tip: set **System Settings → Keyboard → "Press 🌐 key to" → Do Nothing**, so fn doesn't also open the emoji picker.
 

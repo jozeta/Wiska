@@ -21,6 +21,7 @@ final class AppModel {
     let parakeetStore: ParakeetModelStore
     let dictionaryStore: DictionaryStore
     let snippetStore: SnippetStore
+    let commandStore: CommandStore
     let history: HistoryStore?
     @ObservationIgnored private var retentionTask: Task<Void, Never>?
     @ObservationIgnored private var updateTask: Task<Void, Never>?
@@ -55,6 +56,8 @@ final class AppModel {
         self.dictionaryStore = dictionaryStore
         let snippetStore = SnippetStore()
         self.snippetStore = snippetStore
+        let commandStore = CommandStore()
+        self.commandStore = commandStore
         do {
             history = try HistoryStore()
         } catch {
@@ -93,6 +96,7 @@ final class AppModel {
             showPreview: { settings.livePreview },
             selection: AXSelectionReader(),
             editor: FoundationModelsEditor(),
+            commands: { commandStore.commands },
             isSecureInput: { IsSecureEventInputEnabled() }
         )
         controller.onChange = { [weak self] state, audio in
@@ -314,7 +318,7 @@ final class AppModel {
         if !missingPermissions.isEmpty { return "exclamationmark.triangle" }
         return switch dictationState {
         case .listening: "mic.fill"
-        case .preparingModel, .transcribing, .cleaning, .editing, .injecting: "ellipsis"
+        case .preparingModel, .transcribing, .cleaning, .editing, .writing, .injecting: "ellipsis"
         case .idle, .failed: "waveform"
         }
     }
@@ -327,6 +331,7 @@ final class AppModel {
         case .preparingModel: "Downloading speech model…"
         case .transcribing, .cleaning, .injecting: "Transcribing…"
         case .editing: "Editing…"
+        case .writing: "Writing…"
         case .failed(let failure): failure.message
         }
     }
@@ -396,6 +401,7 @@ final class AppModel {
         case .listening: .listening(audio: audio, badge: controller.isCommand ? "⌃ Edit" : badge,
                                     preview: controller.preview, handsFree: controller.isHandsFree)
         case .editing: .working("Editing…")
+        case .writing: .working("Writing…")
         case .preparingModel: .working("Downloading speech model…")
         case .transcribing, .cleaning, .injecting: .working("Transcribing…")
         case .failed(let failure): .error(failure.message)
