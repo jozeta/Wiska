@@ -147,6 +147,29 @@ struct FoundationModelsEditorTests {
         #expect(FoundationModelsEditor.fitToCursor("Hi.", context: nil) == "Hi.")
     }
 
+    /// A model that copies the text around the cursor: only its own words are pasted.
+    @Test func echoedContextIsNotPastedTwice() {
+        let context = "Hi Johan,\n\nAre you coming tomorrow?\n\nAnna\n\n[cursor]\n\nSent from my iPhone"
+        #expect(FoundationModelsEditor.removeEcho("Hi Johan,\n\nAre you coming tomorrow?\n\nAnna\n\nYes, I'll be there at three.",
+                                                  context: context) == "Yes, I'll be there at three.")
+        #expect(FoundationModelsEditor.removeEcho("Anna\n\nYes, see you then.\n\nSent from my iPhone", context: context)
+                == "Yes, see you then.")
+        #expect(FoundationModelsEditor.removeEcho("Yes, I'll be there.", context: context) == "Yes, I'll be there.")
+        #expect(FoundationModelsEditor.removeEcho("Yes.", context: nil) == "Yes.")
+    }
+
+    /// A model that rewrites the surrounding text instead of writing new text: nothing is pasted.
+    @Test func aCopyOfTheContextFails() async throws {
+        let context = "The meeting moves to Thursday because the room is booked on Wednesday afternoon.\n[cursor]"
+        let editor = FoundationModelsEditor(isAvailable: { true }, respond: { _, _ in
+            "The meeting moves to Thursday, because the room is booked on Wednesday afternoon."
+        }, timeout: { _ in .seconds(5) })
+        await #expect(throws: EditError.failed) { try await editor.write(instruction: "fix", context: context, language: nil) }
+        let marker = FoundationModelsEditor(isAvailable: { true }, respond: { _, _ in "See you. [Cursor]" },
+                                            timeout: { _ in .seconds(5) })
+        #expect(try await marker.write(instruction: "reply", context: nil, language: nil) == "See you.")
+    }
+
     @Test(.enabled(if: modelAvailable), .timeLimit(.minutes(1)))
     func writesAReplyUsingTheContext() async throws {
         let context = "Hi Johan,\n\nAre you coming to the meeting tomorrow? It starts at three.\n\nAnna\n\n[cursor]"

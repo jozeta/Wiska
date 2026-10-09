@@ -127,8 +127,10 @@ public final class FoundationModelsEditor: TextEditor {
         } catch {
             throw Self.editError(for: error)
         }
-        let written = Self.rewrap(original: "", edited: output.replacingOccurrences(of: CursorContext.marker, with: ""))
-        guard !written.isEmpty else { throw EditError.failed }
+        let unmarked = output.replacing(/(?i)\[\s*cursor\s*\]/, with: "")
+        let written = Self.removeEcho(Self.rewrap(original: "", edited: unmarked), context: context)
+        // A rewrite of the surrounding text instead of new text would paste it twice.
+        guard !written.isEmpty, !Self.mostlyCopies(written, context: context) else { throw EditError.failed }
         return Self.fitToCursor(written, context: context)
     }
 
@@ -146,5 +148,46 @@ public final class FoundationModelsEditor: TextEditor {
             result += " "
         }
         return result
+    }
+
+    /// Drops a copy of the text before the cursor at the start of the answer, and of the text
+    /// after it at the end: the model sometimes repeats the email it replies to.
+    static func removeEcho(_ written: String, context: String?) -> String {
+        guard let context, let cursor = context.range(of: CursorContext.marker) else { return written }
+        let before = context[..<cursor.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+        let after = context[cursor.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+        var text = written
+        // The longest end of `before`, starting at a word, that the answer starts with.
+        for start in before.indices where start == before.startIndex || before[before.index(before: start)].isWhitespace {
+            let tail = before[start...]
+            if tail.count >= 4, text.hasPrefix(tail) {
+                text = String(text.dropFirst(tail.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                break
+            }
+        }
+        // The longest start of `after`, ending at a word, that the answer ends with.
+        for end in after.indices.reversed() + [after.endIndex]
+        where end == after.endIndex || after[end].isWhitespace {
+            let head = after[..<end]
+            if head.count >= 4, text.hasSuffix(head) {
+                text = String(text.dropLast(head.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                break
+            }
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Most of the answer's words appear in the context in the same order (runs of 4 words).
+    static func mostlyCopies(_ written: String, context: String?) -> Bool {
+        guard let context else { return false }
+        let words = PhraseMatcher.bareWords(written)
+        let source = PhraseMatcher.bareWords(context.replacingOccurrences(of: CursorContext.marker, with: " "))
+        guard words.count >= 8, source.count >= 4 else { return false }
+        let grams = Set((0...(source.count - 4)).map { source[$0..<$0 + 4].joined(separator: " ") })
+        var covered = Array(repeating: false, count: words.count)
+        for i in 0...(words.count - 4) where grams.contains(words[i..<i + 4].joined(separator: " ")) {
+            for j in i..<i + 4 { covered[j] = true }
+        }
+        return Double(covered.filter { $0 }.count) / Double(words.count) > 0.6
     }
 }
