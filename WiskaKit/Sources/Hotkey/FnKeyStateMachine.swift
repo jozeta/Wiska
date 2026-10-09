@@ -2,7 +2,7 @@ import Core
 import Foundation
 
 public enum KeyInput: Equatable {
-    case flagsChanged(fnDown: Bool, shift: Bool, time: TimeInterval)
+    case flagsChanged(fnDown: Bool, shift: Bool, control: Bool = false, time: TimeInterval)
     case keyDown(keyCode: Int64, time: TimeInterval)
 }
 
@@ -16,6 +16,7 @@ public enum KeyInput: Equatable {
 /// - Hands-free: a plain quick tap arms for `doubleTapWindow`; if the next press is also a quick
 ///   tap, its fn up is `.locked` instead of `.tapped`. While locked, fn up → `.released`,
 ///   Esc → `.cancelled`, everything else is ignored, until one of those or `unlock()`.
+/// - ⌃ down at any time during a hold → `.commandAdded` once (an edit instruction); a ⌃ tap never arms.
 public struct FnKeyStateMachine {
     public static let escapeKeyCode: Int64 = 53
     /// macOS sends this key down right after a real fn/🌐 tap (the 🌐 key's own action).
@@ -33,24 +34,49 @@ public struct FnKeyStateMachine {
     public private(set) var isLocked = false
     /// fn went down while locked: only its release finishes (⇧ alone also arrives as "fn up").
     private var lockedFnDown = false
+    /// ⌃ was seen during this hold.
+    private var commanded = false
+    /// A fn press that arrived with ⌃ already down: `.commandAdded` follows `.pressed`.
+    private var pendingCommand = false
 
     public init() {}
+
+    /// Every event for one input: a fn press with ⌃ already down is `.pressed` then `.commandAdded`.
+    public mutating func handleAll(_ input: KeyInput) -> [HotkeyEvent] {
+        var events = handle(input).map { [$0] } ?? []
+        if pendingCommand {
+            pendingCommand = false
+            events.append(.commandAdded)
+        }
+        return events
+    }
 
     public mutating func handle(_ input: KeyInput) -> HotkeyEvent? {
         if isLocked { return handleLocked(input) }
         switch input {
-        case .flagsChanged(fnDown: true, shift: let shift, time: let time):
+        case .flagsChanged(fnDown: true, shift: let shift, control: let control, time: let time):
             // fn went DOWN, or another modifier changed while fn is held.
             if let start = pressedAt {
-                guard shift, !shifted, !interrupted, time - start < minimumHold else { return nil }
-                shifted = true
-                return .shiftAdded
+                guard !interrupted else { return nil }
+                let shiftAdded = shift && !shifted && time - start < minimumHold
+                if shiftAdded { shifted = true }
+                if control && !commanded {
+                    commanded = true
+                    if shiftAdded {
+                        pendingCommand = true
+                        return .shiftAdded
+                    }
+                    return .commandAdded
+                }
+                return shiftAdded ? .shiftAdded : nil
             }
             secondPress = armedUntil.map { time <= $0 } ?? false
             armedUntil = nil
             pressedAt = time
             shifted = shift
             interrupted = false
+            commanded = control
+            pendingCommand = control
             return .pressed(shifted: shift)
 
         case .keyDown(keyCode: Self.globeKeyCode, time: _):
@@ -63,28 +89,29 @@ public struct FnKeyStateMachine {
             interrupted = true
             return .cancelled
 
-        case .flagsChanged(fnDown: false, shift: _, time: let time):
-            // fn went UP.
+        case .flagsChanged(fnDown: false, shift: _, control: _, time: let time):
+            // fn went UP (or ⌃/⇧ changed with fn not held: harmless, pressedAt is nil).
             guard let start = pressedAt else { return nil }
             pressedAt = nil
             if interrupted { return nil }
             guard time - start < minimumHold else { return .released }
-            if secondPress {
+            if secondPress && !commanded {
                 secondPress = false
                 isLocked = true
                 return .locked
             }
-            if !shifted { armedUntil = time + doubleTapWindow }
+            secondPress = false
+            if !shifted && !commanded { armedUntil = time + doubleTapWindow }
             return .tapped(shifted: shifted)
         }
     }
 
     private mutating func handleLocked(_ input: KeyInput) -> HotkeyEvent? {
         switch input {
-        case .flagsChanged(fnDown: true, shift: _, time: _):
+        case .flagsChanged(fnDown: true, shift: _, control: _, time: _):
             lockedFnDown = true
             return nil
-        case .flagsChanged(fnDown: false, shift: _, time: _):
+        case .flagsChanged(fnDown: false, shift: _, control: _, time: _):
             guard lockedFnDown else { return nil }
             unlock()
             return .released
@@ -109,6 +136,8 @@ public struct FnKeyStateMachine {
         pressedAt = nil
         secondPress = false
         armedUntil = nil
+        commanded = false
+        pendingCommand = false
     }
 
     /// Forget any hold or lock in progress (used when the event tap was disabled and events may

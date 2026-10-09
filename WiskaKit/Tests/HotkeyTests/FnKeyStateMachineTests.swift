@@ -179,4 +179,44 @@ struct FnKeyStateMachineTests {
     @Test func globeKeyDownWhileHeldDoesNotCancel() {
         #expect(run([down(10), key(10.2, 179), up(11)]) == [.pressed(shifted: false), nil, .released])
     }
+
+    private func runAll(_ inputs: [KeyInput]) -> [[HotkeyEvent]] {
+        var machine = FnKeyStateMachine()
+        return inputs.map { machine.handleAll($0) }
+    }
+
+    private func ctrl(_ t: Double, fn: Bool = true, control: Bool = true) -> KeyInput {
+        .flagsChanged(fnDown: fn, shift: false, control: control, time: t)
+    }
+
+    @Test func controlDuringTheHoldIsACommandOnce() {
+        #expect(runAll([down(10), ctrl(10.6), ctrl(10.7, control: false), ctrl(10.8), up(11)])
+                == [[.pressed(shifted: false)], [.commandAdded], [], [], [.released]])
+    }
+
+    @Test func controlBeforeFnIsACommand() {
+        #expect(runAll([ctrl(10), up(10.5)]) == [[.pressed(shifted: false), .commandAdded], [.released]])
+    }
+
+    @Test func controlWithoutFnDoesNothing() {
+        #expect(runAll([ctrl(10, fn: false), ctrl(10.1, fn: false, control: false)]) == [[], []])
+    }
+
+    @Test func controlTapDoesNotArm() {
+        // fn+⌃ quick tap, then a quick plain tap: no hands-free lock.
+        #expect(runAll([ctrl(10), up(10.1), down(10.2), up(10.3)])
+                == [[.pressed(shifted: false), .commandAdded], [.tapped(shifted: false)],
+                    [.pressed(shifted: false)], [.tapped(shifted: false)]])
+    }
+
+    @Test func controlIsIgnoredWhileLocked() {
+        #expect(runAll([down(10), up(10.1), down(10.2), up(10.3), ctrl(11, fn: false), ctrl(11.1)])
+                == [[.pressed(shifted: false)], [.tapped(shifted: false)], [.pressed(shifted: false)], [.locked],
+                    [], []])
+    }
+
+    @Test func controlAfterACancelIsIgnored() {
+        #expect(runAll([down(10), .keyDown(keyCode: 0, time: 10.2), ctrl(10.3), up(10.6)])
+                == [[.pressed(shifted: false)], [.cancelled], [], []])
+    }
 }

@@ -13,6 +13,8 @@ public final class FnHotkeyMonitor {
     static let fnKeyCode: Int64 = 63
     /// Left and right ⇧: needed to notice ⇧ pressed just after fn (`.shiftAdded`).
     static let shiftKeyCodes: Set<Int64> = [56, 60]
+    /// Left and right ⌃: fn+⌃ makes the hold an edit command.
+    static let controlKeyCodes: Set<Int64> = [59, 62]
     private static let log = Log.logger("Hotkey")
 
     public let events: AsyncStream<HotkeyEvent>
@@ -45,7 +47,8 @@ public final class FnHotkeyMonitor {
         Self.log.info("fn event tap started")
     }
 
-    func receive(type: CGEventType, keyCode: Int64, fnFlag: Bool, shiftFlag: Bool, time: TimeInterval) {
+    func receive(type: CGEventType, keyCode: Int64, fnFlag: Bool, shiftFlag: Bool, controlFlag: Bool = false,
+                 time: TimeInterval) {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
@@ -53,8 +56,9 @@ public final class FnHotkeyMonitor {
             if machine.reset() { continuation.yield(.cancelled) }
             Self.log.notice("event tap was disabled by the system; re-enabled and reset")
         case .flagsChanged:
-            guard keyCode == Self.fnKeyCode || Self.shiftKeyCodes.contains(keyCode) else { return }
-            feed(.flagsChanged(fnDown: fnFlag, shift: shiftFlag, time: time))
+            guard keyCode == Self.fnKeyCode || Self.shiftKeyCodes.contains(keyCode)
+                    || Self.controlKeyCodes.contains(keyCode) else { return }
+            feed(.flagsChanged(fnDown: fnFlag, shift: shiftFlag, control: controlFlag, time: time))
         case .keyDown:
             feed(.keyDown(keyCode: keyCode, time: time))
         default:
@@ -68,7 +72,7 @@ public final class FnHotkeyMonitor {
     }
 
     private func feed(_ input: KeyInput) {
-        if let event = machine.handle(input) { continuation.yield(event) }
+        for event in machine.handleAll(input) { continuation.yield(event) }
     }
 }
 
@@ -82,9 +86,11 @@ private func fnTapCallback(
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let fnFlag = event.flags.contains(.maskSecondaryFn)
         let shiftFlag = event.flags.contains(.maskShift)
+        let controlFlag = event.flags.contains(.maskControl)
         let time = TimeInterval(event.timestamp) / 1_000_000_000
         MainActor.assumeIsolated {
-            monitor.receive(type: type, keyCode: keyCode, fnFlag: fnFlag, shiftFlag: shiftFlag, time: time)
+            monitor.receive(type: type, keyCode: keyCode, fnFlag: fnFlag, shiftFlag: shiftFlag,
+                            controlFlag: controlFlag, time: time)
         }
     }
     return Unmanaged.passUnretained(event)
