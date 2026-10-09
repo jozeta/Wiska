@@ -29,9 +29,7 @@ struct SpeechTab: View {
                         }
                     }
                 }
-                ParakeetCard(store: model.parakeetStore, updates: model.modelUpdates, settings: model.settings) {
-                    model.parakeetModelBecameReady()
-                }
+                ParakeetCard(store: model.parakeetStore, updates: model.modelUpdates, settings: model.settings)
                 if model.parakeetUnavailable {
                     Text("Parakeet is selected but not ready — Apple is used until it is.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -49,7 +47,6 @@ private struct ParakeetCard: View {
     let store: ParakeetModelStore
     let updates: ModelUpdateChecker
     let settings: SettingsStore
-    let onReady: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -85,6 +82,10 @@ private struct ParakeetCard: View {
                 Button("Check now") { Task { await updates.checkNow() } }
                     .disabled(updates.state == .checking)
             }
+            if case .updateAvailable = updates.state {
+                Text("Downloading replaces the current model; Apple is used until the download finishes.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Picker("Check for model updates", selection: $settings.modelUpdateInterval) {
                 ForEach(SettingsStore.modelUpdateIntervals, id: \.self) { days in
                     Text(Self.intervalLabel(days)).tag(days)
@@ -92,7 +93,6 @@ private struct ParakeetCard: View {
             }
         }
         }
-        .onChange(of: store.status) { if store.status == .ready { onReady() } }
     }
 
     private var updateStatus: String {

@@ -118,6 +118,8 @@ final class AppModel {
                 settings.noteRecentApp(app)
             }
         }
+        // Load Parakeet after any download (also when Settings is closed).
+        parakeetStore.onDownloaded = { [weak self] in self?.parakeetModelBecameReady() }
         applyHighlight()
     }
 

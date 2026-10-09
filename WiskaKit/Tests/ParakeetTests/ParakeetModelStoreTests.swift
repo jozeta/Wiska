@@ -139,4 +139,15 @@ struct ParakeetModelStoreTests {
         #expect(store.status == .notDownloaded)
         #expect(!FileManager.default.fileExists(atPath: dir.path))
     }
+
+    /// Whoever loads the model hears about a finished download even when Settings is closed.
+    @Test func finishedDownloadIsAnnounced() async throws {
+        let store = ParakeetModelStore(directory: dir, downloader: FakeDownloader(installed: false))
+        var announced = 0
+        store.onDownloaded = { announced += 1 }
+        store.download()
+        try await waitWhileDownloading(store)
+        #expect(store.status == .ready)
+        #expect(announced == 1)
+    }
 }

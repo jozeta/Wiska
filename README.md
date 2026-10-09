@@ -39,7 +39,7 @@ Settings has a **Help** tab with examples, voice commands for each of your langu
 
 ## Privacy
 
-Speech recognition, cleanup and editing all run on your Mac. Wiska makes no network requests except downloading speech models when you ask for them (Apple's language assets, or the Parakeet model from Hugging Face) and, if Parakeet is installed, a small check every few days whether a newer Parakeet model exists — turn it off with Settings → Speech → Check for model updates → Never. History is stored locally in `~/Library/Application Support/Wiska` and can be turned off.
+Speech recognition, cleanup and editing all run on your Mac. Wiska makes no network requests except downloading speech models when you ask for them (Apple's language assets, or the Parakeet model from Hugging Face) and, if Parakeet is installed, a small check whether a newer Parakeet model exists (weekly by default; daily, monthly or never in Settings) — turn it off with Settings → Speech → Check for model updates → Never. History is stored locally in `~/Library/Application Support/Wiska` and can be turned off.
 
 ## Building from source
 

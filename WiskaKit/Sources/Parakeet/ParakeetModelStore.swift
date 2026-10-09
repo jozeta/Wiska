@@ -52,6 +52,8 @@ public final class ParakeetModelStore {
     @ObservationIgnored private var task: Task<Void, Never>?
     /// Called after `remove()`, so whoever loaded the model (~1 GB in memory) can let it go.
     @ObservationIgnored var onRemove: (@MainActor () -> Void)?
+    /// Called after a download completes, so the model is loaded even when Settings is closed.
+    @ObservationIgnored public var onDownloaded: (@MainActor () -> Void)?
 
     public var isInstalled: Bool { status == .ready }
 
@@ -98,6 +100,7 @@ public final class ParakeetModelStore {
                 try Data((revision ?? "").utf8).write(to: directory.appendingPathComponent(Self.completionMarker))
                 self?.status = .ready
                 Self.log.info("parakeet model downloaded")
+                self?.onDownloaded?()
             } catch {
                 try? FileManager.default.removeItem(at: directory)
                 if Task.isCancelled || error is CancellationError {
