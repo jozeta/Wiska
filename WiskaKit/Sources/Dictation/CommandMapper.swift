@@ -55,7 +55,7 @@ public enum CommandMapper {
                                                secondary: context.secondary, toggle: context.toggle)
             return MappedHotkey(command: .switchLanguage(choice), newToggleLanguage: nil)
         case .locked:
-            return MappedHotkey(command: nil, newToggleLanguage: nil)   // Task 2: .lockHandsFree
+            return MappedHotkey(command: .lockHandsFree, newToggleLanguage: nil)
         case .tapped(let shifted):
             let next = context.toggle.next(in: context.enabled)
             let flip = shifted && context.mode == .toggle && next != context.toggle ? next : nil

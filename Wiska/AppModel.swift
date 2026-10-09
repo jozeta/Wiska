@@ -314,7 +314,7 @@ final class AppModel {
         if let command = mapped.command {
             switch command {
             case .start(let choice), .switchLanguage(let choice): badge = badgeText(for: choice)
-            case .finish, .cancel: break
+            case .finish, .cancel, .lockHandsFree: break
             }
             controller.handle(command)
         }

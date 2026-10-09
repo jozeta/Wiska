@@ -83,6 +83,8 @@ public final class DictationController {
         case .cancel:
             guard state == .listening else { return }
             cancelListening()
+        case .lockHandsFree:
+            break   // Task 4
         case .switchLanguage(let choice):
             guard state == .listening, choice != currentChoice else { return }
             // Stay in .listening throughout so the HUD doesn't collapse and reopen.

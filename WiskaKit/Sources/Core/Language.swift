@@ -143,4 +143,6 @@ public enum DictationCommand: Sendable, Equatable {
     case switchLanguage(LanguageChoice)
     case finish
     case cancel
+    /// The recording in progress continues hands-free (double-tap fn).
+    case lockHandsFree
 }
