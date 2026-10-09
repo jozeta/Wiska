@@ -64,7 +64,7 @@ struct CleanupTab: View {
             }
         }
         .formStyle(.grouped)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(minHeight: 360, idealHeight: 560, maxHeight: .infinity)
     }
 }
 

@@ -37,8 +37,10 @@ struct HelpTab: View {
                 }
             }
             Section("Snippets") {
-                tip("When I say … → Insert …", "In the Snippets tab, save a phrase (“insert my signature”) and the text it stands for. Say the phrase anywhere in a dictation and the text is inserted exactly as written.")
-                tip("Example", "“thanks for the help, insert my signature” → the sentence, then your signature on its own lines.")
+                Text("Save a phrase and the text it stands for in the Snippets tab. Say the phrase anywhere in a dictation, and the text is inserted exactly as you wrote it — in any app, line breaks included.")
+                tip("Example", "When I say “insert my signature” → Insert “Best regards, Johan”. Dictating “thanks for the help, insert my signature” gives the sentence, then your signature on its own lines.")
+                tip("Choosing a phrase", "Use words you wouldn't say by accident, like “insert my …”. Capitals, punctuation and a slightly misheard word don't matter.")
+                tip("Another language", "Add a second phrase to the same snippet, like “infoga min signatur”.")
                 tip("Check without dictating", "Type a sentence in Snippets → Try it to see what would be inserted.")
                 ForEach(model.snippetStore.snippets.filter { $0.problems.isEmpty }) { snippet in
                     LabeledContent("“\(snippet.spokenPhrases.joined(separator: "” or “"))”",
@@ -57,7 +59,7 @@ struct HelpTab: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 720)   // tall enough for most of it; scrolls past that
+        .frame(minHeight: 360, idealHeight: 720, maxHeight: .infinity)
     }
 
     static let editExamples = [

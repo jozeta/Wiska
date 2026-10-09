@@ -10,19 +10,10 @@ struct SnippetsTab: View {
 
     var body: some View {
         Form {
-            Section("How snippets work") {
-                Text("Save a phrase and the text it stands for. Say the phrase anywhere in a dictation, and the text is inserted exactly as you wrote it — in any app, line breaks included.")
-                    .font(.callout)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Example").font(.caption.bold()).foregroundStyle(.secondary)
-                    Text("When I say  **insert my signature**  →  Insert  **Best regards, Johan**")
-                    Text("Dictate “thanks for the help, insert my signature” and you get the sentence, then your signature on its own lines.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Text("Tip: use a phrase you wouldn't say by accident, like “insert my …”. Add a second phrase for another language, like “infoga min signatur”.")
+            Section {
+                Text("Say a snippet's phrase anywhere in a dictation to insert its text. How it works and examples: Help tab.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-
             Section("Try it") {
                 TextField("Try it", text: $trial, prompt: Text("Type what you would say, e.g. “thanks, insert my signature”"))
                     .labelsHidden()
@@ -56,7 +47,7 @@ struct SnippetsTab: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 720)
+        .frame(minHeight: 360, idealHeight: 720, maxHeight: .infinity)
         // Snippets left with neither a phrase nor text don't stay behind.
         .onDisappear {
             for snippet in store.snippets { store.removeIfEmpty(id: snippet.id) }

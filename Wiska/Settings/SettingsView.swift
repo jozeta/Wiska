@@ -15,6 +15,7 @@ struct SettingsView: View {
             Tab("Appearance", systemImage: "paintpalette") { AppearanceTab(model: model) }
             Tab("Help", systemImage: "questionmark.circle") { HelpTab(model: model) }
         }
-        .frame(width: 700)   // wide enough that captions and examples rarely wrap
+        // Resizable: starts 700 wide (captions and examples rarely wrap), never narrower than 560.
+        .frame(minWidth: 560, idealWidth: 700, maxWidth: .infinity)
     }
 }

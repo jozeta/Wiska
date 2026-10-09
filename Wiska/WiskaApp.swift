@@ -26,6 +26,7 @@ struct WiskaApp: App {
         Settings {
             SettingsView(model: model)
         }
+        .windowResizability(.contentMinSize)
     }
 }
 
