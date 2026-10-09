@@ -32,8 +32,10 @@ public struct HuggingFaceRepoDownloader: RepoDownloader {
         var done = 0
         for file in files {
             try Task.checkCancellation()
-            let url = URL(string: "https://huggingface.co/\(repo)/resolve/\(listing.sha)/\(file.rfilename)")!
-            let destination = directory.appendingPathComponent(file.rfilename)
+            let destination = try Self.destination(for: file.rfilename, in: directory)
+            let url = URL(string: "https://huggingface.co")!.appendingPathComponent(repo)
+                .appendingPathComponent("resolve").appendingPathComponent(listing.sha)
+                .appendingPathComponent(file.rfilename)
             try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(),
                                                     withIntermediateDirectories: true)
             let base = done
@@ -45,6 +47,18 @@ public struct HuggingFaceRepoDownloader: RepoDownloader {
             done += file.size ?? 0
             progress(Double(done) / Double(total))
         }
+    }
+
+    /// Where a listed file goes. The names come from the network: one that would land outside
+    /// the model folder ("../", an absolute path) is refused.
+    static func destination(for name: String, in directory: URL) throws -> URL {
+        let parts = name.split(separator: "/", omittingEmptySubsequences: false)
+        guard !name.isEmpty, !name.hasPrefix("/"), !parts.contains(where: { $0 == ".." || $0 == "." || $0.isEmpty })
+        else { throw URLError(.badURL) }
+        let base = directory.standardizedFileURL.path
+        let destination = directory.appendingPathComponent(name).standardizedFileURL
+        guard destination.path.hasPrefix(base + "/") else { throw URLError(.badURL) }
+        return destination
     }
 
     static func check(_ response: URLResponse) throws {

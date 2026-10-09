@@ -80,3 +80,20 @@ struct GemmaRealDownload {
 }
 
 @MainActor final class Box<Value> { var value: Value; init(_ value: Value) { self.value = value } }
+
+/// File names come from the Hugging Face API: none may land outside the model folder.
+struct DownloadPathTests {
+    let directory = URL(fileURLWithPath: "/tmp/models/gemma")
+
+    @Test func ordinaryNamesStayInside() throws {
+        #expect(try HuggingFaceRepoDownloader.destination(for: "model.safetensors", in: directory).path
+                == "/tmp/models/gemma/model.safetensors")
+        #expect(try HuggingFaceRepoDownloader.destination(for: "sub/tokenizer.json", in: directory).path
+                == "/tmp/models/gemma/sub/tokenizer.json")
+    }
+
+    @Test(arguments: ["../../Library/LaunchAgents/x.plist", "/etc/passwd", "a/../../b", "..", ""])
+    func escapingNamesAreRefused(name: String) {
+        #expect(throws: (any Error).self) { try HuggingFaceRepoDownloader.destination(for: name, in: directory) }
+    }
+}
