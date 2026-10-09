@@ -76,7 +76,9 @@ final class AppModel {
                                         category: AppCatalog.category(for: bundleID, overrides: settings.appCategories))
             },
             handsFreeSilence: { settings.handsFreeSilence },
-            showPreview: { settings.livePreview }
+            showPreview: { settings.livePreview },
+            selection: AXSelectionReader(),
+            editor: FoundationModelsEditor()
         )
         controller.onChange = { [weak self] state, audio in
             guard let self else { return }
@@ -278,7 +280,7 @@ final class AppModel {
         if !missingPermissions.isEmpty { return "exclamationmark.triangle" }
         return switch dictationState {
         case .listening: "mic.fill"
-        case .preparingModel, .transcribing, .cleaning, .injecting: "ellipsis"
+        case .preparingModel, .transcribing, .cleaning, .editing, .injecting: "ellipsis"
         case .idle, .failed: "waveform"
         }
     }
@@ -290,6 +292,7 @@ final class AppModel {
         case .listening: "Listening…"
         case .preparingModel: "Downloading speech model…"
         case .transcribing, .cleaning, .injecting: "Transcribing…"
+        case .editing: "Editing…"
         case .failed(let failure): failure.message
         }
     }
@@ -354,8 +357,9 @@ final class AppModel {
     private func hudContent(for state: DictationController.State, audio: AudioLevel) -> HUDContent {
         switch state {
         case .idle: .hidden
-        case .listening: .listening(audio: audio, badge: badge, preview: controller.preview,
-                                    handsFree: controller.isHandsFree)
+        case .listening: .listening(audio: audio, badge: controller.isCommand ? "⌘ Edit" : badge,
+                                    preview: controller.preview, handsFree: controller.isHandsFree)
+        case .editing: .working("Editing…")
         case .preparingModel: .working("Downloading speech model…")
         case .transcribing, .cleaning, .injecting: .working("Transcribing…")
         case .failed(let failure): .error(failure.message)

@@ -30,6 +30,7 @@ struct GeneralTab: View {
             Section("Dictation") {
                 LabeledContent("Dictate", value: "Hold fn, speak, release")
                 LabeledContent("Hands-free", value: "Double-tap fn · tap fn to finish · Esc cancels")
+                LabeledContent("Edit", value: "Select text, hold fn+⌃, say what to change")
                 Picker("Finish hands-free after silence", selection: $settings.handsFreeSilence) {
                     ForEach(SettingsStore.handsFreeSilenceChoices, id: \.self) { seconds in
                         Text(Self.silenceLabel(seconds)).tag(seconds)
