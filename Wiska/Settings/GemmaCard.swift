@@ -26,6 +26,7 @@ struct GemmaCard: View {
                 Button("Cancel") { store.cancelDownload() }
             case .ready:
                 if gemma.loadError != nil {
+                    Button("Try again") { gemma.retryLoading() }
                     Button("Remove and download again") {
                         gemma.remove()
                         store.download()

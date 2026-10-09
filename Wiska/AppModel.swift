@@ -53,6 +53,8 @@ final class AppModel {
     @ObservationIgnored private var flashTask: Task<Void, Never>?
     @ObservationIgnored private var hotkeyFailureLogged = false
     @ObservationIgnored private var badge = "AUTO"
+    /// fn+⌃: "⌃ Edit" with a selection, "⌃ Write" without, "⌃ Command" when the app doesn't say.
+    @ObservationIgnored private var commandBadge = "⌃ Command"
     @ObservationIgnored private var handsFreeLatch = HandsFreeLatch()
 
     init() {
@@ -130,6 +132,11 @@ final class AppModel {
         kbWhisperStore.onDownloaded = { [weak self] in
             self?.settings.useKBWhisper = true
             self?.kbWhisper.prepare()
+        }
+        // A download that failed, was cancelled or had no room: Gemma isn't there, so back to Apple.
+        gemmaStore.onDownloadEnded = { [weak self] in
+            guard let self, !gemmaStore.isInstalled, settings.languageModel == .gemma else { return }
+            settings.languageModel = .apple
         }
         gemmaStore.onDownloaded = { [weak self] in
             self?.settings.languageModel = .gemma
@@ -315,6 +322,7 @@ final class AppModel {
     /// The ticked set changed: give back Apple's slots for unticked languages, then fetch
     /// assets for newly ticked ones in the background.
     func tickedLanguagesChanged() {
+        if !settings.enabledLanguages.contains(.swedish) { kbWhisper.unload() }   // no Swedish: free ~1.5 GB
         warmUpParakeetIfSelected()
         syncAppleLanguages()
     }
@@ -374,10 +382,13 @@ final class AppModel {
         func usable(_ engine: SpeechEngine) -> SpeechEngine {
             engine == .parakeet && !parakeet.isReady ? .apple : engine
         }
-        guard settings.engineMode == .perLanguage else { return usable(settings.engine).shortName }
-        return settings.enabledLanguages
-            .map { "\($0.flag) \(usable(settings.engine(for: $0)).shortName)" }
-            .joined(separator: " · ")
+        let base = settings.engineMode == .perLanguage
+            ? settings.enabledLanguages.map { "\($0.flag) \(usable(settings.engine(for: $0)).shortName)" }
+                .joined(separator: " · ")
+            : usable(settings.engine).shortName
+        // Swedish dictations are re-transcribed by KB-Whisper when it's on and installed.
+        let kbActive = settings.useKBWhisper && settings.enabledLanguages.contains(.swedish) && kbWhisper.isReady
+        return kbActive ? "\(base) · 🇸🇪 + KB-Whisper" : base
     }
 
     private func badgeText(for choice: LanguageChoice) -> String {
@@ -452,6 +463,12 @@ final class AppModel {
             case .start(let choice), .switchLanguage(let choice): badge = badgeText(for: choice)
             case .finish, .cancel, .lockHandsFree, .makeCommand: break
             }
+            if command == .makeCommand {
+                commandBadge = CommandBadge.text(selectedText: AXSelectionReader.focusedSelection(),
+                                                 rangeIsEmpty: AXSelectionReader.focusedSelectionIsEmpty())
+                // Cleanup set to Off doesn't load Gemma at fn press: commands load it here.
+                if settings.languageModel == .gemma { gemma.prepare() }
+            }
             controller.handle(command)
             // A lock that didn't take (no dictation running) must not swallow the next fn press.
             if command == .lockHandsFree, !controller.isHandsFree { hotkey.endHandsFree() }
@@ -474,7 +491,7 @@ final class AppModel {
     private func hudContent(for state: DictationController.State, audio: AudioLevel) -> HUDContent {
         switch state {
         case .idle: .hidden
-        case .listening: .listening(audio: audio, badge: controller.isCommand ? "⌃ Edit" : badge,
+        case .listening: .listening(audio: audio, badge: controller.isCommand ? commandBadge : badge,
                                     preview: controller.preview, handsFree: controller.isHandsFree)
         case .editing: .working("Editing…")
         case .writing: .working("Writing…")

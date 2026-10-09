@@ -14,6 +14,7 @@ struct VoiceCompareView: View {
     @State private var running = false
     @State private var collect: Task<Void, Never>?
     @State private var results: [(name: String, text: String, wer: Double, time: Duration)] = []
+    @State private var micError: String?
 
     private static let maxSamples = 60 * 16_000
 
@@ -34,6 +35,9 @@ struct VoiceCompareView: View {
                     .disabled(running)
                 if recording { Text("Recording… \(samples.count / 16_000) s").font(.caption).foregroundStyle(.secondary) }
                 if running { ProgressView().controlSize(.small); Text("Transcribing…").font(.caption) }
+            }
+            if let micError {
+                Text(micError).font(.caption).foregroundStyle(.red)
             }
             List(results, id: \.name) { result in
                 VStack(alignment: .leading, spacing: 2) {
@@ -61,7 +65,11 @@ struct VoiceCompareView: View {
     private func start() {
         samples = []
         results = []
-        guard let capture = try? recorder.start() else { return }
+        micError = nil
+        guard let capture = try? recorder.start() else {
+            micError = "Couldn't start the microphone. Allow Wiska in System Settings → Privacy & Security → Microphone."
+            return
+        }
         recording = true
         collect = Task { @MainActor in
             for await chunk in capture.chunks {
@@ -91,6 +99,8 @@ struct VoiceCompareView: View {
                                 ContinuousClock.now - start))
             }
             running = false
+            // Compare ran KB-Whisper with the toggle off: don't keep ~1.5 GB loaded for 30 minutes.
+            if !model.settings.useKBWhisper { model.kbWhisper.unload() }
         }
     }
 }

@@ -8,6 +8,7 @@ struct CompareModelsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var results: [String: [Int: BenchmarkResult]] = [:]
     @State private var running = false
+    @State private var runTask: Task<Void, Never>?
 
     var body: some View {
         let engines = model.benchmarkEngines()
@@ -46,7 +47,7 @@ struct CompareModelsView: View {
             HStack {
                 Text("Nothing is saved. Grammar cases run with Fix grammar on.").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button("Close") { dismiss() }
+                Button("Close") { runTask?.cancel(); dismiss() }
                 Button(running ? "Running…" : "Run") { run(engines) }
                     .disabled(running || engines.isEmpty)
                     .keyboardShortcut(.defaultAction)
@@ -54,6 +55,7 @@ struct CompareModelsView: View {
         }
         .padding(16)
         .frame(width: 760, height: 620)
+        .onDisappear { runTask?.cancel() }   // closed mid-run: stop using the GPU
     }
 
     private func summary(_ name: String) -> String? {
@@ -66,9 +68,10 @@ struct CompareModelsView: View {
     private func run(_ engines: [(name: String, rewriter: any TextRewriter, editor: any Core.TextEditor)]) {
         running = true
         results = [:]
-        Task {
+        runTask = Task {
             for engine in engines {
                 for benchmarkCase in ModelBenchmark.cases {
+                    guard !Task.isCancelled else { break }
                     let result = await ModelBenchmark.run(benchmarkCase, rewriter: engine.rewriter, editor: engine.editor)
                     results[engine.name, default: [:]][benchmarkCase.id] = result
                 }

@@ -38,7 +38,8 @@ struct SpeechTab: View {
             }
             .onChange(of: settings.engine) { model.warmUpParakeetIfSelected() }
             .onChange(of: settings.engineMode) { model.warmUpParakeetIfSelected() }
-            if model.settings.enabledLanguages.contains(.swedish) {
+            // Also shown when installed without Swedish ticked, so it can still be removed.
+            if model.settings.enabledLanguages.contains(.swedish) || model.kbWhisperStore.status != .notDownloaded {
                 Section("Swedish") {
                     KBWhisperCard(model: model)
                     Button("Compare on my voice…") { comparingVoice = true }

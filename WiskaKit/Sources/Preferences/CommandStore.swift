@@ -80,7 +80,9 @@ public final class CommandStore {
             // Never overwrite a file we couldn't read: keep it aside for the user.
             let stamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: true))
                 .replacingOccurrences(of: ":", with: "-")
-            let aside = url.deletingLastPathComponent().appendingPathComponent("commands.corrupt-\(stamp).json")
+            // The date for people, a short random suffix so two in the same instant never collide.
+            let suffix = UUID().uuidString.prefix(6)
+            let aside = url.deletingLastPathComponent().appendingPathComponent("commands.corrupt-\(stamp)-\(suffix).json")
             do {
                 try FileManager.default.moveItem(at: url, to: aside)
             } catch {
