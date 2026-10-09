@@ -96,15 +96,7 @@ private struct ParakeetCard: View {
     }
 
     private var updateStatus: String {
-        switch updates.state {
-        case .checking: "Checking…"
-        case .updateAvailable: "Update available"
-        case .failed(let message): "Couldn't check: \(message)"
-        case .upToDate(let date): "Up to date · checked \(date.formatted(.relative(presentation: .named)))"
-        case .idle:
-            settings.lastModelUpdateCheck.map { "Up to date · checked \($0.formatted(.relative(presentation: .named)))" }
-                ?? "Not checked yet"
-        }
+        ModelUpdateChecker.statusText(updates.state, lastCheck: settings.lastModelUpdateCheck)
     }
 
     static func intervalLabel(_ days: Int) -> String {

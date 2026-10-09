@@ -131,4 +131,16 @@ struct ModelUpdateCheckerTests {
         #expect(store.installedRevision == "new")
         #expect(checker.state == .idle)
     }
+
+    /// After a relaunch the result of the last check is unknown: never claim "Up to date".
+    @Test func statusTextIsHonestAfterARelaunch() {
+        let checked = Date(timeIntervalSince1970: 1_000)
+        let now = checked.addingTimeInterval(3 * 3_600)
+        #expect(ModelUpdateChecker.statusText(.idle, lastCheck: checked, now: now).hasPrefix("Last checked"))
+        #expect(ModelUpdateChecker.statusText(.idle, lastCheck: nil, now: now) == "Not checked yet")
+        #expect(ModelUpdateChecker.statusText(.upToDate(checked), lastCheck: checked, now: now).hasPrefix("Up to date"))
+        #expect(ModelUpdateChecker.statusText(.checking, lastCheck: nil, now: now) == "Checking…")
+        #expect(ModelUpdateChecker.statusText(.updateAvailable(source.revision), lastCheck: nil, now: now) == "Update available")
+        #expect(ModelUpdateChecker.statusText(.failed("offline"), lastCheck: nil, now: now) == "Couldn't check: offline")
+    }
 }

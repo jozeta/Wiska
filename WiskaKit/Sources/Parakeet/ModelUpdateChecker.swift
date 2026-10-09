@@ -42,6 +42,19 @@ public final class ModelUpdateChecker {
         return latest.lastModified > installedAt
     }
 
+    /// The card's status line. `.idle` means this run hasn't checked yet, so the last check's
+    /// result is unknown: it says when, never "Up to date".
+    public static func statusText(_ state: State, lastCheck: Date?, now: Date = Date()) -> String {
+        func ago(_ date: Date) -> String { date.formatted(.relative(presentation: .named, unitsStyle: .wide)) }
+        return switch state {
+        case .checking: "Checking…"
+        case .updateAvailable: "Update available"
+        case .failed(let message): "Couldn't check: \(message)"
+        case .upToDate(let date): "Up to date · checked \(ago(date))"
+        case .idle: lastCheck.map { "Last checked \(ago($0))" } ?? "Not checked yet"
+        }
+    }
+
     /// "Check now": always checks and shows failures.
     public func checkNow(now: Date = Date()) async {
         guard store.isInstalled else { return }
