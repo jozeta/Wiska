@@ -71,7 +71,7 @@ final class AppModel {
                                      style: { settings.style(for: $0) }),
             injector: PasteboardInjector(),
             contextProvider: {
-                let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+                let bundleID = FrontApp.bundleID()
                 return DictationContext(appBundleID: bundleID, enabledLanguages: settings.enabledLanguages,
                                         category: AppCatalog.category(for: bundleID, overrides: settings.appCategories))
             },
@@ -186,10 +186,13 @@ final class AppModel {
         if settings.usesParakeet && !parakeet.isReady { warmUpParakeetIfSelected() }
         switch plan(for: choice) {
         case .single(.apple): return apple
-        case .single(.parakeet): return parakeet
+        // Parakeet sometimes hears a short phrase in another alphabet ("Кит статус"): Apple retries.
+        case .single(.parakeet): return ScriptFallbackTranscriber(primary: parakeet, fallback: apple)
         case .hybrid(let appleLanguages):
-            return HybridTranscriber(parakeet: parakeet, apple: apple, appleLanguages: appleLanguages,
-                                     fallbackLanguage: { [settings] in settings.lastDetectedLanguage })
+            return ScriptFallbackTranscriber(
+                primary: HybridTranscriber(parakeet: parakeet, apple: apple, appleLanguages: appleLanguages,
+                                           fallbackLanguage: { [settings] in settings.lastDetectedLanguage }),
+                fallback: apple)
         }
     }
 
