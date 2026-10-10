@@ -7,3 +7,4 @@ DerivedData/
 build/
 Local.xcconfig
 .superpowers/
+build-release/

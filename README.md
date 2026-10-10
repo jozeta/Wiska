@@ -2,6 +2,31 @@
 
 Private, on-device dictation for macOS. Hold **fn**, speak, release — your words appear wherever the cursor is, cleaned up and formatted for the app you're in. Nothing you say leaves your Mac.
 
+<p align="center">
+  <img src="docs/images/settings-models.png" width="420" alt="Settings → Models: Parakeet, KB-Whisper and Gemma, downloaded and updated on request">
+</p>
+
+## Download
+
+**[Download Wiska for macOS (Wiska.zip, about 19 MB)](https://github.com/jozeta/Wiska/releases/latest/download/Wiska.zip)** — or see all [releases](https://github.com/jozeta/Wiska/releases).
+
+Requires macOS 26 or later on Apple Silicon. Unzip and move **Wiska.app** to your Applications folder.
+
+### "Apple could not verify Wiska…" — the security warning
+
+The first time you open Wiska, macOS says it can't verify that the app is free of malware. That's expected: the app is signed, but it isn't **notarized** by Apple, which requires a paid Apple Developer membership. It doesn't mean anything is wrong with the app — but you should only bypass the warning for software you trust, so:
+
+- **Check the download (optional):** the SHA-256 checksum of each `Wiska.zip` is listed on its [release page](https://github.com/jozeta/Wiska/releases). In Terminal: `shasum -a 256 ~/Downloads/Wiska.zip`.
+- **Or build it yourself** from this source code (see [Building from source](#building-from-source)) — then no warning appears.
+
+To open it anyway:
+
+1. Open Wiska once and click **Done** in the warning.
+2. Go to **System Settings → Privacy & Security**, scroll down to *"Wiska" was blocked to protect your Mac* and click **Open Anyway**, then confirm with your password or Touch ID.
+3. From then on Wiska opens normally. (After an update you may have to do this once more.)
+
+Wiska then asks for the permissions it needs — **Microphone** (to hear you), **Accessibility** and **Input Monitoring** (to notice the fn key and paste the text). Everything is processed on your Mac; see [Privacy](#privacy).
+
 ## Features
 
 - **Push-to-talk anywhere** — hold fn to dictate into any app; release and the text is pasted at the cursor.
@@ -24,8 +49,17 @@ Private, on-device dictation for macOS. Hold **fn**, speak, release — your wor
 ## Requirements
 
 - macOS 26 or later on Apple Silicon.
-- Apple Intelligence turned on, for cleanup and editing by voice (dictation works without it).
-- Permissions: **Microphone** (to hear you) and **Accessibility** (to read the fn key and paste).
+- For cleanup and editing by voice: Apple Intelligence turned on, **or** the optional Gemma model (Settings → Models). Dictation itself works without either.
+- Optional downloads (Settings → Models): Parakeet (470 MB), KB-Whisper for Swedish (1.1 GB), Gemma 4 E4B (5.2 GB). They aren't part of the app and are fetched only when you ask.
+
+## Screenshots
+
+| | |
+|---|---|
+| <img src="docs/images/settings-general.png" width="380" alt="General settings"> | <img src="docs/images/settings-cleanup.png" width="380" alt="Cleanup settings: language model, Fix grammar, styles per kind of app"> |
+| **General** — push-to-talk, hands-free, edit by voice | **Cleanup** — language model, Fix grammar, a style per kind of app |
+| <img src="docs/images/settings-models.png" width="380" alt="Models: download, remove and update every model"> | <img src="docs/images/settings-commands.png" width="380" alt="Saved commands"> |
+| **Models** — every optional model in one place, with update checks | **Commands** — name the instructions you use often |
 
 ## Using Wiska
 
@@ -49,7 +83,7 @@ Speech recognition, cleanup and editing all run on your Mac. Wiska makes no netw
 
 ## Building from source
 
-1. Install Xcode 26.
+1. Install Xcode 26, and its Metal Toolchain (needed by the MLX and whisper.cpp engines): `xcodebuild -downloadComponent MetalToolchain`.
 2. Copy `Local.xcconfig.example` to `Local.xcconfig` and set your `DEVELOPMENT_TEAM`.
 3. Build and run the `Wiska` scheme in `Wiska.xcodeproj`, or from the terminal:
 
@@ -58,7 +92,7 @@ Speech recognition, cleanup and editing all run on your Mac. Wiska makes no netw
    open build/Build/Products/Debug/Wiska.app
    ```
 
-The app's logic lives in the Swift package `WiskaKit` (modules Core, Hotkey, Audio, SpeechToText, Parakeet, Cleanup, Injection, Dictation, HUD, Preferences, History). Run its tests with:
+The app's logic lives in the Swift package `WiskaKit` (modules Core, Hotkey, Audio, SpeechToText, Parakeet, KBWhisper, LocalModel, Cleanup, Injection, Dictation, HUD, Preferences, History). Run its tests with:
 
 ```sh
 cd WiskaKit && swift test
