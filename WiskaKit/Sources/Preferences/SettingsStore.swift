@@ -137,14 +137,16 @@ public final class SettingsStore {
     public var dictationTheme: DictationTheme {
         didSet { defaults.set(dictationTheme.rawValue, forKey: Key.dictationTheme) }
     }
-    /// The size slider's range, shared by the orb and Clippy.
-    public static let themeSizeRange: ClosedRange<Double> = 80...240
+    /// The orb size slider's range (its whole footprint, glow included).
+    public static let orbSizeRange: ClosedRange<Double> = 120...480
+    /// The Clippy size slider's range (his height).
+    public static let clippySizeRange: ClosedRange<Double> = 80...240
     public static let defaultOrbSize: Double = 140
     public static let defaultClippySize: Double = 128
     /// The orb's whole footprint in points, glow included.
     public var orbSize: Double {
         didSet {
-            let clamped = Self.clampedSize(orbSize, fallback: Self.defaultOrbSize)
+            let clamped = Self.clampedSize(orbSize, in: Self.orbSizeRange, fallback: Self.defaultOrbSize)
             if clamped != orbSize { orbSize = clamped; return }
             defaults.set(orbSize, forKey: Key.orbSize)
         }
@@ -152,7 +154,7 @@ public final class SettingsStore {
     /// Clippy's height in points.
     public var clippySize: Double {
         didSet {
-            let clamped = Self.clampedSize(clippySize, fallback: Self.defaultClippySize)
+            let clamped = Self.clampedSize(clippySize, in: Self.clippySizeRange, fallback: Self.defaultClippySize)
             if clamped != clippySize { clippySize = clamped; return }
             defaults.set(clippySize, forKey: Key.clippySize)
         }
@@ -171,8 +173,8 @@ public final class SettingsStore {
     public var orbOrigin: CGPoint? { didSet { Self.write(orbOrigin, defaults, Key.orbOrigin) } }
     public var clippyOrigin: CGPoint? { didSet { Self.write(clippyOrigin, defaults, Key.clippyOrigin) } }
 
-    static func clampedSize(_ size: Double, fallback: Double) -> Double {
-        size.isFinite ? min(max(size, themeSizeRange.lowerBound), themeSizeRange.upperBound) : fallback
+    static func clampedSize(_ size: Double, in range: ClosedRange<Double>, fallback: Double) -> Double {
+        size.isFinite ? min(max(size, range.lowerBound), range.upperBound) : fallback
     }
 
     private static func write(_ point: CGPoint?, _ defaults: UserDefaults, _ key: String) {
@@ -317,9 +319,9 @@ public final class SettingsStore {
         appCategories = storedApps.compactMapValues(AppCategory.init(rawValue:))
         dictationTheme = Self.read(defaults, Key.dictationTheme, DictationTheme.notchDropdown)
         orbSize = Self.clampedSize(defaults.object(forKey: Key.orbSize) as? Double ?? Self.defaultOrbSize,
-                                   fallback: Self.defaultOrbSize)
+                                   in: Self.orbSizeRange, fallback: Self.defaultOrbSize)
         clippySize = Self.clampedSize(defaults.object(forKey: Key.clippySize) as? Double ?? Self.defaultClippySize,
-                                      fallback: Self.defaultClippySize)
+                                      in: Self.clippySizeRange, fallback: Self.defaultClippySize)
         clippyFollowsPointer = defaults.object(forKey: Key.clippyFollowsPointer) as? Bool ?? false
         orbWindowBehavior = Self.read(defaults, Key.orbWindowBehavior, FloatingWindowBehavior.alwaysOnTop)
         clippyWindowBehavior = Self.read(defaults, Key.clippyWindowBehavior, FloatingWindowBehavior.alwaysOnTop)

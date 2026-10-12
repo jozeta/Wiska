@@ -59,20 +59,32 @@ final class DictationThemeSettingsTests {
         let store = SettingsStore(defaults: defaults)
         #expect(store.dictationTheme == .notchDropdown)
         #expect(store.orbWindowBehavior == .alwaysOnTop)
-        #expect(store.clippySize == SettingsStore.themeSizeRange.lowerBound)
-        #expect(store.orbSize == SettingsStore.themeSizeRange.upperBound)
+        #expect(store.clippySize == SettingsStore.clippySizeRange.lowerBound)
+        #expect(store.orbSize == SettingsStore.orbSizeRange.upperBound)
         #expect(store.orbOrigin == nil)
         #expect(store.clippyOrigin == nil)
+    }
+
+    /// The orb goes from half the old largest size (120) to double it (480); Clippy keeps 80…240.
+    @Test func eachThemeHasItsOwnSizeRange() {
+        #expect(SettingsStore.orbSizeRange == 120...480)
+        #expect(SettingsStore.clippySizeRange == 80...240)
+        #expect(SettingsStore.orbSizeRange.contains(SettingsStore.defaultOrbSize))
+        defaults.set(100.0, forKey: "orbSize")                    // saved under the old range
+        #expect(SettingsStore(defaults: defaults).orbSize == 120)
+        let store = SettingsStore(defaults: defaults)
+        store.orbSize = 460
+        #expect(SettingsStore(defaults: defaults).orbSize == 460)
     }
 
     @Test func sizesAreKeptInRange() {
         let store = SettingsStore(defaults: defaults)
         store.orbSize = 10
-        #expect(store.orbSize == SettingsStore.themeSizeRange.lowerBound)
+        #expect(store.orbSize == SettingsStore.orbSizeRange.lowerBound)
         store.orbSize = .nan
         #expect(store.orbSize == SettingsStore.defaultOrbSize)
         store.clippySize = 1_000
-        #expect(store.clippySize == SettingsStore.themeSizeRange.upperBound)
+        #expect(store.clippySize == SettingsStore.clippySizeRange.upperBound)
         store.clippySize = .infinity
         #expect(store.clippySize == SettingsStore.defaultClippySize)
     }

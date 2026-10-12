@@ -60,11 +60,12 @@ struct AppearanceTab: View {
             Section("Magical Orb") {
                 HStack {
                     Spacer()
-                    OrbPreview(colour: settings.highlight, side: settings.orbSize)
-                        .frame(height: SettingsStore.themeSizeRange.upperBound)
+                    // Shown at its real size up to `orbPreviewLimit`; the slider says the actual size.
+                    OrbPreview(colour: settings.highlight, side: min(settings.orbSize, Self.orbPreviewLimit))
+                        .frame(height: Self.orbPreviewLimit)
                     Spacer()
                 }
-                sizeSlider("Orb size", value: settings.orbSize) {
+                sizeSlider("Orb size", value: settings.orbSize, in: SettingsStore.orbSizeRange, step: 20) {
                     settings.orbSize = $0
                     model.applyAppearance()
                 }
@@ -80,10 +81,10 @@ struct AppearanceTab: View {
                 HStack {
                     Spacer()
                     ClippyPreview(highlight: settings.highlight, showsBubble: false, height: settings.clippySize)
-                        .frame(height: SettingsStore.themeSizeRange.upperBound)
+                        .frame(height: SettingsStore.clippySizeRange.upperBound)
                     Spacer()
                 }
-                sizeSlider("Clippy size", value: settings.clippySize) {
+                sizeSlider("Clippy size", value: settings.clippySize, in: SettingsStore.clippySizeRange, step: 10) {
                     settings.clippySize = $0
                     model.applyAppearance()
                 }
@@ -100,17 +101,21 @@ struct AppearanceTab: View {
         }
     }
 
-    /// The size slider the orb and Clippy share.
-    private func sizeSlider(_ title: String, value: Double, set: @escaping (Double) -> Void) -> some View {
+    /// The largest orb the Settings preview draws (the slider goes up to 480).
+    private static let orbPreviewLimit: CGFloat = 280
+
+    /// The size slider the orb and Clippy share, with the size in points beside it.
+    private func sizeSlider(_ title: String, value: Double, in range: ClosedRange<Double>, step: Double,
+                            set: @escaping (Double) -> Void) -> some View {
         LabeledContent(title) {
-            Slider(value: Binding(get: { value }, set: { set($0.rounded()) }),
-                   in: SettingsStore.themeSizeRange, step: 10) {
+            Slider(value: Binding(get: { value }, set: { set($0.rounded()) }), in: range, step: step) {
                 EmptyView()
             } minimumValueLabel: {
                 Image(systemName: "circle.fill").font(.system(size: 6))
             } maximumValueLabel: {
                 Image(systemName: "circle.fill").font(.system(size: 14))
             }
+            Text("\(Int(value)) pt").monospacedDigit().foregroundStyle(.secondary).frame(width: 52, alignment: .trailing)
         }
     }
 
