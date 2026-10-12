@@ -65,7 +65,8 @@ static float fbm(float2 p) {
     // Fire flickers: a gentle, irregular breathing of the light.
     float flicker = 0.9 + 0.2 * noise(float2(t * 3.0, 1.7));
 
-    float edge = radius * (0.95 + 0.35 * flames + 0.3 * (tongues - 0.5) + ripple * band);
+    // A louder voice (more ripple) flares the tongues further out.
+    float edge = radius * (0.95 + 0.35 * flames + 0.3 * (tongues - 0.5) * (1.0 + 2.0 * ripple) + ripple * band);
     float body = smoothstep(edge, edge * 0.3, r) * (0.55 + flames);
     float licks = smoothstep(edge * 1.15, edge * 0.7, r) * smoothstep(0.45, 0.75, tongues);
     float core = exp(-r * r / (radius * radius * 0.14));
@@ -78,7 +79,7 @@ static float fbm(float2 p) {
                  + licks * (0.4 + 0.7 * e)
                  + wisps * (0.4 + 0.8 * e)
                  + halo * (0.18 + 0.5 * e)) * flicker;
-    light *= smoothstep(1.0, 0.72, r);                     // nothing reaches the window's edge
+    light *= smoothstep(1.0, 0.82, r);                     // nothing reaches the window's edge (OrbMotion.fadeStart)
 
     // A fire's colour ramp by heat: dim edge colour → highlight colour → its bright end → white-hot.
     float heat = clamp(core * 0.95 + body * 0.45 * (0.6 + 0.6 * e) + licks * 0.3 + wisps * 0.3, 0.0, 1.3);

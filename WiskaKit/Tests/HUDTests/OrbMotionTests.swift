@@ -15,11 +15,11 @@ struct OrbMotionTests {
         let idle = poses(.idle, energy: 0)
         #expect(idle.allSatisfy { $0.flameSpeed >= 0.2 && $0.flameSpeed <= 0.3 })   // lively, not rushing
         let sizes = idle.map(\.coreScale)
-        #expect(sizes.max()! - sizes.min()! >= 0.18)                    // a strong pulse…
+        #expect(sizes.max()! - sizes.min()! >= 0.24)                    // a strong pulse…
         let step = zip(sizes.dropFirst(8), sizes).map { abs($0 - $1) }.max()!
-        #expect(step < 0.04)                                            // …that never jumps
+        #expect(step < 0.045)                                           // …that never jumps
         let intensities = idle.map(\.intensity)
-        #expect(intensities.max()! - intensities.min()! >= 0.2)         // brightens and dims with it
+        #expect(intensities.max()! - intensities.min()! >= 0.28)        // brightens and dims with it
         // About one breath every five seconds: 6–10 swings through rest in 20 s.
         let swings = zip(sizes.dropFirst(), sizes).filter { ($0 - 1) * ($1 - 1) < 0 }.count
         #expect((6...10).contains(swings))
@@ -44,9 +44,10 @@ struct OrbMotionTests {
         #expect(loud.ripple > quiet.ripple)
         #expect(loud.intensity <= 1 && loud.coreScale <= OrbMotion.maxCoreScale)
         // Strongly: a loud voice grows the fire by about a third and brightens it a lot.
-        #expect(loud.coreScale - poses(.listening(command: false), energy: 0)[0].coreScale >= 0.3)
-        #expect(loud.intensity - poses(.listening(command: false), energy: 0)[0].intensity >= 0.5)
-        #expect(loud.ripple >= 0.4)
+        // Strongly: a loud voice grows the fire by ~40%, takes it to full brightness, flares its tongues.
+        #expect(loud.coreScale - poses(.listening(command: false), energy: 0)[0].coreScale >= 0.4)
+        #expect(loud.intensity - poses(.listening(command: false), energy: 0)[0].intensity >= 0.6)
+        #expect(loud.ripple >= 0.5)
     }
 
     @Test func workingBurnsHotterThanIdle() {
@@ -59,6 +60,17 @@ struct OrbMotionTests {
         }
     }
 
+    /// Wavy borders float round the fire: always a few, slow when idle, bigger and quicker with the voice.
+    @Test func wavyBordersFloatAroundAndRespondToTheVoice() {
+        let idle = poses(.idle, energy: 0)
+        #expect(idle.allSatisfy { (2...3).contains($0.waveCount) && $0.waveAmplitude > 0 && $0.waveSpeed <= 0.4 })
+        let quiet = poses(.listening(command: false), energy: 0.1)[0]
+        let loud = poses(.listening(command: false), energy: 1)[0]
+        #expect(loud.waveAmplitude > quiet.waveAmplitude * 2)
+        #expect(loud.waveSpeed > quiet.waveSpeed)
+        #expect(poses(.idle, energy: 0, reduceMotion: true).allSatisfy { $0.waveSpeed == 0 })
+    }
+
     @Test func errorsTurnRed() {
         #expect(poses(.error, energy: 0).allSatisfy { $0.isError })
         #expect(poses(.idle, energy: 0).allSatisfy { !$0.isError })
@@ -68,7 +80,8 @@ struct OrbMotionTests {
     @Test func theFireFitsTheWindow() {
         for mood in [Presence.Mood.idle, .listening(command: true), .working(.writing), .success, .error] {
             for pose in poses(mood, energy: 1) {
-                #expect(OrbMotion.fireEdge(pose) <= 0.75)
+                #expect(OrbMotion.fireEdge(pose) <= OrbMotion.fadeStart)
+                #expect(OrbMotion.waveReach(pose) <= 0.95)
             }
         }
     }

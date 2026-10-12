@@ -19,6 +19,7 @@ struct OrbView: View {
     @State private var clock = VoiceEnergy.Clock()
     @State private var bands = BandClock()
     @State private var flames = FlameClock()
+    @State private var waves = FlameClock()
 
     var body: some View {
         let _ = model.revision
@@ -31,10 +32,14 @@ struct OrbView: View {
             let mood = model.sampleLevel == nil ? model.presence.mood(at: timeline.date) : .listening(command: false)
             let pose = OrbMotion.pose(at: t, mood: mood, energy: energy, reduceMotion: reduceMotion)
             let phase = flames.advance(to: timeline.date, speed: pose.flameSpeed)
+            let wavePhase = waves.advance(to: timeline.date, speed: pose.waveSpeed)
             ZStack {
                 // A soft glow underneath: the orb never vanishes, even if the shader can't load.
                 Canvas { context, size in
                     OrbRenderer.drawGlow(in: &context, size: size, pose: pose, colour: model.colour)
+                }
+                Canvas { context, size in
+                    OrbRenderer.drawWaves(in: &context, size: size, phase: wavePhase, pose: pose, colour: model.colour)
                 }
                 Rectangle()
                     .fill(.white)
@@ -107,6 +112,35 @@ enum OrbRenderer {
                              .init(color: outer.opacity(0.3 * pose.glow), location: 0.35),
                              .init(color: outer.opacity(0), location: 1)]),
             center: centre, startRadius: 0, endRadius: radius))
+    }
+
+    /// Wavy borders floating round the fire: soft glowing rings that undulate out of step with
+    /// each other, slowly when idle and bigger and quicker with the voice.
+    static func drawWaves(in context: inout GraphicsContext, size: CGSize, phase: Double, pose: OrbPose,
+                          colour: Highlight) {
+        let half = min(size.width, size.height) / 2
+        let centre = CGPoint(x: size.width / 2, y: size.height / 2)
+        let fire = half * OrbMotion.fireRadius * pose.coreScale
+        let (outer, inner) = colours(pose, colour)
+        for index in 0..<pose.waveCount {
+            let base = fire * OrbMotion.waveRadius(index)
+            let k = Double(index)
+            var path = Path()
+            for step in 0...120 {
+                let a = Double(step) / 120 * 2 * .pi
+                let wave = 0.6 * sin(3 * a + phase * (1 + 0.3 * k) + k * 2.1)
+                    + 0.4 * sin(5 * a - phase * (1.3 - 0.2 * k) + k)
+                let r = base * (1 + pose.waveAmplitude * CGFloat(wave))
+                let p = CGPoint(x: centre.x + r * CGFloat(cos(a)), y: centre.y + r * CGFloat(sin(a)))
+                step == 0 ? path.move(to: p) : path.addLine(to: p)
+            }
+            let tint = index.isMultiple(of: 2) ? inner : outer
+            let strength = (0.3 + 0.55 * Double(pose.glow)) * (1 - 0.22 * k)
+            var glow = context
+            glow.addFilter(.blur(radius: max(1, half * 0.025)))
+            glow.stroke(path, with: .color(tint.opacity(0.6 * strength)), lineWidth: max(1.5, half * 0.03))
+            context.stroke(path, with: .color(tint.opacity(strength)), lineWidth: max(0.8, half * 0.01))
+        }
     }
 
     private static func circle(_ centre: CGPoint, _ radius: CGFloat) -> Path {
