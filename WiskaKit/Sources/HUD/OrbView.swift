@@ -11,8 +11,7 @@ final class OrbModel {
     @ObservationIgnored var sampleLevel: ((Double) -> AudioLevel)?
 }
 
-/// The Magical Orb: a ball of plasma fire (a Metal shader, `OrbFire.metal`) with a few drifting
-/// sparks. Driven by the voice (`VoiceEnergy` and the pitch bands, from the microphone frames the
+/// The Magical Orb: a ball of plasma fire (a Metal shader, `OrbFire.metal`). Driven by the voice (`VoiceEnergy` and the pitch bands, from the microphone frames the
 /// app already has). Redraws at full rate only while something moves; idle it ticks slowly.
 struct OrbView: View {
     let model: OrbModel
@@ -43,10 +42,6 @@ struct OrbView: View {
                         content.colorEffect(OrbRenderer.fire(size: proxy.size, phase: phase, pose: pose,
                                                              bands: shares, colour: model.colour))
                     }
-                Canvas { context, size in
-                    OrbRenderer.drawSparks(in: &context, size: size, t: t, pose: pose, bands: shares,
-                                           colour: model.colour)
-                }
             }
             .compositingGroup()
         }
@@ -88,7 +83,6 @@ enum OrbRenderer {
     static let shaderName = "orbFire"
     /// The bundle holding the compiled shader (the HUD module's resources).
     static let shaderBundle = Bundle.module
-    static let particleCount = 14
 
     static func fire(size: CGSize, phase: Double, pose: OrbPose, bands: [CGFloat], colour: Highlight) -> Shader {
         let (outer, inner) = colours(pose, colour)
@@ -103,21 +97,6 @@ enum OrbRenderer {
         pose.isError ? (Color(hex: 0xC2304A), AuroraTheme.danger) : (AuroraTheme.end(colour), AuroraTheme.start(colour))
     }
 
-    /// How much the voice's bands push the edge out at angle `a` (radians, 0 = right, −π/2 = top):
-    /// low pitches at the top, high ones at the bottom, mirrored left and right — as the shader does,
-    /// softened across neighbouring bands.
-    static func bandValue(at a: Double, bands: [CGFloat]) -> CGFloat {
-        guard bands.count > 1 else { return 0 }
-        let u = (sin(a) + 1) / 2
-        let x = u * Double(bands.count - 1)
-        func smoothed(_ i: Int) -> CGFloat {
-            let at = { bands[max(0, min(bands.count - 1, $0))] }
-            return 0.25 * at(i - 1) + 0.5 * at(i) + 0.25 * at(i + 1)
-        }
-        let i = Int(x.rounded(.down)), f = CGFloat(x - Double(i))
-        return smoothed(i) * (1 - f) + smoothed(min(i + 1, bands.count - 1)) * f
-    }
-
     static func drawGlow(in context: inout GraphicsContext, size: CGSize, pose: OrbPose, colour: Highlight) {
         let half = min(size.width, size.height) / 2
         let centre = CGPoint(x: size.width / 2, y: size.height / 2)
@@ -128,33 +107,6 @@ enum OrbRenderer {
                              .init(color: outer.opacity(0.3 * pose.glow), location: 0.35),
                              .init(color: outer.opacity(0), location: 1)]),
             center: centre, startRadius: 0, endRadius: radius))
-    }
-
-    /// Embers: sparks that float up off the fire and fade, slowly. While you speak each one
-    /// shines with the pitch band where it rose; otherwise they glow softly.
-    static func drawSparks(in context: inout GraphicsContext, size: CGSize, t: Double, pose: OrbPose,
-                           bands: [CGFloat], colour: Highlight) {
-        guard pose.particleOpacity > 0 else { return }
-        let half = min(size.width, size.height) / 2
-        let centre = CGPoint(x: size.width / 2, y: size.height / 2)
-        let (_, inner) = colours(pose, colour)
-        let voiced = bands.contains { $0 > 0.02 }
-        for i in 0..<particleCount {
-            let seed = Double(i) * 1.618
-            // Each ember's life runs 0 → 1 and starts over: rise, sway, fade in and out.
-            let rate = 0.12 * Double(pose.particleSpeed) * (0.7 + 0.15 * Double(i % 3))
-            let life = (Seed.hash(seed) + t * rate).truncatingRemainder(dividingBy: 1)
-            let start = Seed.hash(seed + 0.3) * 2 * .pi
-            let origin = CGPoint(x: centre.x + half * 0.4 * CGFloat(cos(start)),
-                                 y: centre.y + half * 0.3 * CGFloat(sin(start)))
-            let sway = half * 0.05 * CGFloat(sin(t * 0.6 + seed * 2))
-            let p = CGPoint(x: origin.x + sway * CGFloat(life), y: origin.y - half * 0.55 * CGFloat(life))
-            let shine = voiced ? 0.35 + 0.65 * Double(bandValue(at: start, bands: bands)) : 0.75
-            let fade = sin(.pi * life) * shine * Double(pose.particleOpacity)
-            let dot = max(0.7, half * 0.012 * (i.isMultiple(of: 3) ? 1.5 : 1)) * CGFloat(1 - 0.4 * life)
-            context.fill(circle(p, dot * 2.6), with: .color(inner.opacity(0.3 * fade)))
-            context.fill(circle(p, dot), with: .color(Color(red: 1, green: 0.97, blue: 0.9).opacity(fade)))
-        }
     }
 
     private static func circle(_ centre: CGPoint, _ radius: CGFloat) -> Path {

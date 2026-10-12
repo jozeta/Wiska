@@ -13,24 +13,24 @@ struct OrbMotionTests {
 
     @Test func idleFireDriftsSlowlyAndPulsesClearlyButCalmly() {
         let idle = poses(.idle, energy: 0)
-        #expect(idle.allSatisfy { $0.flameSpeed > 0 && $0.flameSpeed <= 0.15 })
+        #expect(idle.allSatisfy { $0.flameSpeed >= 0.2 && $0.flameSpeed <= 0.3 })   // lively, not rushing
         let sizes = idle.map(\.coreScale)
-        #expect(sizes.max()! - sizes.min()! >= 0.12)                    // an obvious pulse…
+        #expect(sizes.max()! - sizes.min()! >= 0.18)                    // a strong pulse…
         let step = zip(sizes.dropFirst(8), sizes).map { abs($0 - $1) }.max()!
-        #expect(step < 0.03)                                            // …that never jumps
+        #expect(step < 0.04)                                            // …that never jumps
         let intensities = idle.map(\.intensity)
-        #expect(intensities.max()! - intensities.min()! >= 0.15)        // brightens and dims with it
+        #expect(intensities.max()! - intensities.min()! >= 0.2)         // brightens and dims with it
         // About one breath every five seconds: 6–10 swings through rest in 20 s.
         let swings = zip(sizes.dropFirst(), sizes).filter { ($0 - 1) * ($1 - 1) < 0 }.count
         #expect((6...10).contains(swings))
         #expect(idle.allSatisfy { $0.intensity < 0.45 })
     }
 
-    @Test func busyFlamesAndSparksStayUnhurried() {
-        for mood in [Presence.Mood.working(.transcribing), .working(.editing), .success] {
-            #expect(poses(mood, energy: 0).allSatisfy { $0.flameSpeed <= 0.45 && $0.particleSpeed <= 0.6 })
+    @Test func busyFlamesAreLivelyButUnhurried() {
+        for mood in [Presence.Mood.working(.transcribing), .working(.editing)] {
+            #expect(poses(mood, energy: 0).allSatisfy { $0.flameSpeed >= 0.5 && $0.flameSpeed <= 0.7 })
         }
-        #expect(poses(.listening(command: false), energy: 1).allSatisfy { $0.flameSpeed <= 0.6 && $0.particleSpeed <= 0.8 })
+        #expect(poses(.listening(command: false), energy: 1).allSatisfy { $0.flameSpeed <= 0.8 })
     }
 
     @Test func theVoiceFeedsTheFire() {
@@ -43,6 +43,10 @@ struct OrbMotionTests {
         #expect(loud.coreScale > quiet.coreScale)
         #expect(loud.ripple > quiet.ripple)
         #expect(loud.intensity <= 1 && loud.coreScale <= OrbMotion.maxCoreScale)
+        // Strongly: a loud voice grows the fire by about a third and brightens it a lot.
+        #expect(loud.coreScale - poses(.listening(command: false), energy: 0)[0].coreScale >= 0.3)
+        #expect(loud.intensity - poses(.listening(command: false), energy: 0)[0].intensity >= 0.5)
+        #expect(loud.ripple >= 0.4)
     }
 
     @Test func workingBurnsHotterThanIdle() {
@@ -71,7 +75,7 @@ struct OrbMotionTests {
 
     @Test func reducedMotionHoldsTheFireStill() {
         let still = poses(.listening(command: false), energy: 1, reduceMotion: true)
-        #expect(still.allSatisfy { $0.flameSpeed == 0 && $0.particleOpacity == 0 })
+        #expect(still.allSatisfy { $0.flameSpeed == 0 })
         #expect(Set(poses(.idle, energy: 0, reduceMotion: true).map(\.coreScale)).count == 1)
     }
 
@@ -80,25 +84,5 @@ struct OrbMotionTests {
         let device = try #require(MTLCreateSystemDefaultDevice())
         let library = try device.makeDefaultLibrary(bundle: OrbRenderer.shaderBundle)
         #expect(library.makeFunction(name: OrbRenderer.shaderName) != nil)
-    }
-}
-
-struct OrbVoiceShapeTests {
-    let silent = [CGFloat](repeating: 0, count: 32)
-
-    @Test func silenceLeavesTheFireRound() {
-        for a in stride(from: 0.0, to: 2 * .pi, by: 0.3) {
-            #expect(OrbRenderer.bandValue(at: a, bands: silent) == 0)
-        }
-    }
-
-    /// Low pitches sit at the top, high ones at the bottom, mirrored left and right (as in the shader).
-    @Test func eachPitchBandPushesItsOwnPartOfTheFire() {
-        var low = silent; low[1] = 1
-        var high = silent; high[30] = 1
-        let top = -Double.pi / 2, bottom = Double.pi / 2
-        #expect(OrbRenderer.bandValue(at: top, bands: low) > OrbRenderer.bandValue(at: bottom, bands: low))
-        #expect(OrbRenderer.bandValue(at: bottom, bands: high) > OrbRenderer.bandValue(at: top, bands: high))
-        #expect(abs(OrbRenderer.bandValue(at: 0.4, bands: high) - OrbRenderer.bandValue(at: .pi - 0.4, bands: high)) < 0.001)
     }
 }
