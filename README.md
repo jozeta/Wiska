@@ -31,7 +31,8 @@ Wiska then asks for the permissions it needs — **Microphone** (to hear you), *
 
 - **Push-to-talk anywhere** — hold fn to dictate into any app; release and the text is pasted at the cursor.
 - **Hands-free** — double-tap fn and keep talking; tap fn to finish (or let it stop after a configurable silence). Esc cancels.
-- **Live preview** — your words scroll through a notch-shaped capsule under a live waveform while you speak.
+- **Four looks for dictation** — a capsule dropping from the notch, a bar growing out of both sides of it, a Magical Orb of voice-driven fire, or Clippy, a paperclip assistant. See [Dictation themes](#dictation-themes).
+- **Live preview** — your words appear as you speak (with Apple's speech engine): scrolling under the waveform in the notch capsule, or in Clippy's speech bubble.
 - **Nine languages** — English, Svenska, Deutsch, Français, Español, Italiano, Português, Dansk and Nederlands, with auto-detect, a toggle, or a hotkey per language (fn+⇧).
 - **Two speech engines** — Apple's on-device speech recognition or NVIDIA Parakeet (runs locally on the Neural Engine), chosen per language.
 - **Smart cleanup** — filler words and false starts removed by Apple Intelligence on-device, with a safety check that never lets the model answer or invent text.
@@ -45,6 +46,32 @@ Wiska then asks for the permissions it needs — **Microphone** (to hear you), *
 - **Personal dictionary** — names and terms spelled your way, plus custom replacements.
 - **History** — search and filter past dictations, see exactly what cleanup changed, and track words per day, time saved, top apps and languages. Kept for as long as you choose (or not at all).
 - **Insert or copy** — paste into the active app, or only copy to the clipboard.
+
+## Dictation themes
+
+Pick how dictation looks in **Settings → Appearance**; the change applies at once, even mid-dictation. Every theme shows the same dictation — only the look differs.
+
+<p align="center">
+  <img src="docs/images/settings-appearance.png" width="420" alt="Settings → Appearance: the four themes with live previews, and the Magical Orb's settings">
+</p>
+
+- **Notch Dropdown** (the default) — a capsule drops down from the notch with a live waveform and, optionally, your words scrolling beneath it.
+- **Expanded Notch** — a bar exactly as tall as the notch grows out of both its sides: what Wiska is doing on the left, the waveform on the right. No text, just state and sound.
+- **Magical Orb** — a floating ball of fire (drawn on the GPU) that breathes slowly while idle, flares up with your voice — each pitch band pushes its own part of the flames — and roars while Wiska transcribes, with wavy rings floating round it. Drag it anywhere; choose its size (120–480 pt) and whether it floats above your windows or sits on the desktop. It uses your highlight colour.
+
+<p align="center">
+  <img src="docs/images/theme-orb.png" width="200" alt="The Magical Orb at rest">
+</p>
+
+- **Clippy** — a paperclip assistant who listens along, shows your words in a speech bubble, and keeps busy while idle: he blinks, glances around, pulls faces (angry, happy, questioning, pondering, surprised, smug) and about once a minute does a trick — a spin, a nap, a cartwheel, a dance, a trampoline, peekaboo, a jelly wobble, a moonwalk, a dizzy spell or the hiccups. Drag him anywhere, resize him, and if you like, let his eyes follow your mouse pointer.
+
+<p align="center">
+  <img src="docs/images/theme-clippy.png" width="520" alt="Clippy idling: looking out, a smug squint, curious, and mid-cartwheel">
+</p>
+
+The orb and Clippy never take focus from the app you're dictating into, and clicking them never starts a dictation. They stay where you leave them, and are moved back on screen if a display goes away. With *Reduce motion* turned on (System Settings → Accessibility), they hold still.
+
+Clippy here is an original drawing in the spirit of the Office assistant; Wiska isn't affiliated with Microsoft.
 
 ## Requirements
 
@@ -60,6 +87,8 @@ Wiska then asks for the permissions it needs — **Microphone** (to hear you), *
 | **General** — push-to-talk, hands-free, edit by voice | **Cleanup** — language model, Fix grammar, a style per kind of app |
 | <img src="docs/images/settings-models.png" width="380" alt="Models: download, remove and update every model"> | <img src="docs/images/settings-commands.png" width="380" alt="Saved commands"> |
 | **Models** — every optional model in one place, with update checks | **Commands** — name the instructions you use often |
+| <img src="docs/images/settings-appearance.png" width="380" alt="Appearance: the four dictation themes and the orb's settings"> | <img src="docs/images/settings-appearance-clippy.png" width="380" alt="Appearance with Clippy chosen: his size, following the pointer, window behavior"> |
+| **Appearance** — four dictation themes, the orb's size and placement | **Appearance → Clippy** — size, eyes that follow the pointer, on top or on the desktop |
 
 ## Using Wiska
 
@@ -73,6 +102,8 @@ Wiska then asks for the permissions it needs — **Microphone** (to hear you), *
 | Nothing selected, hold fn+⌃, say what to write | Write at the cursor |
 | Hold fn+⌃, start with a saved command ("formal") | Use its instruction |
 
+With the Magical Orb or Clippy, drag them with the mouse to move them.
+
 Tip: set **System Settings → Keyboard → "Press 🌐 key to" → Do Nothing**, so fn doesn't also open the emoji picker.
 
 Settings has a **Help** tab with examples, voice commands for each of your languages, and troubleshooting.
@@ -83,7 +114,7 @@ Speech recognition, cleanup and editing all run on your Mac. Wiska makes no netw
 
 ## Building from source
 
-1. Install Xcode 26, and its Metal Toolchain (needed by the MLX and whisper.cpp engines): `xcodebuild -downloadComponent MetalToolchain`.
+1. Install Xcode 26, and its Metal Toolchain (needed by the MLX and whisper.cpp engines and the Magical Orb's shader): `xcodebuild -downloadComponent MetalToolchain`.
 2. Copy `Local.xcconfig.example` to `Local.xcconfig` and set your `DEVELOPMENT_TEAM`.
 3. Build and run the `Wiska` scheme in `Wiska.xcodeproj`, or from the terminal:
 
