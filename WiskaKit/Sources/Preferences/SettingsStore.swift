@@ -33,6 +33,13 @@ public final class SettingsStore {
         static let categoryStyles = "categoryStyles"
         static let appCategories = "appCategories"
         static let recentApps = "recentApps"
+        static let dictationTheme = "dictationTheme"
+        static let orbSize = "orbSize"
+        static let orbHighlight = "orbHighlight"
+        static let orbWindowBehavior = "orbWindowBehavior"
+        static let clippyWindowBehavior = "clippyWindowBehavior"
+        static let orbOrigin = "orbOrigin"
+        static let clippyOrigin = "clippyOrigin"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -123,6 +130,49 @@ public final class SettingsStore {
     }
 
     public var highlight: Highlight { didSet { defaults.set(highlight.rawValue, forKey: Key.highlight) } }
+
+    // MARK: Dictation appearance
+
+    public var dictationTheme: DictationTheme {
+        didSet { defaults.set(dictationTheme.rawValue, forKey: Key.dictationTheme) }
+    }
+    public static let orbSizeRange: ClosedRange<Double> = 80...240
+    public static let defaultOrbSize: Double = 140
+    /// The orb's whole footprint in points, glow included.
+    public var orbSize: Double {
+        didSet {
+            let clamped = Self.clampedOrbSize(orbSize)
+            if clamped != orbSize { orbSize = clamped; return }
+            defaults.set(orbSize, forKey: Key.orbSize)
+        }
+    }
+    /// The orb's own colour; nil follows the highlight colour.
+    public var orbHighlight: Highlight? {
+        didSet { defaults.set(orbHighlight?.rawValue, forKey: Key.orbHighlight) }
+    }
+    public var orbWindowBehavior: FloatingWindowBehavior {
+        didSet { defaults.set(orbWindowBehavior.rawValue, forKey: Key.orbWindowBehavior) }
+    }
+    public var clippyWindowBehavior: FloatingWindowBehavior {
+        didSet { defaults.set(clippyWindowBehavior.rawValue, forKey: Key.clippyWindowBehavior) }
+    }
+    /// Where the user dragged the orb (window origin, global screen coordinates); nil = default spot.
+    public var orbOrigin: CGPoint? { didSet { Self.write(orbOrigin, defaults, Key.orbOrigin) } }
+    public var clippyOrigin: CGPoint? { didSet { Self.write(clippyOrigin, defaults, Key.clippyOrigin) } }
+
+    static func clampedOrbSize(_ size: Double) -> Double {
+        size.isFinite ? min(max(size, orbSizeRange.lowerBound), orbSizeRange.upperBound) : defaultOrbSize
+    }
+
+    private static func write(_ point: CGPoint?, _ defaults: UserDefaults, _ key: String) {
+        defaults.set(point.map { [Double($0.x), Double($0.y)] }, forKey: key)
+    }
+
+    private static func readPoint(_ defaults: UserDefaults, _ key: String) -> CGPoint? {
+        guard let pair = defaults.array(forKey: key) as? [Double], pair.count == 2,
+              pair.allSatisfy(\.isFinite) else { return nil }
+        return CGPoint(x: pair[0], y: pair[1])
+    }
 
     public var cleanupLevel: CleanupLevel { didSet { defaults.set(cleanupLevel.rawValue, forKey: Key.cleanupLevel) } }
 
@@ -254,6 +304,13 @@ public final class SettingsStore {
         })
         let storedApps = defaults.dictionary(forKey: Key.appCategories) as? [String: String] ?? [:]
         appCategories = storedApps.compactMapValues(AppCategory.init(rawValue:))
+        dictationTheme = Self.read(defaults, Key.dictationTheme, DictationTheme.notchDropdown)
+        orbSize = Self.clampedOrbSize(defaults.object(forKey: Key.orbSize) as? Double ?? Self.defaultOrbSize)
+        orbHighlight = defaults.string(forKey: Key.orbHighlight).flatMap(Highlight.init(rawValue:))
+        orbWindowBehavior = Self.read(defaults, Key.orbWindowBehavior, FloatingWindowBehavior.alwaysOnTop)
+        clippyWindowBehavior = Self.read(defaults, Key.clippyWindowBehavior, FloatingWindowBehavior.alwaysOnTop)
+        orbOrigin = Self.readPoint(defaults, Key.orbOrigin)
+        clippyOrigin = Self.readPoint(defaults, Key.clippyOrigin)
         recentApps = Array((defaults.stringArray(forKey: Key.recentApps) ?? []).prefix(Self.maxRecentApps))
     }
 
