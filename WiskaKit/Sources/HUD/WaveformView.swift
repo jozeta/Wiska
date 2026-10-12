@@ -11,6 +11,8 @@ struct WaveformView: View {
     static let barWidth: CGFloat = 2
     let audio: AudioLevel
     let highlight: Highlight
+    /// Shrinks the bars (and the row) for slimmer surroundings, like the Expanded Notch.
+    var scale: CGFloat = 1
     @State private var clock = Clock()
 
     var body: some View {
@@ -20,12 +22,12 @@ struct WaveformView: View {
                 ForEach(0..<Self.barCount, id: \.self) { index in
                     Capsule()
                         .fill(color(at: index))
-                        .frame(width: Self.barWidth, height: clock.motion.bar(index))
+                        .frame(width: Self.barWidth, height: clock.motion.bar(index) * scale)
                         .frame(maxWidth: .infinity)
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: Self.maxBar)
+            .frame(height: Self.maxBar * scale)
         }
     }
 

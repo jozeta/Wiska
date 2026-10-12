@@ -2,13 +2,20 @@ import Core
 import CoreGraphics
 import Observation
 
+/// What the dictation UI shows right now; every theme presents the same value.
 public enum HUDContent: Equatable, Sendable {
     case hidden
-    case listening(audio: AudioLevel, badge: String, preview: String, handsFree: Bool)
-    case working(String)
+    /// `isCommand`: an fn+⌃ instruction (the badge then says Edit / Write / Command).
+    case listening(audio: AudioLevel, badge: String, preview: String, handsFree: Bool, isCommand: Bool = false)
+    case working(String, activity: WorkActivity = .transcribing)
     case message(String)
     /// A failure, shown in the danger colour.
     case error(String)
+}
+
+/// What a `.working` dictation is busy with.
+public enum WorkActivity: Sendable, Equatable {
+    case transcribing, editing, writing, preparing
 }
 
 @MainActor @Observable

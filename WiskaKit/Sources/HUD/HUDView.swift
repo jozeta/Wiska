@@ -42,7 +42,7 @@ struct HUDView: View {
         switch model.content {
         case .hidden:
             EmptyView()
-        case .listening(let audio, let badge, let preview, let handsFree):
+        case .listening(let audio, let badge, let preview, let handsFree, _):
             VStack(spacing: -Self.previewOverlap) {
                 HStack(spacing: 8) {
                     HStack(spacing: 4) {
@@ -63,7 +63,7 @@ struct HUDView: View {
                         .frame(height: Self.previewHeight, alignment: .top)
                 }
             }
-        case .working(let text):
+        case .working(let text, _):
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small).tint(AuroraTheme.start(model.highlight))
                 Text(text)

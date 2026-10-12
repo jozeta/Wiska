@@ -72,6 +72,16 @@ public final class HUDPanelController {
         }
     }
 
+    /// Another theme takes over: off screen at once, no animation.
+    public func deactivate() {
+        generation += 1
+        requested = .hidden
+        model.content = .hidden
+        model.expanded = false
+        model.reveal = 0
+        panel.orderOut(nil)
+    }
+
     private func place() {
         guard let screen = activeScreen() else { return }
         let placement = NotchLayout.placement(on: Self.layoutScreen(screen), referenceWidth: Self.referenceWidth,
@@ -103,7 +113,7 @@ public final class HUDPanelController {
         if case .hidden? = previous { grown = false } else { grown = current }
         switch content {
         case .hidden: return false
-        case .listening(_, _, let preview, _): return grown || !preview.isEmpty
+        case .listening(_, _, let preview, _, _): return grown || !preview.isEmpty
         default: return grown
         }
     }
@@ -134,3 +144,5 @@ public final class HUDPanelController {
         return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
     }
 }
+
+extension HUDPanelController: DictationPresenter {}
