@@ -35,7 +35,8 @@ public final class SettingsStore {
         static let recentApps = "recentApps"
         static let dictationTheme = "dictationTheme"
         static let orbSize = "orbSize"
-        static let orbHighlight = "orbHighlight"
+        static let clippySize = "clippySize"
+        static let clippyFollowsPointer = "clippyFollowsPointer"
         static let orbWindowBehavior = "orbWindowBehavior"
         static let clippyWindowBehavior = "clippyWindowBehavior"
         static let orbOrigin = "orbOrigin"
@@ -136,19 +137,29 @@ public final class SettingsStore {
     public var dictationTheme: DictationTheme {
         didSet { defaults.set(dictationTheme.rawValue, forKey: Key.dictationTheme) }
     }
-    public static let orbSizeRange: ClosedRange<Double> = 80...240
+    /// The size slider's range, shared by the orb and Clippy.
+    public static let themeSizeRange: ClosedRange<Double> = 80...240
     public static let defaultOrbSize: Double = 140
+    public static let defaultClippySize: Double = 128
     /// The orb's whole footprint in points, glow included.
     public var orbSize: Double {
         didSet {
-            let clamped = Self.clampedOrbSize(orbSize)
+            let clamped = Self.clampedSize(orbSize, fallback: Self.defaultOrbSize)
             if clamped != orbSize { orbSize = clamped; return }
             defaults.set(orbSize, forKey: Key.orbSize)
         }
     }
-    /// The orb's own colour; nil follows the highlight colour.
-    public var orbHighlight: Highlight? {
-        didSet { defaults.set(orbHighlight?.rawValue, forKey: Key.orbHighlight) }
+    /// Clippy's height in points.
+    public var clippySize: Double {
+        didSet {
+            let clamped = Self.clampedSize(clippySize, fallback: Self.defaultClippySize)
+            if clamped != clippySize { clippySize = clamped; return }
+            defaults.set(clippySize, forKey: Key.clippySize)
+        }
+    }
+    /// Clippy's eyes follow the mouse pointer.
+    public var clippyFollowsPointer: Bool {
+        didSet { defaults.set(clippyFollowsPointer, forKey: Key.clippyFollowsPointer) }
     }
     public var orbWindowBehavior: FloatingWindowBehavior {
         didSet { defaults.set(orbWindowBehavior.rawValue, forKey: Key.orbWindowBehavior) }
@@ -160,8 +171,8 @@ public final class SettingsStore {
     public var orbOrigin: CGPoint? { didSet { Self.write(orbOrigin, defaults, Key.orbOrigin) } }
     public var clippyOrigin: CGPoint? { didSet { Self.write(clippyOrigin, defaults, Key.clippyOrigin) } }
 
-    static func clampedOrbSize(_ size: Double) -> Double {
-        size.isFinite ? min(max(size, orbSizeRange.lowerBound), orbSizeRange.upperBound) : defaultOrbSize
+    static func clampedSize(_ size: Double, fallback: Double) -> Double {
+        size.isFinite ? min(max(size, themeSizeRange.lowerBound), themeSizeRange.upperBound) : fallback
     }
 
     private static func write(_ point: CGPoint?, _ defaults: UserDefaults, _ key: String) {
@@ -305,8 +316,11 @@ public final class SettingsStore {
         let storedApps = defaults.dictionary(forKey: Key.appCategories) as? [String: String] ?? [:]
         appCategories = storedApps.compactMapValues(AppCategory.init(rawValue:))
         dictationTheme = Self.read(defaults, Key.dictationTheme, DictationTheme.notchDropdown)
-        orbSize = Self.clampedOrbSize(defaults.object(forKey: Key.orbSize) as? Double ?? Self.defaultOrbSize)
-        orbHighlight = defaults.string(forKey: Key.orbHighlight).flatMap(Highlight.init(rawValue:))
+        orbSize = Self.clampedSize(defaults.object(forKey: Key.orbSize) as? Double ?? Self.defaultOrbSize,
+                                   fallback: Self.defaultOrbSize)
+        clippySize = Self.clampedSize(defaults.object(forKey: Key.clippySize) as? Double ?? Self.defaultClippySize,
+                                      fallback: Self.defaultClippySize)
+        clippyFollowsPointer = defaults.object(forKey: Key.clippyFollowsPointer) as? Bool ?? false
         orbWindowBehavior = Self.read(defaults, Key.orbWindowBehavior, FloatingWindowBehavior.alwaysOnTop)
         clippyWindowBehavior = Self.read(defaults, Key.clippyWindowBehavior, FloatingWindowBehavior.alwaysOnTop)
         orbOrigin = Self.readPoint(defaults, Key.orbOrigin)

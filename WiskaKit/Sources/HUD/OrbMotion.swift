@@ -14,6 +14,13 @@ struct OrbPose: Equatable {
     var particleOpacity: CGFloat
     /// Particle orbit speed multiplier.
     var particleSpeed: CGFloat
+    /// Chance (0…1) that each lightning bolt shows in a given flicker.
+    var boltChance: Double
+    /// How many bolts can crackle at once.
+    var maxBolts: Int
+    /// The tilted rings' opacity and turning speed (radians per second; 0 = still).
+    var ringOpacity: CGFloat
+    var ringSpeed: Double
     var isError: Bool
 }
 
@@ -24,39 +31,61 @@ enum OrbMotion {
     static let maxCoreScale: CGFloat = 1.3
     /// The glow reaches this many core radii at full strength.
     static let glowReach: CGFloat = 2.35
+    /// The aura's resting radius, in core radii.
+    static let auraRadius: CGFloat = 1.32
+    /// The tilted rings' radius, in core radii.
+    static let ringRadius: CGFloat = 1.5
+    /// Lightning reaches at most this many core radii (bolt end plus its jitter).
+    static let boltReach: CGFloat = 2.1
 
     static func pose(at t: Double, mood: Presence.Mood, energy: CGFloat, reduceMotion: Bool) -> OrbPose {
         let e = min(1, max(0, energy))
         let breath = reduceMotion ? 0 : CGFloat(sin(t * 1.3))
+        let calm: Double = reduceMotion ? 0 : 1
         switch mood {
         case .idle, .message:
-            return OrbPose(coreScale: 1 + 0.025 * breath, glow: 0.38 + 0.06 * breath, ripple: 0,
+            return OrbPose(coreScale: 1 + 0.025 * breath, glow: 0.38 + 0.06 * breath, ripple: reduceMotion ? 0 : 0.025,
                            spinOpacity: 0, particleOpacity: reduceMotion ? 0 : 0.3, particleSpeed: 0.4,
+                           boltChance: 0.05 * calm, maxBolts: 1, ringOpacity: 0.35, ringSpeed: 0.35 * calm,
                            isError: false)
         case .listening(let command):
-            // A gentle pulse even in silence, then the voice drives size, glow and ripple.
+            // A gentle pulse even in silence, then the voice drives size, glow, ripple and lightning.
             let pulse = reduceMotion ? 0 : CGFloat(sin(t * 3.2)) * (0.02 + 0.03 * e)
             return OrbPose(coreScale: min(maxCoreScale, 1.04 + 0.24 * e + pulse),
                            glow: min(1, 0.5 + (command ? 0.1 : 0) + 0.45 * e),
-                           ripple: reduceMotion ? 0 : 0.03 + 0.09 * e,
+                           ripple: reduceMotion ? 0 : 0.04 + 0.24 * e,
                            spinOpacity: 0, particleOpacity: reduceMotion ? 0 : 0.35 + 0.6 * e,
-                           particleSpeed: 0.7 + 2.2 * e, isError: false)
+                           particleSpeed: 0.7 + 2.2 * e,
+                           boltChance: calm * (0.12 + 0.7 * Double(e)), maxBolts: 1 + Int((4 * e).rounded()),
+                           ringOpacity: 0.45 + 0.5 * e, ringSpeed: calm * (0.6 + 2.4 * Double(e)), isError: false)
         case .working:
             return OrbPose(coreScale: 1 + 0.03 * breath, glow: 0.55 + 0.08 * CGFloat(sin(t * 2.4)),
-                           ripple: 0, spinOpacity: 0.85, particleOpacity: reduceMotion ? 0 : 0.45,
-                           particleSpeed: 1.6, isError: false)
+                           ripple: reduceMotion ? 0 : 0.05, spinOpacity: 0.85,
+                           particleOpacity: reduceMotion ? 0 : 0.45, particleSpeed: 1.6,
+                           boltChance: 0.25 * calm, maxBolts: 2, ringOpacity: 0.6, ringSpeed: 1.8 * calm,
+                           isError: false)
         case .success:
-            return OrbPose(coreScale: 1.1, glow: 0.95, ripple: 0, spinOpacity: 0,
-                           particleOpacity: reduceMotion ? 0 : 0.8, particleSpeed: 2.4, isError: false)
+            return OrbPose(coreScale: 1.1, glow: 0.95, ripple: reduceMotion ? 0 : 0.08, spinOpacity: 0,
+                           particleOpacity: reduceMotion ? 0 : 0.8, particleSpeed: 2.4,
+                           boltChance: 0.85 * calm, maxBolts: 5, ringOpacity: 0.9, ringSpeed: 3 * calm,
+                           isError: false)
         case .error:
             return OrbPose(coreScale: 1, glow: 0.6, ripple: 0, spinOpacity: 0,
-                           particleOpacity: 0, particleSpeed: 0, isError: true)
+                           particleOpacity: 0, particleSpeed: 0, boltChance: 0, maxBolts: 0,
+                           ringOpacity: 0.3, ringSpeed: 0, isError: true)
         }
     }
 
-    /// How far the drawing reaches from the centre, for a window `side` points wide.
+    /// How far the glow reaches from the centre, for a window `side` points wide.
     static func outerRadius(_ pose: OrbPose, side: CGFloat) -> CGFloat {
         let core = side * coreShare * pose.coreScale
         return core * glowReach * (0.85 + 0.15 * pose.glow)
+    }
+
+    /// The farthest anything is drawn (glow, rippling aura, rings, lightning).
+    static func maxReach(_ pose: OrbPose, side: CGFloat) -> CGFloat {
+        let core = side * coreShare * pose.coreScale
+        return max(outerRadius(pose, side: side), core * auraRadius * (1 + pose.ripple), core * ringRadius,
+                   pose.maxBolts > 0 ? core * boltReach : 0)
     }
 }

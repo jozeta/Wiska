@@ -13,7 +13,6 @@ struct AppearanceTab: View {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible())], spacing: 12) {
                     ForEach(DictationTheme.allCases, id: \.self) { theme in
                         ThemeCard(theme: theme, highlight: settings.highlight,
-                                  orbColour: settings.orbHighlight ?? settings.highlight,
                                   selected: theme == settings.dictationTheme) {
                             settings.dictationTheme = theme
                             model.applyAppearance()
@@ -27,17 +26,22 @@ struct AppearanceTab: View {
 
             themeOptions(settings)
 
-            Section("Highlight colour") {
-                if settings.dictationTheme == .notchDropdown {
-                    HStack { Spacer(); HUDPreview(highlight: settings.highlight); Spacer() }
-                        .padding(.vertical, 8)
+            // Clippy has no colours of its own to set; every other theme uses the highlight colour.
+            if settings.dictationTheme != .clippy {
+                Section("Highlight colour") {
+                    if settings.dictationTheme == .notchDropdown {
+                        HStack { Spacer(); HUDPreview(highlight: settings.highlight); Spacer() }
+                            .padding(.vertical, 8)
+                    }
+                    HighlightSwatches(selection: settings.highlight) {
+                        settings.highlight = $0
+                        model.applyAppearance()
+                    }
+                    Text(settings.dictationTheme == .orb
+                         ? "Colours the orb, the notch and Wiska's accents."
+                         : "Colours the notch, the waveform and Wiska's accents.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
-                HighlightSwatches(selection: settings.highlight) {
-                    settings.highlight = $0
-                    model.applyAppearance()
-                }
-                Text("Colours the notch, the waveform and Wiska's accents.")
-                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -56,43 +60,56 @@ struct AppearanceTab: View {
             Section("Magical Orb") {
                 HStack {
                     Spacer()
-                    OrbPreview(colour: settings.orbHighlight ?? settings.highlight, side: settings.orbSize)
-                        .frame(height: SettingsStore.orbSizeRange.upperBound)
+                    OrbPreview(colour: settings.highlight, side: settings.orbSize)
+                        .frame(height: SettingsStore.themeSizeRange.upperBound)
                     Spacer()
                 }
-                LabeledContent("Orb size") {
-                    Slider(value: Binding(get: { settings.orbSize },
-                                          set: { settings.orbSize = $0.rounded(); model.applyAppearance() }),
-                           in: SettingsStore.orbSizeRange, step: 10) {
-                        EmptyView()
-                    } minimumValueLabel: {
-                        Image(systemName: "circle.fill").font(.system(size: 6))
-                    } maximumValueLabel: {
-                        Image(systemName: "circle.fill").font(.system(size: 14))
-                    }
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Orb colour")
-                    HighlightSwatches(selection: settings.orbHighlight, followsHighlight: settings.highlight) {
-                        settings.orbHighlight = $0
-                        model.applyAppearance()
-                    }
+                sizeSlider("Orb size", value: settings.orbSize) {
+                    settings.orbSize = $0
+                    model.applyAppearance()
                 }
                 behaviorPicker("Orb window behavior", selection: settings.orbWindowBehavior) {
                     settings.orbWindowBehavior = $0
                     model.applyAppearance()
                 }
-                Text("Drag the orb anywhere; it stays where you leave it.")
+                Text("Drag the orb anywhere; it stays where you leave it. It uses the highlight colour below.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         case .clippy:
             Section("Clippy") {
+                HStack {
+                    Spacer()
+                    ClippyPreview(highlight: settings.highlight, showsBubble: false, height: settings.clippySize)
+                        .frame(height: SettingsStore.themeSizeRange.upperBound)
+                    Spacer()
+                }
+                sizeSlider("Clippy size", value: settings.clippySize) {
+                    settings.clippySize = $0
+                    model.applyAppearance()
+                }
+                Toggle("Follow the mouse pointer with his eyes", isOn: Binding(
+                    get: { settings.clippyFollowsPointer },
+                    set: { settings.clippyFollowsPointer = $0; model.applyAppearance() }))
                 behaviorPicker("Clippy window behavior", selection: settings.clippyWindowBehavior) {
                     settings.clippyWindowBehavior = $0
                     model.applyAppearance()
                 }
                 Text("Drag Clippy anywhere; its bubble follows. The bubble shows your words as you speak when “Show live preview” is on (General).")
                     .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// The size slider the orb and Clippy share.
+    private func sizeSlider(_ title: String, value: Double, set: @escaping (Double) -> Void) -> some View {
+        LabeledContent(title) {
+            Slider(value: Binding(get: { value }, set: { set($0.rounded()) }),
+                   in: SettingsStore.themeSizeRange, step: 10) {
+                EmptyView()
+            } minimumValueLabel: {
+                Image(systemName: "circle.fill").font(.system(size: 6))
+            } maximumValueLabel: {
+                Image(systemName: "circle.fill").font(.system(size: 14))
             }
         }
     }
@@ -116,7 +133,6 @@ struct AppearanceTab: View {
 private struct ThemeCard: View {
     let theme: DictationTheme
     let highlight: Highlight
-    let orbColour: Highlight
     let selected: Bool
     let choose: () -> Void
 
@@ -170,39 +186,20 @@ private struct ThemeCard: View {
                 Spacer()
             }
         case .orb:
-            OrbPreview(colour: orbColour, side: 100)
+            OrbPreview(colour: highlight, side: 100)
         case .clippy:
             ClippyPreview(highlight: highlight).scaleEffect(0.62)
         }
     }
 }
 
-/// The highlight presets as swatches. With `followsHighlight`, a first swatch means
-/// "same as the highlight colour" (nil).
+/// The highlight presets as swatches.
 private struct HighlightSwatches: View {
-    let selection: Highlight?
-    var followsHighlight: Highlight?
-    let choose: (Highlight?) -> Void
-
-    init(selection: Highlight?, followsHighlight: Highlight? = nil, choose: @escaping (Highlight?) -> Void) {
-        self.selection = selection
-        self.followsHighlight = followsHighlight
-        self.choose = choose
-    }
-
-    init(selection: Highlight, choose: @escaping (Highlight) -> Void) {
-        self.selection = selection
-        followsHighlight = nil
-        self.choose = { $0.map(choose) }
-    }
+    let selection: Highlight
+    let choose: (Highlight) -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            if let followsHighlight {
-                swatch(AuroraTheme.gradient(followsHighlight), name: "Highlight", selected: selection == nil) {
-                    choose(nil)
-                }
-            }
             ForEach(Highlight.allCases, id: \.self) { preset in
                 swatch(AuroraTheme.gradient(preset), name: preset.displayName, selected: preset == selection) {
                     choose(preset)

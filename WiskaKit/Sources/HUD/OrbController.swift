@@ -75,6 +75,6 @@ final class OrbController: DictationPresenter {
     }
 
     private func updateColour() {
-        model.colour = options.orbHighlight ?? appHighlight
+        model.colour = appHighlight
     }
 }

@@ -48,9 +48,34 @@ struct OrbMotionTests {
         #expect(poses(.success, energy: 0).map(\.glow).max()! > poses(.idle, energy: 0).map(\.glow).max()!)
     }
 
+    @Test func theAuraRipplesStronglyWithTheVoice() {
+        let quiet = poses(.listening(command: false), energy: 0.2).map(\.ripple).max()!
+        let loud = poses(.listening(command: false), energy: 1).map(\.ripple).max()!
+        #expect(loud >= 0.25)
+        #expect(loud > quiet * 2)
+    }
+
+    @Test func lightningCracklesMoreWithTheVoice() {
+        let idle = poses(.idle, energy: 0)[0]
+        let quiet = poses(.listening(command: false), energy: 0.2)[0]
+        let loud = poses(.listening(command: false), energy: 1)[0]
+        #expect(idle.boltChance < quiet.boltChance)
+        #expect(quiet.boltChance < loud.boltChance)
+        #expect(quiet.maxBolts < loud.maxBolts)
+        #expect(poses(.error, energy: 1).allSatisfy { $0.boltChance == 0 })
+    }
+
+    @Test func theRingsAndLightningStayInsideTheWindow() {
+        for mood in [Presence.Mood.idle, .listening(command: true), .working(.writing), .success] {
+            for pose in poses(mood, energy: 1) {
+                #expect(OrbMotion.maxReach(pose, side: 100) <= 50)
+            }
+        }
+    }
+
     @Test func reducedMotionHoldsStillAndDropsParticles() {
         let still = poses(.idle, energy: 0, reduceMotion: true)
         #expect(Set(still.map(\.coreScale)).count == 1)
-        #expect(still.allSatisfy { $0.particleOpacity == 0 })
+        #expect(still.allSatisfy { $0.particleOpacity == 0 && $0.boltChance == 0 && $0.ringSpeed == 0 })
     }
 }

@@ -20,18 +20,20 @@ extension DictationPresenter {
 /// The theme settings presenters need (from `SettingsStore`; HUD doesn't depend on Preferences).
 public struct ThemeOptions: Equatable, Sendable {
     public var orbSize: CGFloat = 140
-    /// nil = the highlight colour.
-    public var orbHighlight: Highlight?
     public var orbBehavior: FloatingWindowBehavior = .alwaysOnTop
+    /// Clippy's height in points.
+    public var clippySize: CGFloat = 128
     public var clippyBehavior: FloatingWindowBehavior = .alwaysOnTop
+    public var clippyFollowsPointer = false
 
-    public init(orbSize: CGFloat = 140, orbHighlight: Highlight? = nil,
-                orbBehavior: FloatingWindowBehavior = .alwaysOnTop,
-                clippyBehavior: FloatingWindowBehavior = .alwaysOnTop) {
+    public init(orbSize: CGFloat = 140, orbBehavior: FloatingWindowBehavior = .alwaysOnTop,
+                clippySize: CGFloat = 128, clippyBehavior: FloatingWindowBehavior = .alwaysOnTop,
+                clippyFollowsPointer: Bool = false) {
         self.orbSize = orbSize
-        self.orbHighlight = orbHighlight
         self.orbBehavior = orbBehavior
+        self.clippySize = clippySize
         self.clippyBehavior = clippyBehavior
+        self.clippyFollowsPointer = clippyFollowsPointer
     }
 }
 

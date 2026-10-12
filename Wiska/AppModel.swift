@@ -209,9 +209,9 @@ final class AppModel {
     /// what's on screen: recording, recognition and insertion carry on.
     func applyAppearance() {
         hud.highlight = settings.highlight
-        hud.options = ThemeOptions(orbSize: settings.orbSize, orbHighlight: settings.orbHighlight,
-                                   orbBehavior: settings.orbWindowBehavior,
-                                   clippyBehavior: settings.clippyWindowBehavior)
+        hud.options = ThemeOptions(orbSize: settings.orbSize, orbBehavior: settings.orbWindowBehavior,
+                                   clippySize: settings.clippySize, clippyBehavior: settings.clippyWindowBehavior,
+                                   clippyFollowsPointer: settings.clippyFollowsPointer)
         let theme = settings.dictationTheme
         if hud.theme != theme {
             Self.log.info("dictation theme: \(theme.rawValue, privacy: .public)")

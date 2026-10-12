@@ -15,6 +15,10 @@ final class ClippyModel {
     var bubbleAbove = true
     var tailX: CGFloat = ClippyController.bubbleSize.width / 2
     @ObservationIgnored let presence = Presence()
+    /// Where the pupils should point to follow the mouse (nil = not following).
+    @ObservationIgnored var pointerLook: (() -> CGPoint?)?
+    /// Following the pointer keeps the timeline running while idle (even with Reduce Motion).
+    var followsPointer = false
     /// Previews drive Clippy with a made-up voice instead of the microphone.
     @ObservationIgnored var sampleLevel: ((Double) -> Float)?
 }
@@ -29,12 +33,14 @@ struct ClippyView: View {
     var body: some View {
         let _ = model.revision
         let idle = model.presence.mood() == .idle && model.sampleLevel == nil
-        TimelineView(.animation(minimumInterval: idle ? 1.0 / 24 : nil, paused: idle && reduceMotion)) { timeline in
+        TimelineView(.animation(minimumInterval: idle ? 1.0 / 24 : nil,
+                                paused: idle && reduceMotion && !model.followsPointer)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             let level = model.sampleLevel?(t) ?? model.presence.level
             let energy = clock.advance(to: timeline.date, level: level)
             let mood = model.sampleLevel == nil ? model.presence.mood(at: timeline.date) : .listening(command: false)
-            let pose = ClippyMotion.pose(at: t, mood: mood, energy: energy, reduceMotion: reduceMotion)
+            let pose = ClippyMotion.pose(at: t, mood: mood, energy: energy, reduceMotion: reduceMotion,
+                                         pointer: model.followsPointer ? model.pointerLook?() : nil)
             Canvas { context, size in
                 ClippyRenderer.draw(in: &context, size: size, pose: pose)
             }
@@ -135,9 +141,14 @@ enum ClippyRenderer {
 struct ClippyBubbleView: View {
     let model: ClippyModel
     static let maxTextHeight: CGFloat = 108
+    /// Room at the sides (and the far edge) for the bubble's shadow.
+    static let sideInset: CGFloat = 6
+
+    /// The bubble shape is inset from the panel, so the tail's x moves by the same amount.
+    static func shapeTailX(panelTailX: CGFloat) -> CGFloat { panelTailX - sideInset }
 
     var body: some View {
-        let shape = BubbleShape(tailX: model.tailX, tailDown: model.bubbleAbove)
+        let shape = BubbleShape(tailX: Self.shapeTailX(panelTailX: model.tailX), tailDown: model.bubbleAbove)
         VStack(alignment: .leading, spacing: 4) {
             Text(model.status)
                 .font(.system(size: 11, weight: .semibold))
@@ -164,7 +175,7 @@ struct ClippyBubbleView: View {
         .overlay(shape.stroke(Color(hex: 0x262A31), lineWidth: 1))
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: model.bubbleAbove ? .bottom : .top)
-        .padding(.horizontal, 6).padding(model.bubbleAbove ? .top : .bottom, 6)
+        .padding(.horizontal, Self.sideInset).padding(model.bubbleAbove ? .top : .bottom, Self.sideInset)
     }
 }
 
@@ -179,20 +190,22 @@ struct BubbleShape: Shape {
         let body = tailDown ? CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - Self.tailHeight)
             : CGRect(x: rect.minX, y: rect.minY + Self.tailHeight, width: rect.width, height: rect.height - Self.tailHeight)
         var path = Path(roundedRect: body, cornerRadius: Self.radius)
-        let x = min(max(tailX, Self.radius + 8), rect.width - Self.radius - 8)
-        var tail = Path()
-        if tailDown {
-            tail.move(to: CGPoint(x: x - 8, y: body.maxY - 0.5))
-            tail.addLine(to: CGPoint(x: x + 2, y: rect.maxY))
-            tail.addLine(to: CGPoint(x: x + 6, y: body.maxY - 0.5))
-        } else {
-            tail.move(to: CGPoint(x: x - 8, y: body.minY + 0.5))
-            tail.addLine(to: CGPoint(x: x + 2, y: rect.minY))
-            tail.addLine(to: CGPoint(x: x + 6, y: body.minY + 0.5))
-        }
-        tail.closeSubpath()
-        path.addPath(tail)
+        path.addPath(Self.tail(at: tailX, in: rect, down: tailDown))
         return path
+    }
+
+    static let tailHalfWidth: CGFloat = 7
+
+    /// A triangle whose tip is at `x` on the edge facing Clippy, its base even on both sides.
+    static func tail(at x: CGFloat, in rect: CGRect, down: Bool) -> Path {
+        let x = min(max(x, rect.minX + radius + tailHalfWidth), rect.maxX - radius - tailHalfWidth)
+        let base = down ? rect.maxY - tailHeight - 0.5 : rect.minY + tailHeight + 0.5
+        var tail = Path()
+        tail.move(to: CGPoint(x: x - tailHalfWidth, y: base))
+        tail.addLine(to: CGPoint(x: x, y: down ? rect.maxY : rect.minY))
+        tail.addLine(to: CGPoint(x: x + tailHalfWidth, y: base))
+        tail.closeSubpath()
+        return tail
     }
 }
 
@@ -201,11 +214,13 @@ struct BubbleShape: Shape {
 public struct ClippyPreview: View {
     let highlight: Highlight
     var showsBubble: Bool
+    var height: CGFloat
     @State private var model = ClippyModel()
 
-    public init(highlight: Highlight, showsBubble: Bool = true) {
+    public init(highlight: Highlight, showsBubble: Bool = true, height: CGFloat = 94) {
         self.highlight = highlight
         self.showsBubble = showsBubble
+        self.height = height
     }
 
     public var body: some View {
@@ -213,13 +228,13 @@ public struct ClippyPreview: View {
             if showsBubble {
                 ClippyBubbleView(model: model).frame(width: 190).fixedSize(horizontal: false, vertical: true)
             }
-            ClippyView(model: model).frame(width: 64, height: 94)
+            ClippyView(model: model).frame(width: height * 84 / 128, height: height)
         }
         .onAppear {
             model.sampleLevel = { t in Float(max(0, 0.3 + 0.25 * sin(t * 1.9) + 0.1 * sin(t * 7.3))) }
             model.status = "Listening…"
             model.text = "It looks like you're writing a letter."
-            model.tailX = 95
+            model.tailX = 95 + ClippyBubbleView.sideInset
             model.highlight = highlight
             model.revision += 1
         }

@@ -97,3 +97,59 @@ struct BubblePlacementTests {
         #expect(short.contains(placed.frame))
     }
 }
+
+struct ClippyBubbleTailTests {
+    /// The tail's tip sits exactly at `tailX`, with an even base either side.
+    @Test func theTailIsSymmetricAroundItsTip() {
+        let rect = CGRect(x: 0, y: 0, width: 238, height: 80)
+        for down in [true, false] {
+            let tail = BubbleShape.tail(at: 119, in: rect, down: down).boundingRect
+            #expect(abs(tail.midX - 119) < 0.001)
+        }
+    }
+
+    /// The bubble view insets its shape for the shadow; the tail still points at the panel's `tailX`.
+    @Test func theInsetIsTakenOffTheTailPosition() {
+        #expect(ClippyBubbleView.shapeTailX(panelTailX: 125) == 125 - ClippyBubbleView.sideInset)
+    }
+}
+
+@MainActor
+struct ClippyPointerTests {
+    let eyes = CGPoint(x: 500, y: 500)
+
+    @Test func eyesTurnTowardThePointer() {
+        let right = ClippyMotion.look(toward: CGPoint(x: 1200, y: 500), from: eyes)
+        #expect(right.x > 0.9 && abs(right.y) < 0.01)
+        let above = ClippyMotion.look(toward: CGPoint(x: 500, y: 1200), from: eyes)
+        #expect(above.y < -0.9)                          // screen y goes up, the pupils' y goes down
+        let belowLeft = ClippyMotion.look(toward: CGPoint(x: 0, y: 0), from: eyes)
+        #expect(belowLeft.x < -0.6 && belowLeft.y > 0.6)
+    }
+
+    @Test func aNearbyPointerTurnsTheEyesLess() {
+        let near = ClippyMotion.look(toward: CGPoint(x: 520, y: 500), from: eyes)
+        #expect(near.x > 0 && near.x < 0.5)
+        #expect(ClippyMotion.look(toward: eyes, from: eyes) == .zero)
+    }
+
+    @Test func followingThePointerWinsOverTheMoodsOwnGaze() {
+        let target = CGPoint(x: -0.8, y: -0.5)
+        for mood in [Presence.Mood.idle, .listening(command: false), .working(.editing), .working(.transcribing), .error] {
+            let pose = ClippyMotion.pose(at: 1.7, mood: mood, energy: 0.5, reduceMotion: false, pointer: target)
+            #expect(pose.look == target)
+        }
+        let leaning = ClippyMotion.pose(at: 1.7, mood: .idle, energy: 0, reduceMotion: false, pointer: target)
+        #expect(leaning.tilt < 0)                        // turns toward it a little
+        let still = ClippyMotion.pose(at: 1.7, mood: .idle, energy: 0, reduceMotion: true, pointer: target)
+        #expect(still.tilt == 0)
+    }
+
+    @Test func clippyKeepsItsProportionsAtEverySize() {
+        for height: CGFloat in [80, 128, 240] {
+            let size = ClippyController.characterSize(height: height)
+            #expect(size.height == height)
+            #expect(abs(size.width / size.height - 84.0 / 128) < 0.01)
+        }
+    }
+}

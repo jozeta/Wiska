@@ -25,7 +25,29 @@ struct ClippyPose: Equatable {
 enum ClippyMotion {
     static let maxBounce: CGFloat = 11
 
-    static func pose(at t: Double, mood: Presence.Mood, energy: CGFloat, reduceMotion: Bool) -> ClippyPose {
+    /// `pointer`: where the eyes should look instead (following the mouse), from `look(toward:from:)`.
+    static func pose(at t: Double, mood: Presence.Mood, energy: CGFloat, reduceMotion: Bool,
+                     pointer: CGPoint? = nil) -> ClippyPose {
+        var pose = moodPose(at: t, mood: mood, energy: energy, reduceMotion: reduceMotion)
+        if let pointer {
+            pose.look = pointer
+            // Turn a little toward it, too.
+            if !reduceMotion { pose.tilt += Double(pointer.x) * 6 }
+        }
+        return pose
+    }
+
+    /// Pupil direction (−1…1, y down) for a pointer at `pointer`, seen from the eyes at `eyes`
+    /// (screen coordinates, y up). Full turn beyond `reach` points; less when it's close by.
+    static func look(toward pointer: CGPoint, from eyes: CGPoint, reach: CGFloat = 120) -> CGPoint {
+        let dx = pointer.x - eyes.x, dy = pointer.y - eyes.y
+        let distance = (dx * dx + dy * dy).squareRoot()
+        guard distance > 0.5 else { return .zero }
+        let strength = min(1, distance / reach)
+        return CGPoint(x: dx / distance * strength, y: -dy / distance * strength)
+    }
+
+    private static func moodPose(at t: Double, mood: Presence.Mood, energy: CGFloat, reduceMotion: Bool) -> ClippyPose {
         let e = min(1, max(0, energy))
         let blinking = isBlinking(at: t)
         var pose = ClippyPose(tilt: 0, bounce: 0, squash: 1, look: CGPoint(x: 0, y: 0.15),
@@ -73,11 +95,7 @@ enum ClippyMotion {
         return pose
     }
 
-    /// A fraction 0…1, the same for a given number every time (irregular but repeatable timing).
-    static func hash(_ n: Double) -> Double {
-        let x = sin(n * 12.9898 + 78.233) * 43_758.5453
-        return x - x.rounded(.down)
-    }
+    static func hash(_ n: Double) -> Double { Seed.hash(n) }
 
     /// One blink in every 4-second slot, somewhere in its first 2.6 s.
     static func isBlinking(at t: Double) -> Bool {

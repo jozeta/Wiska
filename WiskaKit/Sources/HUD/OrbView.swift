@@ -38,6 +38,10 @@ struct OrbView: View {
 
 enum OrbRenderer {
     static let particleCount = 12
+    /// Two tilted rings orbit the sphere; their back halves pass behind it, for depth.
+    static let ringTilts: [Double] = [0.45, -0.75]
+    /// Lightning flickers to a new shape this many times a second.
+    static let boltRate: Double = 9
 
     static func draw(in context: inout GraphicsContext, size: CGSize, t: Double, pose: OrbPose,
                      colour: Highlight, reduceMotion: Bool) {
@@ -55,17 +59,25 @@ enum OrbRenderer {
                              .init(color: end.opacity(0), location: 1)]),
             center: centre, startRadius: core * 0.5, endRadius: outer))
 
-        // Aura: a ring that ripples with the voice.
-        var aura = Path()
-        let auraRadius = core * 1.32
-        for step in 0...72 {
-            let a = Double(step) / 72 * 2 * .pi
-            let wobble = pose.ripple * CGFloat(sin(3 * a + t * 2.1) * 0.6 + sin(5 * a - t * 3.3) * 0.4)
-            let r = auraRadius * (1 + wobble)
-            let p = CGPoint(x: centre.x + r * CGFloat(cos(a)), y: centre.y + r * CGFloat(sin(a)))
-            step == 0 ? aura.move(to: p) : aura.addLine(to: p)
+        rings(in: &context, centre: centre, core: core, t: t, pose: pose, colour: end, front: false)
+
+        // Aura: two strands that ripple and twist with the voice, out of step with each other.
+        for strand in 0..<2 {
+            var aura = Path()
+            let phase = Double(strand) * 1.9
+            let speed = 1 + Double(pose.ripple) * 9            // louder = faster churn
+            for step in 0...96 {
+                let a = Double(step) / 96 * 2 * .pi
+                let wave = sin(3 * a + t * 2.1 * speed + phase) * 0.5 + sin(5 * a - t * 3.3 * speed) * 0.3
+                    + sin(8 * a + t * 5.2 * speed + phase) * 0.2
+                let r = core * OrbMotion.auraRadius * (1 + pose.ripple * CGFloat(wave) * (strand == 0 ? 1 : 0.7))
+                let p = CGPoint(x: centre.x + r * CGFloat(cos(a)), y: centre.y + r * CGFloat(sin(a)))
+                step == 0 ? aura.move(to: p) : aura.addLine(to: p)
+            }
+            context.stroke(aura, with: .color((strand == 0 ? start : end).opacity((0.25 + 0.5 * pose.glow)
+                    * (strand == 0 ? 1 : 0.6))),
+                           lineWidth: max(1, core * (strand == 0 ? 0.06 : 0.035)))
         }
-        context.stroke(aura, with: .color(start.opacity(0.25 + 0.45 * pose.glow)), lineWidth: max(1, core * 0.06))
 
         // Core: a lit sphere whose highlight slowly drifts around, like flowing light.
         let drift = reduceMotion ? 0 : t * 0.5
@@ -75,6 +87,8 @@ enum OrbRenderer {
             Gradient(colors: [.white.opacity(0.95), start, end]),
             center: light, startRadius: 0, endRadius: core * 1.25))
         context.stroke(circle(centre, core), with: .color(.white.opacity(0.25)), lineWidth: 0.75)
+
+        rings(in: &context, centre: centre, core: core, t: t, pose: pose, colour: start, front: true)
 
         // Processing: two arcs chasing round the core.
         if pose.spinOpacity > 0 {
@@ -89,6 +103,8 @@ enum OrbRenderer {
             }
         }
 
+        lightning(in: &context, centre: centre, core: core, t: t, pose: pose, colour: start)
+
         // Sparks: a few points orbiting inside the glow, livelier with the voice.
         guard pose.particleOpacity > 0 else { return }
         for i in 0..<particleCount {
@@ -101,6 +117,72 @@ enum OrbRenderer {
             let dot = max(0.8, core * 0.045)
             context.fill(circle(p, dot), with: .color((i.isMultiple(of: 2) ? start : .white)
                 .opacity(Double(pose.particleOpacity) * twinkle)))
+        }
+    }
+
+    /// Tilted rings seen in perspective (flattened ellipses), each carrying a bright bead. Drawn in
+    /// two passes: the far halves before the core (dim, hidden by it), the near halves after.
+    private static func rings(in context: inout GraphicsContext, centre: CGPoint, core: CGFloat, t: Double,
+                              pose: OrbPose, colour: Color, front: Bool) {
+        guard pose.ringOpacity > 0 else { return }
+        let rx = core * OrbMotion.ringRadius
+        for (index, tilt) in ringTilts.enumerated() {
+            let ry = rx * CGFloat(0.22 + 0.06 * sin(t * 0.7 + Double(index)))
+            let turn = tilt + t * 0.12 * Double(pose.ringSpeed > 0 ? 1 : 0)
+            func point(_ theta: Double) -> CGPoint {
+                let x = rx * CGFloat(cos(theta)), y = ry * CGFloat(sin(theta))
+                return CGPoint(x: centre.x + x * CGFloat(cos(turn)) - y * CGFloat(sin(turn)),
+                               y: centre.y + x * CGFloat(sin(turn)) + y * CGFloat(cos(turn)))
+            }
+            // The near half is θ in 0…π (towards the viewer), the far half π…2π.
+            var path = Path()
+            let from = front ? 0.0 : Double.pi
+            for step in 0...48 {
+                let p = point(from + Double.pi * Double(step) / 48)
+                step == 0 ? path.move(to: p) : path.addLine(to: p)
+            }
+            let opacity = Double(pose.ringOpacity) * (front ? 0.85 : 0.35)
+            context.stroke(path, with: .color(colour.opacity(opacity)), lineWidth: max(0.8, core * 0.035))
+            // The bead travels the ring; it's brighter and bigger on the near side.
+            let theta = (t * pose.ringSpeed * (index == 0 ? 1 : -1.3) + Double(index) * 2)
+                .truncatingRemainder(dividingBy: 2 * .pi)
+            let near = sin(theta) >= 0
+            guard near == front else { continue }
+            let bead = max(1.2, core * (near ? 0.085 : 0.05))
+            let p = point(theta)
+            context.fill(circle(p, bead * 2.2), with: .color(colour.opacity(0.25 * opacity)))
+            context.fill(circle(p, bead), with: .color(.white.opacity(near ? 0.95 : 0.4)))
+        }
+    }
+
+    /// Jagged bolts that crackle out from the sphere's edge and flicker to new shapes several times a
+    /// second; the louder the voice, the more of them. Each is a blurred coloured stroke under a thin white one.
+    private static func lightning(in context: inout GraphicsContext, centre: CGPoint, core: CGFloat, t: Double,
+                                  pose: OrbPose, colour: Color) {
+        guard pose.boltChance > 0, pose.maxBolts > 0 else { return }
+        let flicker = (t * boltRate).rounded(.down)
+        for i in 0..<pose.maxBolts {
+            let seed = flicker * 7.31 + Double(i) * 3.17
+            guard Seed.hash(seed) < pose.boltChance else { continue }
+            let angle = Seed.hash(seed + 0.11) * 2 * .pi
+            let length = 0.55 + 0.4 * Seed.hash(seed + 0.23)          // reaches 1.55…1.95 core radii
+            var bolt = Path()
+            let segments = 6
+            for s in 0...segments {
+                let along = CGFloat(s) / CGFloat(segments)
+                let r = core * (1 + CGFloat(length) * along)
+                let jitter = s == 0 ? 0 : core * 0.13 * CGFloat(Seed.hash(seed + Double(s) * 0.37) - 0.5) * 2
+                let a = angle + Double(along) * 0.25 * (Seed.hash(seed + 0.5) - 0.5)
+                let p = CGPoint(x: centre.x + r * CGFloat(cos(a)) - jitter * CGFloat(sin(a)),
+                                y: centre.y + r * CGFloat(sin(a)) + jitter * CGFloat(cos(a)))
+                s == 0 ? bolt.move(to: p) : bolt.addLine(to: p)
+            }
+            var glow = context
+            glow.addFilter(.blur(radius: max(1, core * 0.08)))
+            glow.stroke(bolt, with: .color(colour.opacity(0.9)),
+                        style: StrokeStyle(lineWidth: max(1.5, core * 0.1), lineCap: .round, lineJoin: .round))
+            context.stroke(bolt, with: .color(.white.opacity(0.9)),
+                           style: StrokeStyle(lineWidth: max(0.6, core * 0.025), lineCap: .round, lineJoin: .round))
         }
     }
 

@@ -6,16 +6,24 @@ import SwiftUI
 /// click-through child window that moves with it and flips or slides to stay on screen.
 @MainActor
 final class ClippyController: DictationPresenter {
+    /// The window's proportions at the default height (128); the drawing scales into it.
     static let characterSize = CGSize(width: 84, height: 128)
+
+    static func characterSize(height: CGFloat) -> CGSize {
+        CGSize(width: (height * characterSize.width / characterSize.height).rounded(), height: height)
+    }
     static let bubbleSize = CGSize(width: 250, height: 170)
 
     private let model = ClippyModel()
+    private var options: ThemeOptions
     let panel: FloatingPanel
     let bubble: NSPanel
     private var generation = 0
 
     init(_ setup: PresenterSetup) {
-        panel = FloatingPanel(size: Self.characterSize, behavior: setup.options.clippyBehavior)
+        options = setup.options
+        panel = FloatingPanel(size: Self.characterSize(height: setup.options.clippySize),
+                              behavior: setup.options.clippyBehavior)
         panel.contentView = DragHostingView(rootView: ClippyView(model: model))
         bubble = NSPanel(contentRect: NSRect(origin: .zero, size: Self.bubbleSize),
                          styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
@@ -29,6 +37,13 @@ final class ClippyController: DictationPresenter {
         hosting.sizingOptions = []
         bubble.contentView = hosting
         model.highlight = setup.highlight
+        model.followsPointer = setup.options.clippyFollowsPointer
+        model.pointerLook = { [weak panel] in
+            guard let panel else { return nil }
+            // The eyes sit about a third of the way down the character.
+            let eyes = CGPoint(x: panel.frame.midX, y: panel.frame.maxY - panel.frame.height * 0.36)
+            return ClippyMotion.look(toward: NSEvent.mouseLocation, from: eyes)
+        }
         panel.onDragEnded = setup.onMoved
         panel.onMove = { [weak self] in self?.placeBubble() }
         panel.place(origin: setup.origin)
@@ -52,7 +67,17 @@ final class ClippyController: DictationPresenter {
     }
 
     func apply(_ options: ThemeOptions) {
+        let resized = options.clippySize != self.options.clippySize
+        self.options = options
         panel.behavior = options.clippyBehavior
+        if model.followsPointer != options.clippyFollowsPointer { model.followsPointer = options.clippyFollowsPointer }
+        if resized {
+            // Grow or shrink standing in place (bottom centre fixed), then keep it on screen.
+            let old = panel.frame
+            let size = Self.characterSize(height: options.clippySize)
+            panel.place(origin: CGPoint(x: old.midX - size.width / 2, y: old.minY), size: size)
+            panel.onDragEnded?(panel.frame.origin)
+        }
     }
 
     func deactivate() {
