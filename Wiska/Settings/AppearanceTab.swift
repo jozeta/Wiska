@@ -129,6 +129,7 @@ private struct ThemeCard: View {
                                              startPoint: .top, endPoint: .bottom))
                     preview
                 }
+                .frame(maxWidth: .infinity)
                 .frame(height: 110)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 HStack(spacing: 6) {
@@ -152,10 +153,22 @@ private struct ThemeCard: View {
 
     @ViewBuilder private var preview: some View {
         switch theme {
+        // scaleEffect only shrinks the drawing, so each preview also gets its scaled size,
+        // or its full width would widen the card past its column.
         case .notchDropdown:
-            VStack { HUDPreview(highlight: highlight).scaleEffect(0.8); Spacer() }
+            VStack {
+                HUDPreview(highlight: highlight)
+                    .scaleEffect(0.72, anchor: .top)
+                    .frame(width: NotchLayout.fallbackWidth * 0.72, height: 44 * 0.72, alignment: .top)
+                Spacer()
+            }
         case .expandedNotch:
-            VStack { ExpandedNotchPreview(highlight: highlight).scaleEffect(0.68); Spacer() }
+            VStack {
+                ExpandedNotchPreview(highlight: highlight)
+                    .scaleEffect(0.6, anchor: .top)
+                    .frame(width: (2 * 150 + 120) * 0.6, height: 32 * 0.6, alignment: .top)
+                Spacer()
+            }
         case .orb:
             OrbPreview(colour: orbColour, side: 100)
         case .clippy:
