@@ -19,8 +19,6 @@ final class ClippyModel {
     @ObservationIgnored var pointerLook: (() -> CGPoint?)?
     /// Following the pointer keeps the timeline running while idle (even with Reduce Motion).
     var followsPointer = false
-    /// Previews drive Clippy with a made-up voice instead of the microphone.
-    @ObservationIgnored var sampleLevel: ((Double) -> Float)?
 }
 
 /// The character: an original drawing of a bent-wire paperclip with big eyes and heavy brows,
@@ -32,13 +30,13 @@ struct ClippyView: View {
 
     var body: some View {
         let _ = model.revision
-        let idle = model.presence.mood() == .idle && model.sampleLevel == nil
+        let idle = model.presence.mood() == .idle
         TimelineView(.animation(minimumInterval: idle ? 1.0 / 24 : nil,
                                 paused: idle && reduceMotion && !model.followsPointer)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
-            let level = model.sampleLevel?(t) ?? model.presence.level
+            let level = model.presence.level
             let energy = clock.advance(to: timeline.date, level: level)
-            let mood = model.sampleLevel == nil ? model.presence.mood(at: timeline.date) : .listening(command: false)
+            let mood = model.presence.mood(at: timeline.date)
             let pose = ClippyMotion.pose(at: t, mood: mood, energy: energy, reduceMotion: reduceMotion,
                                          pointer: model.followsPointer ? model.pointerLook?() : nil)
             Canvas { context, size in
@@ -103,7 +101,8 @@ enum ClippyRenderer {
         guard pose.turn > 0.15 else { return }       // turned away: just the wire
         for (index, x) in [CGFloat(21), 37].enumerated() {
             eye(in: &context, centre: CGPoint(x: x, y: 33), pose: pose)
-            brow(in: &context, eyeX: x, inward: index == 0 ? 1 : -1, pose: pose)
+            brow(in: &context, eyeX: x, inward: index == 0 ? 1 : -1,
+                 level: max(-1, min(1, pose.brow + (index == 0 ? -1 : 1) * pose.browTilt)))
         }
     }
 
@@ -129,12 +128,22 @@ enum ClippyRenderer {
             context.stroke(smile, with: .color(outline), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
             return
         }
-        let open = max(0.08, pose.eyeOpen)
-        let rect = CGRect(x: centre.x - width / 2, y: centre.y - height * open / 2, width: width, height: height * open)
+        // Wide when surprised (eyeOpen > 1), narrowed by a squint, shut in a blink.
+        let open = max(0.08, pose.eyeOpen) * (1 - 0.55 * pose.squint)
+        let wide = min(1.15, max(1, pose.eyeOpen))
+        let rect = CGRect(x: centre.x - width * wide / 2, y: centre.y - height * open / 2,
+                          width: width * wide, height: height * open)
         context.fill(Path(ellipseIn: rect), with: .color(.white))
         context.stroke(Path(ellipseIn: rect), with: .color(outline), lineWidth: 1.3)
+        if pose.squint > 0.05 {
+            // The flat upper lid of a squint.
+            var lid = Path()
+            lid.move(to: CGPoint(x: rect.minX - 0.5, y: rect.minY + rect.height * 0.25))
+            lid.addLine(to: CGPoint(x: rect.maxX + 0.5, y: rect.minY + rect.height * 0.25))
+            context.stroke(lid, with: .color(outline), style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
+        }
         guard open > 0.3 else { return }
-        let pupil = CGPoint(x: centre.x + pose.look.x * 2.4, y: centre.y + pose.look.y * 3 * open)
+        let pupil = CGPoint(x: centre.x + pose.look.x * 2.4, y: centre.y + pose.look.y * 3 * min(1, open))
         context.fill(Path(ellipseIn: CGRect(x: pupil.x - 2.6, y: pupil.y - 2.6, width: 5.2, height: 5.2)),
                      with: .color(outline))
         context.fill(Path(ellipseIn: CGRect(x: pupil.x - 1.6, y: pupil.y - 2, width: 1.5, height: 1.5)),
@@ -142,9 +151,10 @@ enum ClippyRenderer {
     }
 
     /// `inward`: +1 when the brow's inner end is to its right (the left eye).
-    private static func brow(in context: inout GraphicsContext, eyeX: CGFloat, inward: CGFloat, pose: ClippyPose) {
-        let lift = pose.brow * 3.2
-        let knit = min(0, pose.brow) * -3          // a frown pulls the inner ends down
+    /// `level`: this brow's height, −1 (knitted) … 1 (raised high).
+    private static func brow(in context: inout GraphicsContext, eyeX: CGFloat, inward: CGFloat, level: CGFloat) {
+        let lift = level * 3.2
+        let knit = min(0, level) * -3              // a frown pulls the inner ends down
         let inner = CGPoint(x: eyeX + inward * 5, y: 24 - lift + knit)
         let outer = CGPoint(x: eyeX - inward * 5, y: 24 - lift - knit * 0.3)
         var path = Path()
@@ -249,8 +259,8 @@ public struct ClippyPreview: View {
             ClippyView(model: model).frame(width: height, height: height)
         }
         .onAppear {
-            model.sampleLevel = { t in Float(max(0, 0.3 + 0.25 * sin(t * 1.9) + 0.1 * sin(t * 7.3))) }
-            model.status = "Listening…"
+            // Idle, as he spends most of his time: fidgets, faces and the odd trick.
+            model.status = "Hi! Need a hand?"
             model.text = "It looks like you're writing a letter."
             model.tailX = 95 + ClippyBubbleView.sideInset
             model.highlight = highlight

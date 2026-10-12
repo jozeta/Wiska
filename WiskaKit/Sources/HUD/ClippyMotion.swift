@@ -25,6 +25,10 @@ struct ClippyPose: Equatable {
     var spin: Double = 0
     /// Napping: eyes shut, a few "z"s float up.
     var sleeping = false
+    /// Narrowed eyes, 0…1 (anger, suspicion, smugness): a flat upper lid comes down.
+    var squint: CGFloat = 0
+    /// Uneven brows: positive raises his right brow and lowers his left (a question).
+    var browTilt: CGFloat = 0
 }
 
 /// Pure timing for Clippy, so its behaviour is testable without drawing. Idle movement is
@@ -37,11 +41,12 @@ enum ClippyMotion {
     static func pose(at t: Double, mood: Presence.Mood, energy: CGFloat, reduceMotion: Bool,
                      pointer: CGPoint? = nil) -> ClippyPose {
         var pose = moodPose(at: t, mood: mood, energy: energy, reduceMotion: reduceMotion)
-        if let pointer, !pose.sleeping {
+        // Follow the pointer, except while a trick or a face has its own way of looking.
+        let acting = mood == .idle && (trick(at: t) != nil || expression(at: t) != nil)
+        if let pointer, !pose.sleeping, !acting {
             pose.look = pointer
-            // Turn a little toward it, too (not in the middle of a trick).
-            let tricking = mood == .idle && trick(at: t) != nil
-            if !reduceMotion && !tricking { pose.tilt += Double(pointer.x) * 6 }
+            // Turn a little toward it, too.
+            if !reduceMotion { pose.tilt += Double(pointer.x) * 6 }
         }
         return pose
     }
@@ -79,6 +84,10 @@ enum ClippyMotion {
                 pose.squash = fidget.squash + 0.012 * CGFloat(sin(t * 1.7))
                 pose.brow = fidget.brow
             }
+            // Faces now and then: angry, happy, questioning, pondering, surprised, smug.
+            if trick(at: t) == nil, let (expression, progress) = expression(at: t) {
+                pose = expressionPose(expression, progress: progress, base: pose)
+            }
         case .message:
             pose.look = CGPoint(x: 0, y: 0.35)
             pose.brow = 0.4
@@ -89,7 +98,9 @@ enum ClippyMotion {
             pose.brow = command ? 0.95 : 0.5 + 0.4 * e
             pose.happy = isBeaming(at: t)
             if !reduceMotion {
-                pose.bounce = -min(maxBounce, (2 + 9 * e) * CGFloat(abs(sin(t * (5 + 3 * Double(e))))))
+                // A steady rhythm; the voice sets only the height (a voice-driven speed would jump
+                // about, since `t` is a huge number of seconds).
+                pose.bounce = -min(maxBounce, (2 + 9 * e) * CGFloat(abs(sin(t * 6.5))))
                 pose.squash = 1 - 0.05 * e * CGFloat(sin(t * 15))
                 pose.tilt = 5 * sin(t * 2.6) + 4 * Double(e) * sin(t * 4.3)
                 pose.shiftX = 2.5 * CGFloat(sin(t * 1.9))
@@ -139,7 +150,7 @@ enum ClippyMotion {
 
     /// The bigger idle tricks, about one a minute.
     enum Trick: CaseIterable, Hashable {
-        case spin, nap, cartwheel, dance, trampoline
+        case spin, nap, cartwheel, dance, trampoline, peekaboo, jelly, moonwalk, dizzy, hiccup
 
         var duration: Double {
             switch self {
@@ -148,19 +159,24 @@ enum ClippyMotion {
             case .cartwheel: 1.6
             case .dance: 3.2
             case .trampoline: 2.6
+            case .peekaboo: 3.4
+            case .jelly: 2.2
+            case .moonwalk: 3.4
+            case .dizzy: 3
+            case .hiccup: 2.4
             }
         }
     }
 
-    static let trickSlot: Double = 45
+    static let trickSlot: Double = 40
 
     /// The trick under way at `t`, if any, and how far through it is (0…1). Each 45-second slot
     /// usually holds one, picked and placed irregularly (never in its first 8 seconds).
     static func trick(at t: Double) -> (trick: Trick, progress: Double)? {
         let slot = (t / trickSlot).rounded(.down)
-        guard Seed.hash(slot + 0.17) < 0.85 else { return nil }
+        guard Seed.hash(slot + 0.17) < 0.9 else { return nil }
         let trick = Trick.allCases[Int(Seed.hash(slot + 0.71) * Double(Trick.allCases.count))]
-        let start = slot * trickSlot + 8 + Seed.hash(slot + 0.37) * 25
+        let start = slot * trickSlot + 8 + Seed.hash(slot + 0.37) * 24
         let local = t - start
         guard local >= 0, local < trick.duration else { return nil }
         return (trick, local / trick.duration)
@@ -207,6 +223,115 @@ enum ClippyMotion {
             pose.squash = 1 - 0.09 * CGFloat(pow(max(0, 1 - height * 3), 2))
             pose.happy = height > 0.6
             pose.brow = 0.8
+        case .peekaboo:
+            // Sinks out of sight through the floor, peeks out looking around, pops back up.
+            if p < 0.25 {
+                pose.bounce = 90 * CGFloat(ease(p / 0.25))
+            } else if p < 0.4 {
+                pose.bounce = 90
+            } else if p < 0.5 {
+                pose.bounce = 90 - 35 * CGFloat(ease((p - 0.4) / 0.1))
+            } else if p < 0.8 {
+                pose.bounce = 55
+                pose.look = CGPoint(x: 0.85 * sin(2 * .pi * (p - 0.5) / 0.3), y: 0.1)
+                pose.brow = 0.7
+            } else {
+                let q = (p - 0.8) / 0.2
+                pose.bounce = 55 * CGFloat(1 - ease(q)) - 8 * CGFloat(sin(.pi * q))
+                pose.happy = q > 0.5
+                pose.brow = 0.8
+            }
+        case .jelly:
+            // Wobbles like jelly: squash, stretch, settling.
+            pose.squash = 1 + 0.15 * CGFloat((1 - 0.6 * p) * sin(5 * .pi * p))
+            pose.brow = 0.4
+            pose.eyeOpen = 1.1
+        case .moonwalk:
+            // Glides back to one side, leaning back, and returns — looking where he's going.
+            pose.shiftX = -24 * CGFloat(envelope)
+            pose.tilt = 6 * envelope
+            pose.bounce = -1.5 * CGFloat(abs(sin(10 * .pi * p)) * envelope)
+            pose.look = CGPoint(x: p < 0.5 ? -0.7 : 0.7, y: 0.1)
+            pose.brow = 0.5
+        case .dizzy:
+            // Two quick flips, then a woozy wobble with his eyes rolling round.
+            if p < 0.4 {
+                let q = p / 0.4
+                pose.spin = 720 * ease(q)
+                pose.bounce = -9 * CGFloat(sin(.pi * q))
+            } else {
+                let q = (p - 0.4) / 0.6
+                pose.spin = 720
+                pose.tilt = 10 * sin(12 * q) * (1 - q)
+                pose.look = CGPoint(x: 0.8 * cos(15 * q), y: 0.8 * sin(15 * q))
+                pose.squint = 0.3 * CGFloat(1 - q)
+                pose.brow = -0.2
+            }
+        case .hiccup:
+            // Three sudden little jumps, wide-eyed each time.
+            pose.brow = 0.2
+            for centre in [0.2, 0.5, 0.8] where abs(p - centre) < 0.1 {
+                pose.eyeOpen = 1.25
+                pose.brow = 1
+                if abs(p - centre) < 0.04 { pose.bounce = -6 * CGFloat(sin(.pi * (p - centre + 0.04) / 0.08)) }
+            }
+        }
+        return pose
+    }
+
+    /// Idle faces.
+    enum Expression: CaseIterable, Hashable {
+        case angry, happy, questioning, pondering, surprised, smug
+    }
+
+    static let expressionSlot: Double = 6
+    static let expressionDuration: Double = 1.8
+
+    /// The face being pulled at `t`, if any: most 6-second slots hold one for 1.8 s.
+    static func expression(at t: Double) -> (expression: Expression, progress: Double)? {
+        let slot = (t / expressionSlot).rounded(.down)
+        guard Seed.hash(slot + 0.83) < 0.6 else { return nil }
+        let start = slot * expressionSlot + 0.5 + Seed.hash(slot + 0.91) * 3.5
+        let local = t - start
+        guard local >= 0, local < expressionDuration else { return nil }
+        let expression = Expression.allCases[Int(Seed.hash(slot + 0.61) * Double(Expression.allCases.count))]
+        return (expression, local / expressionDuration)
+    }
+
+    /// `base` with a face pulled over it, eased in and out.
+    static func expressionPose(_ expression: Expression, progress p: Double, base: ClippyPose) -> ClippyPose {
+        var pose = base
+        let k = CGFloat(max(0, min(1, p / 0.15, (1 - p) / 0.15)))
+        func blend(_ from: CGFloat, _ to: CGFloat) -> CGFloat { from + (to - from) * k }
+        func towards(_ look: CGPoint) -> CGPoint {
+            CGPoint(x: blend(base.look.x, look.x), y: blend(base.look.y, look.y))
+        }
+        switch expression {
+        case .angry:
+            pose.squint = blend(0, 0.55)
+            pose.brow = blend(base.brow, -0.85)
+            pose.look = towards(CGPoint(x: 0, y: 0.2))
+        case .happy:
+            pose.happy = k > 0.5
+            pose.brow = blend(base.brow, 0.5)
+        case .questioning:
+            pose.browTilt = blend(0, 0.85)
+            pose.brow = blend(base.brow, 0.3)
+            pose.tilt = base.tilt + 6 * Double(k)
+            pose.look = towards(CGPoint(x: 0.3, y: -0.1))
+        case .pondering:
+            pose.look = towards(CGPoint(x: -0.6, y: -0.65))
+            pose.browTilt = blend(0, -0.5)
+            pose.squint = blend(0, 0.25)
+            pose.tilt = base.tilt - 4 * Double(k)
+        case .surprised:
+            pose.eyeOpen = blend(base.eyeOpen, 1.25)
+            pose.brow = blend(base.brow, 1)
+        case .smug:
+            pose.squint = blend(0, 0.45)
+            pose.browTilt = blend(0, 0.6)
+            pose.brow = blend(base.brow, 0.1)
+            pose.look = towards(CGPoint(x: 0.5, y: 0.1))
         }
         return pose
     }

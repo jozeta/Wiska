@@ -13,7 +13,9 @@ struct ClippyMotionTests {
 
     @Test func idleBlinksNowAndThenButMostlyLooksOut() {
         // Outside the tricks (a nap shuts his eyes for a while).
-        let idle = stride(from: 0.0, to: 40, by: 1.0 / 60).filter { ClippyMotion.trick(at: $0) == nil }
+        let idle = stride(from: 0.0, to: 40, by: 1.0 / 60).filter {
+            ClippyMotion.trick(at: $0) == nil && ClippyMotion.expression(at: $0) == nil
+        }
             .map { ClippyMotion.pose(at: $0, mood: .idle, energy: 0, reduceMotion: false) }
         let closed = idle.filter { $0.eyeOpen < 0.5 }.count
         #expect(closed > 0)
@@ -25,13 +27,76 @@ struct ClippyMotionTests {
     /// Between tricks he's never quite still (a sway, a breath, frequent small fidgets), but it
     /// stays small.
     @Test func idleIsLivelyButSmallBetweenTricks() {
-        let samples = stride(from: 0.0, to: 600, by: 1.0 / 30).filter { ClippyMotion.trick(at: $0) == nil }
+        let samples = stride(from: 0.0, to: 600, by: 1.0 / 30).filter {
+            ClippyMotion.trick(at: $0) == nil && ClippyMotion.expression(at: $0) == nil
+        }
         let idle = samples.map { ClippyMotion.pose(at: $0, mood: .idle, energy: 0, reduceMotion: false) }
         #expect(idle.contains { $0.bounce < -1 })                    // hops
         #expect(idle.contains { abs($0.tilt) > 3 })                  // twists and turns
         #expect(idle.allSatisfy { $0.bounce >= -4 && abs($0.tilt) <= 8 && abs($0.squash - 1) <= 0.08 })
         let moving = idle.filter { abs($0.tilt) > 0.5 || abs($0.squash - 1) > 0.005 || $0.bounce < -0.3 }
         #expect(Double(moving.count) / Double(idle.count) > 0.6)     // more animated than before
+    }
+
+    /// The voice changes how high he bounces, never where he is in the bounce: frame to frame he
+    /// moves smoothly, even with the real (huge) clock and a voice that wavers.
+    @Test func listeningNeverJitters() {
+        let t0 = 800_000_000.0, frame = 1.0 / 60
+        var previous = ClippyMotion.pose(at: t0, mood: .listening(command: false), energy: 0.5, reduceMotion: false)
+        for i in 1..<240 {
+            let energy = 0.5 + 0.2 * CGFloat(sin(Double(i) * 0.7))         // a wavering voice
+            let pose = ClippyMotion.pose(at: t0 + Double(i) * frame, mood: .listening(command: false), energy: energy,
+                                         reduceMotion: false)
+            #expect(abs(pose.bounce - previous.bounce) < 1.5)
+            #expect(abs(pose.tilt - previous.tilt) < 1)
+            #expect(abs(pose.shiftX - previous.shiftX) < 0.5)
+            previous = pose
+        }
+    }
+
+    /// Faces now and then between tricks: each kind shows up, none for long.
+    @Test func idleFacesComeAndGo() {
+        var seen: Set<ClippyMotion.Expression> = []
+        var busy = 0
+        let step = 1.0 / 10, minutes = 30.0
+        for t in stride(from: 0.0, to: minutes * 60, by: step) {
+            if let expression = ClippyMotion.expression(at: t) { seen.insert(expression.expression); busy += 1 }
+        }
+        #expect(seen == Set(ClippyMotion.Expression.allCases))
+        let share = Double(busy) * step / (minutes * 60)
+        #expect(share > 0.1 && share < 0.4)
+    }
+
+    @Test func eachFaceReads() {
+        func face(_ expression: ClippyMotion.Expression) -> ClippyPose {
+            ClippyMotion.expressionPose(expression, progress: 0.5, base: ClippyMotion.pose(at: 1000, mood: .idle,
+                                                                                          energy: 0, reduceMotion: true))
+        }
+        #expect(face(.angry).squint >= 0.4 && face(.angry).brow < -0.5)
+        #expect(face(.happy).happy)
+        #expect(abs(face(.questioning).browTilt) >= 0.6)
+        #expect(face(.pondering).look.y < -0.3 && abs(face(.pondering).browTilt) > 0.3)
+        #expect(face(.surprised).eyeOpen > 1.1 && face(.surprised).brow > 0.8)
+        #expect(face(.smug).squint > 0.3 && abs(face(.smug).browTilt) > 0.3)
+    }
+
+    /// Tricks and faces still happen while his eyes follow the pointer; between them, the eyes
+    /// go back to the pointer.
+    @Test func tricksAndFacesHappenWhileFollowingThePointer() {
+        let pointer = CGPoint(x: 0.7, y: -0.2)
+        let trickTime = stride(from: 0.0, to: 600, by: 0.1).first { ClippyMotion.trick(at: $0)?.trick == .cartwheel }!
+        let tracked = ClippyMotion.pose(at: trickTime + 0.5, mood: .idle, energy: 0, reduceMotion: false, pointer: pointer)
+        let plain = ClippyMotion.pose(at: trickTime + 0.5, mood: .idle, energy: 0, reduceMotion: false)
+        #expect(tracked.spin == plain.spin && tracked.spin > 0)
+        let faceTime = stride(from: 0.0, to: 600, by: 0.1).first {
+            ClippyMotion.expression(at: $0)?.expression == .surprised && ClippyMotion.trick(at: $0) == nil
+        }!
+        let face = ClippyMotion.pose(at: faceTime + 0.3, mood: .idle, energy: 0, reduceMotion: false, pointer: pointer)
+        #expect(face.eyeOpen > 1.05)
+        let calm = stride(from: 0.0, to: 600, by: 0.1).first {
+            ClippyMotion.expression(at: $0) == nil && ClippyMotion.trick(at: $0) == nil && !ClippyMotion.isBlinking(at: $0)
+        }!
+        #expect(ClippyMotion.pose(at: calm, mood: .idle, energy: 0, reduceMotion: false, pointer: pointer).look == pointer)
     }
 
     /// Five bigger tricks, each now and then: roughly one a minute, never more than one at a time.
@@ -46,7 +111,7 @@ struct ClippyMotionTests {
             previous = trick
         }
         #expect(seen == Set(ClippyMotion.Trick.allCases))
-        #expect(Double(starts) / minutes >= 0.5 && Double(starts) / minutes <= 1.5)
+        #expect(Double(starts) / minutes >= 0.7 && Double(starts) / minutes <= 1.8)
         #expect(Double(busy) * step / (minutes * 60) < 0.12)
     }
 
@@ -61,14 +126,26 @@ struct ClippyMotionTests {
         #expect(run(.cartwheel).map(\.spin).max()! >= 359)
         let dance = run(.dance)
         #expect(dance.contains { $0.shiftX > 5 } && dance.contains { $0.shiftX < -5 } && dance.contains { $0.happy })
+        let peek = run(.peekaboo)
+        #expect(peek.contains { $0.bounce >= 80 })                                      // gone below the floor
+        #expect(peek.contains { $0.bounce > 40 && $0.bounce < 70 && abs($0.look.x) > 0.5 })   // peeking out, looking around
+        #expect(run(.jelly).contains { $0.squash > 1.1 } && run(.jelly).contains { $0.squash < 0.9 })
+        #expect(run(.moonwalk).map { abs($0.shiftX) }.max()! >= 20)
+        let dizzy = run(.dizzy)
+        #expect(dizzy.map(\.spin).max()! >= 719 && dizzy.contains { abs($0.tilt) > 6 && $0.spin == 720 })
+        let hiccups = run(.hiccup)
+        var jumps = 0
+        for i in 1..<hiccups.count where hiccups[i].bounce < -3 && hiccups[i - 1].bounce >= -3 { jumps += 1 }
+        #expect(jumps == 3 && hiccups.contains { $0.eyeOpen > 1.1 })
         let hops = run(.trampoline)
         var landings = 0
         for i in 1..<hops.count where hops[i].bounce > -0.5 && hops[i - 1].bounce <= -0.5 { landings += 1 }
         #expect(landings >= 2 && hops.contains { $0.bounce <= -8 } && hops.contains { $0.squash < 0.95 })
         for trick in ClippyMotion.Trick.allCases {
             let poses = run(trick)
-            #expect(poses.allSatisfy { $0.bounce >= -ClippyMotion.maxBounce })
-            #expect(poses.first! .turn == 1 && abs(poses.last!.spin.truncatingRemainder(dividingBy: 360)) < 0.001)
+            #expect(poses.allSatisfy { $0.bounce >= -ClippyMotion.maxBounce && $0.squash <= 1.16 })
+            #expect(poses.first!.turn == 1 && abs(poses.last!.spin.truncatingRemainder(dividingBy: 360)) < 0.001)
+            #expect(abs(poses.first!.bounce) < 0.001 && abs(poses.last!.bounce) < 0.001)   // starts and ends standing
         }
     }
 
