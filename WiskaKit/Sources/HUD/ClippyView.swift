@@ -160,11 +160,11 @@ struct ClippyBubbleView: View {
         .padding(.horizontal, 12).padding(.vertical, 9)
         .padding(model.bubbleAbove ? .bottom : .top, BubbleShape.tailHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(shape.fill(Color(hex: 0xFFFFE1)))
+        .background(shape.fill(Color(hex: 0xFFFFE1)).shadow(color: .black.opacity(0.3), radius: 4, y: 2))
         .overlay(shape.stroke(Color(hex: 0x262A31), lineWidth: 1))
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: model.bubbleAbove ? .bottom : .top)
-        .padding(1)
+        .padding(.horizontal, 6).padding(model.bubbleAbove ? .top : .bottom, 6)
     }
 }
 

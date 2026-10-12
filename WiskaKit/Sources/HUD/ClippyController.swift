@@ -23,7 +23,7 @@ final class ClippyController: DictationPresenter {
         bubble.hidesOnDeactivate = false
         bubble.isOpaque = false
         bubble.backgroundColor = .clear
-        bubble.hasShadow = true
+        bubble.hasShadow = false        // drawn by the view: a window shadow wouldn't follow the bubble's shape
         bubble.isReleasedWhenClosed = false
         let hosting = NSHostingView(rootView: ClippyBubbleView(model: model))
         hosting.sizingOptions = []
@@ -62,22 +62,28 @@ final class ClippyController: DictationPresenter {
     }
 
     private func present(_ content: HUDContent) {
-        let before = model.presence.mood()
+        let wasVisible = bubble.isVisible
         model.presence.update(content)
         let mood = model.presence.mood()
-        if mood != before { model.revision += 1 }
+        if model.presence.takeMoodChange() { model.revision += 1 }
         let speech = Self.speech(for: content, mood: mood, lastText: model.text)
         if model.status != speech.status { model.status = speech.status }
         if model.text != speech.text { model.text = speech.text }
         if model.isError != speech.isError { model.isError = speech.isError }
-        if speech.visible { showBubble() } else { bubble.orderOut(nil) }
+        if speech.visible {
+            if !wasVisible { showBubble() }
+        } else {
+            bubble.orderOut(nil)
+        }
         if mood == .success {
             // "Done" for a moment, then Clippy goes quiet again.
             let token = generation
             Task { [weak self] in
                 try? await Task.sleep(for: .seconds(Presence.successDuration + 0.05))
-                guard let self, self.generation == token else { return }
-                self.present(.hidden)
+                guard let self else { return }
+                if self.generation == token { return self.present(.hidden) }
+                // Something newer arrived meanwhile; still redraw if the celebration has ended.
+                if self.model.presence.takeMoodChange() { self.model.revision += 1 }
             }
         }
     }
@@ -111,11 +117,16 @@ final class ClippyController: DictationPresenter {
         if !bubble.isVisible { bubble.orderFront(nil) }
     }
 
+    /// How many times the bubble window was laid out (for tests: not once per audio frame).
+    private(set) var bubbleLayouts = 0
+
     private func placeBubble() {
         let screen = (panel.screen ?? NSScreen.main)?.visibleFrame ?? panel.frame
         let placed = BubblePlacement.place(bubble: Self.bubbleSize, character: panel.frame, screen: screen)
         if model.bubbleAbove != placed.above { model.bubbleAbove = placed.above }
         if model.tailX != placed.tailX { model.tailX = placed.tailX }
+        guard placed.frame != bubble.frame || bubbleLayouts == 0 else { return }
+        bubbleLayouts += 1
         bubble.setFrame(placed.frame, display: bubble.isVisible)
     }
 }

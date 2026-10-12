@@ -18,6 +18,8 @@ final class Presence {
 
     private(set) var content: HUDContent = .hidden
     private var successUntil = Date.distantPast
+    /// The mood last reported by `takeMoodChange`, i.e. the one the view last drew.
+    private var reported: Mood = .idle
 
     func update(_ content: HUDContent, at now: Date = Date()) {
         if case .working = self.content, content == .hidden { successUntil = now + Self.successDuration }
@@ -33,6 +35,15 @@ final class Presence {
         case .message: .message
         case .error: .error
         }
+    }
+
+    /// True once each time the mood differs from the last one reported — including a celebration
+    /// that ran out on its own. Views redraw (and pick their frame rate) only when this says so.
+    func takeMoodChange(at now: Date = Date()) -> Bool {
+        let mood = mood(at: now)
+        guard mood != reported else { return false }
+        reported = mood
+        return true
     }
 
     /// The microphone loudness to animate with (silent unless listening).

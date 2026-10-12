@@ -64,18 +64,26 @@ struct ExpandedNotchView: View {
         }
     }
 
-    /// One waveform for the whole dictation, so it settles flat when speech stops instead of vanishing.
+    /// One waveform for the whole dictation (the same view, so its bars keep their motion): it
+    /// settles flat when speech stops instead of being swapped out.
     @ViewBuilder private var waveform: some View {
-        switch model.content {
-        case .hidden, .message, .error:
-            Color.clear
-        case .listening(let audio, _, _, _, _):
+        if let audio = Self.waveformAudio(for: model.content) {
+            let working = audio == .silent
             WaveformView(audio: audio, highlight: model.highlight,
                          scale: ExpandedNotchLayout.waveformScale(height: model.height))
-        case .working:
-            WaveformView(audio: .silent, highlight: model.highlight,
-                         scale: ExpandedNotchLayout.waveformScale(height: model.height))
-                .opacity(0.5)
+                .opacity(working ? 0.5 : 1)
+                .animation(.easeOut(duration: 0.3), value: working)
+        } else {
+            Color.clear
+        }
+    }
+
+    /// What the waveform hears: the voice while listening, silence while working, nothing otherwise.
+    static func waveformAudio(for content: HUDContent) -> AudioLevel? {
+        switch content {
+        case .listening(let audio, _, _, _, _): audio
+        case .working: .silent
+        case .hidden, .message, .error: nil
         }
     }
 

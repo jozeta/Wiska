@@ -40,17 +40,15 @@ final class OrbController: DictationPresenter {
     }
 
     private func present(_ content: HUDContent) {
-        let before = model.presence.mood()
         model.presence.update(content)
         // Audio frames don't need a new revision: the running timeline reads them.
-        let mood = model.presence.mood()
-        if mood != before { model.revision += 1 }
+        if model.presence.takeMoodChange() { model.revision += 1 }
         // The celebration ends on its own: redraw then, so the orb drops back to its idle pace.
-        if mood == .success {
-            let token = generation
+        // Not tied to `generation`: a later hide must not cancel this check.
+        if model.presence.mood() == .success {
             Task { [weak self] in
                 try? await Task.sleep(for: .seconds(Presence.successDuration + 0.05))
-                guard let self, self.generation == token else { return }
+                guard let self, self.model.presence.takeMoodChange() else { return }
                 self.model.revision += 1
             }
         }

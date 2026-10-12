@@ -45,3 +45,30 @@ struct PresenceTests {
         #expect(presence.mood(at: t0.addingTimeInterval(0.2)) == .success)
     }
 }
+
+@MainActor
+struct PresenceRedrawTests {
+    let t0 = Date(timeIntervalSinceReferenceDate: 1_000)
+
+    /// The view picks its frame rate only when told the mood changed. A celebration that ran out
+    /// while other hides arrived must still be reported, or an idle theme animates at full rate forever.
+    @Test func anExpiredCelebrationIsReportedEvenAfterRepeatedHides() {
+        let presence = Presence()
+        presence.update(.working("Transcribing…"), at: t0)
+        #expect(presence.takeMoodChange(at: t0))
+        presence.update(.hidden, at: t0)
+        #expect(presence.takeMoodChange(at: t0))                       // → success
+        let later = t0.addingTimeInterval(Presence.successDuration + 0.2)
+        presence.update(.hidden, at: later)                            // a delayed hide, after it expired
+        #expect(presence.takeMoodChange(at: later))                    // success → idle: redraw
+        #expect(!presence.takeMoodChange(at: later))                   // reported once
+    }
+
+    @Test func audioFramesAreNotMoodChanges() {
+        let presence = Presence()
+        presence.update(.listening(audio: AudioLevel(level: 0.2), badge: "EN", preview: "", handsFree: false), at: t0)
+        #expect(presence.takeMoodChange(at: t0))
+        presence.update(.listening(audio: AudioLevel(level: 0.6), badge: "EN", preview: "hi", handsFree: false), at: t0)
+        #expect(!presence.takeMoodChange(at: t0))
+    }
+}
