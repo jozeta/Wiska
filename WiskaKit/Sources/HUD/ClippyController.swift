@@ -6,11 +6,9 @@ import SwiftUI
 /// click-through child window that moves with it and flips or slides to stay on screen.
 @MainActor
 final class ClippyController: DictationPresenter {
-    /// The window's proportions at the default height (128); the drawing scales into it.
-    static let characterSize = CGSize(width: 84, height: 128)
-
+    /// Square, so he has room to lie down and cartwheel; it's transparent, so he looks no wider.
     static func characterSize(height: CGFloat) -> CGSize {
-        CGSize(width: (height * characterSize.width / characterSize.height).rounded(), height: height)
+        CGSize(width: height, height: height)
     }
     static let bubbleSize = CGSize(width: 250, height: 170)
 

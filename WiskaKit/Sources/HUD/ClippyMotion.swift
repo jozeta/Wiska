@@ -17,6 +17,14 @@ struct ClippyPose: Equatable {
     var brow: CGFloat
     /// Smiling eyes (^ ^).
     var happy: Bool
+    /// Sideways offset in design units (a shimmy, or making room to lie down).
+    var shiftX: CGFloat = 0
+    /// Turning round on the spot: 1 = facing you, −1 = his back (a horizontal squeeze in between).
+    var turn: CGFloat = 1
+    /// Rotation in degrees around the clip's middle (a cartwheel).
+    var spin: Double = 0
+    /// Napping: eyes shut, a few "z"s float up.
+    var sleeping = false
 }
 
 /// Pure timing for Clippy, so its behaviour is testable without drawing. Idle movement is
@@ -29,10 +37,11 @@ enum ClippyMotion {
     static func pose(at t: Double, mood: Presence.Mood, energy: CGFloat, reduceMotion: Bool,
                      pointer: CGPoint? = nil) -> ClippyPose {
         var pose = moodPose(at: t, mood: mood, energy: energy, reduceMotion: reduceMotion)
-        if let pointer {
+        if let pointer, !pose.sleeping {
             pose.look = pointer
-            // Turn a little toward it, too.
-            if !reduceMotion { pose.tilt += Double(pointer.x) * 6 }
+            // Turn a little toward it, too (not in the middle of a trick).
+            let tricking = mood == .idle && trick(at: t) != nil
+            if !reduceMotion && !tricking { pose.tilt += Double(pointer.x) * 6 }
         }
         return pose
     }
@@ -57,23 +66,33 @@ enum ClippyMotion {
             let glance = glance(at: t)
             pose.look = glance
             if !reduceMotion {
+                if let (trick, progress) = trick(at: t) {
+                    var trickPose = trickPose(trick, progress: progress, at: t)
+                    if !trickPose.sleeping && !trickPose.happy { trickPose.eyeOpen = pose.eyeOpen }   // still blinks
+                    return trickPose
+                }
+                // Never quite still: a gentle sway and breath, plus frequent small fidgets.
                 let fidget = fidget(at: t)
-                pose.tilt = max(-7, min(7, Double(glance.x) * 4 + fidget.tilt))   // a glance and a twist together stay small
+                let sway = 1.8 * sin(t * 0.8)
+                pose.tilt = max(-8, min(8, sway + Double(glance.x) * 4 + fidget.tilt))
                 pose.bounce = fidget.bounce
-                pose.squash = fidget.squash
+                pose.squash = fidget.squash + 0.012 * CGFloat(sin(t * 1.7))
                 pose.brow = fidget.brow
             }
         case .message:
             pose.look = CGPoint(x: 0, y: 0.35)
             pose.brow = 0.4
         case .listening(let command):
-            // Attentive: looking at you, brows up, bobbing and flexing with the voice.
+            // Happy to help: looking at you, brows up, bobbing and swaying even before you speak,
+            // bouncing with the voice, and a happy squint now and then.
             pose.look = CGPoint(x: 0, y: 0.35)
-            pose.brow = command ? 0.95 : 0.35 + 0.35 * e
+            pose.brow = command ? 0.95 : 0.5 + 0.4 * e
+            pose.happy = isBeaming(at: t)
             if !reduceMotion {
-                pose.bounce = -min(maxBounce, (2.5 + 8.5 * CGFloat(abs(sin(t * 7.5)))) * e)
+                pose.bounce = -min(maxBounce, (2 + 9 * e) * CGFloat(abs(sin(t * (5 + 3 * Double(e))))))
                 pose.squash = 1 - 0.05 * e * CGFloat(sin(t * 15))
-                pose.tilt = 4 * Double(e) * sin(t * 4.3)
+                pose.tilt = 5 * sin(t * 2.6) + 4 * Double(e) * sin(t * 4.3)
+                pose.shiftX = 2.5 * CGFloat(sin(t * 1.9))
             }
         case .working(let activity):
             if activity == .editing {
@@ -110,16 +129,98 @@ enum ClippyMotion {
         return t >= at && t < at + 0.13
     }
 
+    /// Listening: a happy squint for half a second in most 3-second stretches.
+    static func isBeaming(at t: Double) -> Bool {
+        let slot = (t / 3).rounded(.down)
+        guard Seed.hash(slot + 0.13) < 0.7 else { return false }
+        let at = slot * 3 + 0.4 + Seed.hash(slot + 0.29) * 2
+        return t >= at && t < at + 0.5
+    }
+
+    /// The bigger idle tricks, about one a minute.
+    enum Trick: CaseIterable, Hashable {
+        case spin, nap, cartwheel, dance, trampoline
+
+        var duration: Double {
+            switch self {
+            case .spin: 1.8
+            case .nap: 6
+            case .cartwheel: 1.6
+            case .dance: 3.2
+            case .trampoline: 2.6
+            }
+        }
+    }
+
+    static let trickSlot: Double = 45
+
+    /// The trick under way at `t`, if any, and how far through it is (0…1). Each 45-second slot
+    /// usually holds one, picked and placed irregularly (never in its first 8 seconds).
+    static func trick(at t: Double) -> (trick: Trick, progress: Double)? {
+        let slot = (t / trickSlot).rounded(.down)
+        guard Seed.hash(slot + 0.17) < 0.85 else { return nil }
+        let trick = Trick.allCases[Int(Seed.hash(slot + 0.71) * Double(Trick.allCases.count))]
+        let start = slot * trickSlot + 8 + Seed.hash(slot + 0.37) * 25
+        let local = t - start
+        guard local >= 0, local < trick.duration else { return nil }
+        return (trick, local / trick.duration)
+    }
+
+    /// Soft start and end.
+    private static func ease(_ p: Double) -> Double { p * p * (3 - 2 * p) }
+
+    static func trickPose(_ trick: Trick, progress p: Double, at t: Double) -> ClippyPose {
+        var pose = ClippyPose(tilt: 0, bounce: 0, squash: 1, look: CGPoint(x: 0, y: 0.15), eyeOpen: 1,
+                              brow: 0.3, happy: false)
+        let envelope = sin(.pi * p)
+        switch trick {
+        case .spin:
+            // A hop and a full turn on the spot: you see his back half-way.
+            pose.turn = CGFloat(cos(2 * .pi * ease(p)))
+            pose.bounce = -6 * CGFloat(envelope)
+            pose.brow = 0.6
+        case .nap:
+            // Lies down on the floor, sleeps a bit, gets back up.
+            let lying = p < 0.2 ? ease(p / 0.2) : p > 0.8 ? ease((1 - p) / 0.2) : 1
+            pose.tilt = 88 * lying
+            pose.shiftX = -48 * CGFloat(lying)
+            pose.bounce = -11 * CGFloat(lying)
+            pose.squash = 1 + 0.02 * CGFloat(sin(t * 2)) * CGFloat(lying)
+            pose.eyeOpen = 1 - 0.92 * CGFloat(lying)
+            pose.brow = 0.3 * (1 - CGFloat(lying))
+            pose.sleeping = lying > 0.9
+        case .cartwheel:
+            pose.spin = 360 * ease(p)
+            pose.bounce = -9 * CGFloat(envelope)
+            pose.brow = 0.7
+        case .dance:
+            // A happy shimmy: side to side, leaning into it, little bounces.
+            pose.shiftX = 7.5 * CGFloat(sin(4 * .pi * p) * envelope)
+            pose.tilt = -8 * sin(4 * .pi * p) * envelope
+            pose.bounce = -2.5 * CGFloat(abs(sin(8 * .pi * p)) * envelope)
+            pose.happy = p > 0.05 && p < 0.95
+            pose.brow = 0.5 + 0.3 * CGFloat(sin(8 * .pi * p))
+        case .trampoline:
+            // Three bouncy hops, squashing on each landing.
+            let height = abs(sin(3 * .pi * p))
+            pose.bounce = -10 * CGFloat(height)
+            pose.squash = 1 - 0.09 * CGFloat(pow(max(0, 1 - height * 3), 2))
+            pose.happy = height > 0.6
+            pose.brow = 0.8
+        }
+        return pose
+    }
+
     enum Fidget: CaseIterable { case hop, twist, stretch, lean, browWiggle }
 
-    /// Idle fidgets: every 6-second slot may hold one small, short movement — a double hop, a
+    /// Idle fidgets: most 4-second slots hold one small, short movement — a double hop, a
     /// twist side to side, a stretch, a lean, a wiggle of the brows — picked and timed irregularly.
     static func fidget(at t: Double) -> (bounce: CGFloat, tilt: Double, squash: CGFloat, brow: CGFloat) {
         let rest: (bounce: CGFloat, tilt: Double, squash: CGFloat, brow: CGFloat) = (0, 0, 1, 0)
-        let slot = (t / 6).rounded(.down)
-        guard Seed.hash(slot + 0.31) < 0.7 else { return rest }
+        let slot = (t / 4).rounded(.down)
+        guard Seed.hash(slot + 0.31) < 0.85 else { return rest }
         let duration = 1.4
-        let local = t - (slot * 6 + 0.5 + Seed.hash(slot + 0.43) * 3.8)
+        let local = t - (slot * 4 + 0.3 + Seed.hash(slot + 0.43) * 2.2)
         guard local > 0, local < duration else { return rest }
         let p = local / duration
         let envelope = sin(.pi * p)                              // eases in and out

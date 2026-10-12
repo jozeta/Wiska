@@ -12,7 +12,9 @@ struct ClippyMotionTests {
     }
 
     @Test func idleBlinksNowAndThenButMostlyLooksOut() {
-        let idle = poses(.idle)
+        // Outside the tricks (a nap shuts his eyes for a while).
+        let idle = stride(from: 0.0, to: 40, by: 1.0 / 60).filter { ClippyMotion.trick(at: $0) == nil }
+            .map { ClippyMotion.pose(at: $0, mood: .idle, energy: 0, reduceMotion: false) }
         let closed = idle.filter { $0.eyeOpen < 0.5 }.count
         #expect(closed > 0)
         #expect(Double(closed) / Double(idle.count) < 0.08)
@@ -20,17 +22,54 @@ struct ClippyMotionTests {
         #expect(Double(idle.filter { abs($0.look.x) > 0.4 }.count) / Double(idle.count) < 0.4)
     }
 
-    /// Now and then a small fidget (a hop, a twist, a stretch), discreet and mostly still.
-    @Test func idleFidgetsDiscreetly() {
-        let idle = poses(.idle, seconds: 120)
+    /// Between tricks he's never quite still (a sway, a breath, frequent small fidgets), but it
+    /// stays small.
+    @Test func idleIsLivelyButSmallBetweenTricks() {
+        let samples = stride(from: 0.0, to: 600, by: 1.0 / 30).filter { ClippyMotion.trick(at: $0) == nil }
+        let idle = samples.map { ClippyMotion.pose(at: $0, mood: .idle, energy: 0, reduceMotion: false) }
         #expect(idle.contains { $0.bounce < -1 })                    // hops
         #expect(idle.contains { abs($0.tilt) > 3 })                  // twists and turns
-        #expect(idle.allSatisfy { $0.bounce >= -4 && abs($0.tilt) <= 8 && abs($0.squash - 1) <= 0.07 })
-        let moving = idle.filter { $0.bounce < -0.3 || abs($0.tilt) > 1 || abs($0.squash - 1) > 0.02 }
-        #expect(Double(moving.count) / Double(idle.count) < 0.4)
-        // Not the same fidget every time.
-        let hops = idle.contains { $0.bounce < -1 }, twists = idle.contains { abs($0.tilt) > 3 && $0.bounce > -0.3 }
-        #expect(hops && twists)
+        #expect(idle.allSatisfy { $0.bounce >= -4 && abs($0.tilt) <= 8 && abs($0.squash - 1) <= 0.08 })
+        let moving = idle.filter { abs($0.tilt) > 0.5 || abs($0.squash - 1) > 0.005 || $0.bounce < -0.3 }
+        #expect(Double(moving.count) / Double(idle.count) > 0.6)     // more animated than before
+    }
+
+    /// Five bigger tricks, each now and then: roughly one a minute, never more than one at a time.
+    @Test func idleTricksAreFunButSeldom() {
+        var seen: Set<ClippyMotion.Trick> = []
+        var starts = 0, busy = 0, previous: ClippyMotion.Trick?
+        let step = 1.0 / 10, minutes = 30.0
+        for t in stride(from: 0.0, to: minutes * 60, by: step) {
+            let trick = ClippyMotion.trick(at: t)?.trick
+            if let trick { seen.insert(trick); busy += 1 }
+            if trick != nil && previous == nil { starts += 1 }
+            previous = trick
+        }
+        #expect(seen == Set(ClippyMotion.Trick.allCases))
+        #expect(Double(starts) / minutes >= 0.5 && Double(starts) / minutes <= 1.5)
+        #expect(Double(busy) * step / (minutes * 60) < 0.12)
+    }
+
+    @Test func eachTrickDoesItsThing() {
+        func run(_ trick: ClippyMotion.Trick) -> [ClippyPose] {
+            stride(from: 0.0, through: 1, by: 0.01).map { ClippyMotion.trickPose(trick, progress: $0, at: 100) }
+        }
+        #expect(run(.spin).contains { $0.turn < -0.9 })                                  // shows his back
+        let nap = run(.nap)
+        #expect(nap.contains { abs($0.tilt) >= 80 && $0.eyeOpen < 0.2 && $0.sleeping })  // lying down, asleep
+        #expect(nap.first!.tilt == 0 && nap.last!.tilt == 0)                            // and back up
+        #expect(run(.cartwheel).map(\.spin).max()! >= 359)
+        let dance = run(.dance)
+        #expect(dance.contains { $0.shiftX > 5 } && dance.contains { $0.shiftX < -5 } && dance.contains { $0.happy })
+        let hops = run(.trampoline)
+        var landings = 0
+        for i in 1..<hops.count where hops[i].bounce > -0.5 && hops[i - 1].bounce <= -0.5 { landings += 1 }
+        #expect(landings >= 2 && hops.contains { $0.bounce <= -8 } && hops.contains { $0.squash < 0.95 })
+        for trick in ClippyMotion.Trick.allCases {
+            let poses = run(trick)
+            #expect(poses.allSatisfy { $0.bounce >= -ClippyMotion.maxBounce })
+            #expect(poses.first! .turn == 1 && abs(poses.last!.spin.truncatingRemainder(dividingBy: 360)) < 0.001)
+        }
     }
 
     @Test func blinksAreNotEvenlySpaced() {
@@ -50,8 +89,18 @@ struct ClippyMotionTests {
         #expect(loud <= ClippyMotion.maxBounce)
     }
 
+    /// Listening, he's cheerful: moving even before you speak, flashing a happy face now and then.
+    @Test func listeningIsHappyAndLively() {
+        let silent = poses(.listening(command: false), energy: 0, seconds: 20)
+        #expect(silent.contains { $0.bounce < -1.5 })
+        #expect(silent.map { abs($0.tilt) }.max()! >= 4)
+        let happy = silent.filter(\.happy).count
+        #expect(happy > 0 && Double(happy) / Double(silent.count) < 0.3)
+        #expect(silent.allSatisfy { $0.brow >= 0.45 })
+    }
+
     @Test func eachStateHasItsOwnExpression() {
-        let listening = poses(.listening(command: false), seconds: 2)
+        let listening = poses(.listening(command: false), seconds: 2).filter { !$0.happy }
         let command = poses(.listening(command: true), seconds: 2)
         #expect(command.allSatisfy { $0.brow > 0.8 })                        // eyebrows up: an instruction
         #expect(listening.allSatisfy { $0.brow > 0.2 && $0.brow < 0.8 })     // attentive
@@ -64,7 +113,8 @@ struct ClippyMotionTests {
     @Test func reducedMotionHoldsStill() {
         for mood in [Presence.Mood.idle, .listening(command: false), .working(.transcribing), .error] {
             let still = poses(mood, energy: 1, reduceMotion: true, seconds: 5)
-            #expect(still.allSatisfy { $0.bounce == 0 && $0.tilt == 0 && $0.squash == 1 })
+            #expect(still.allSatisfy { $0.bounce == 0 && $0.tilt == 0 && $0.squash == 1 && $0.shiftX == 0
+                && $0.turn == 1 && $0.spin == 0 && !$0.sleeping })
         }
     }
 }
@@ -157,11 +207,11 @@ struct ClippyPointerTests {
         #expect(still.tilt == 0)
     }
 
-    @Test func clippyKeepsItsProportionsAtEverySize() {
+    @Test func clippysWindowIsSquareAtEverySize() {
         for height: CGFloat in [80, 128, 240] {
             let size = ClippyController.characterSize(height: height)
             #expect(size.height == height)
-            #expect(abs(size.width / size.height - 84.0 / 128) < 0.01)
+            #expect(size.width == size.height)          // square: room to lie down and cartwheel
         }
     }
 }

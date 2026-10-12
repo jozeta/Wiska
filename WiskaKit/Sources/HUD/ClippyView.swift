@@ -84,10 +84,15 @@ enum ClippyRenderer {
         let scale = min(size.width / design.width, (size.height - headroom) / design.height)
         // Pivot on the bottom of the clip: lean, hop and flex from there.
         let base = CGPoint(x: size.width / 2, y: size.height - 2)
-        context.translateBy(x: base.x, y: base.y + pose.bounce * scale)
+        if pose.sleeping { snore(in: context, at: CGPoint(x: base.x + 30 * scale, y: base.y - 40 * scale), scale: scale) }
+        context.translateBy(x: base.x + pose.shiftX * scale, y: base.y + pose.bounce * scale)
         context.rotate(by: .degrees(pose.tilt))
         context.scaleBy(x: scale * (2 - pose.squash), y: scale * pose.squash)
-        context.translateBy(x: -design.width / 2, y: -96)
+        // Cartwheels and turns happen around the clip's middle.
+        context.translateBy(x: 0, y: -46)
+        context.rotate(by: .degrees(pose.spin))
+        context.scaleBy(x: pose.turn, y: 1)
+        context.translateBy(x: -design.width / 2, y: -50)
 
         let round = StrokeStyle(lineWidth: 5.4, lineCap: .round, lineJoin: .round)
         context.stroke(wire, with: .color(outline.opacity(0.75)), style: round)
@@ -95,9 +100,22 @@ enum ClippyRenderer {
                                                    startPoint: CGPoint(x: 16, y: 0), endPoint: CGPoint(x: 44, y: 100)),
                        style: StrokeStyle(lineWidth: 3.6, lineCap: .round, lineJoin: .round))
 
+        guard pose.turn > 0.15 else { return }       // turned away: just the wire
         for (index, x) in [CGFloat(21), 37].enumerated() {
             eye(in: &context, centre: CGPoint(x: x, y: 33), pose: pose)
             brow(in: &context, eyeX: x, inward: index == 0 ? 1 : -1, pose: pose)
+        }
+    }
+
+    /// A few "z"s floating up while he naps.
+    private static func snore(in context: GraphicsContext, at origin: CGPoint, scale: CGFloat) {
+        let t = Date().timeIntervalSinceReferenceDate
+        for i in 0..<3 {
+            let life = (t * 0.5 + Double(i) / 3).truncatingRemainder(dividingBy: 1)
+            let size = (7 + 4 * CGFloat(i)) * scale * 0.6
+            let p = CGPoint(x: origin.x + CGFloat(life) * 10 * scale, y: origin.y - CGFloat(life) * 26 * scale)
+            context.draw(Text("z").font(.system(size: size, weight: .heavy, design: .rounded))
+                .foregroundStyle(Color.white.opacity(sin(.pi * life) * 0.9)), at: p)
         }
     }
 
@@ -228,7 +246,7 @@ public struct ClippyPreview: View {
             if showsBubble {
                 ClippyBubbleView(model: model).frame(width: 190).fixedSize(horizontal: false, vertical: true)
             }
-            ClippyView(model: model).frame(width: height * 84 / 128, height: height)
+            ClippyView(model: model).frame(width: height, height: height)
         }
         .onAppear {
             model.sampleLevel = { t in Float(max(0, 0.3 + 0.25 * sin(t * 1.9) + 0.1 * sin(t * 7.3))) }
