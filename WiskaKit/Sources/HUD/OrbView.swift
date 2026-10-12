@@ -11,14 +11,15 @@ final class OrbModel {
     @ObservationIgnored var sampleLevel: ((Double) -> AudioLevel)?
 }
 
-/// The Magical Orb: a luminous core in a soft glow, a rippling aura and a few drifting sparks.
-/// Driven by the voice energy (`VoiceEnergy`, from the microphone frames the app already has).
-/// Redraws at full rate only while something moves; idle it ticks slowly.
+/// The Magical Orb: a ball of plasma fire (a Metal shader, `OrbFire.metal`) with a few drifting
+/// sparks. Driven by the voice (`VoiceEnergy` and the pitch bands, from the microphone frames the
+/// app already has). Redraws at full rate only while something moves; idle it ticks slowly.
 struct OrbView: View {
     let model: OrbModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var clock = VoiceEnergy.Clock()
     @State private var bands = BandClock()
+    @State private var flames = FlameClock()
 
     var body: some View {
         let _ = model.revision
@@ -30,11 +31,38 @@ struct OrbView: View {
             let shares = bands.advance(to: timeline.date, audio: audio)
             let mood = model.sampleLevel == nil ? model.presence.mood(at: timeline.date) : .listening(command: false)
             let pose = OrbMotion.pose(at: t, mood: mood, energy: energy, reduceMotion: reduceMotion)
-            Canvas { context, size in
-                OrbRenderer.draw(in: &context, size: size, t: t, pose: pose, bands: shares, colour: model.colour,
-                                 reduceMotion: reduceMotion)
+            let phase = flames.advance(to: timeline.date, speed: pose.flameSpeed)
+            ZStack {
+                // A soft glow underneath: the orb never vanishes, even if the shader can't load.
+                Canvas { context, size in
+                    OrbRenderer.drawGlow(in: &context, size: size, pose: pose, colour: model.colour)
+                }
+                Rectangle()
+                    .fill(.white)
+                    .visualEffect { content, proxy in
+                        content.colorEffect(OrbRenderer.fire(size: proxy.size, phase: phase, pose: pose,
+                                                             bands: shares, colour: model.colour))
+                    }
+                Canvas { context, size in
+                    OrbRenderer.drawSparks(in: &context, size: size, t: t, pose: pose, bands: shares,
+                                           colour: model.colour)
+                }
             }
+            .compositingGroup()
         }
+    }
+}
+
+/// The flames' own clock: advances at the pose's speed, so changing speed never jumps the fire.
+final class FlameClock {
+    private(set) var phase: Double = 0
+    private var last: Date?
+
+    func advance(to now: Date, speed: Double) -> Double {
+        let dt = last.map { min(now.timeIntervalSince($0), 1.0 / 20) } ?? 0
+        last = now
+        phase += dt * speed
+        return phase
     }
 }
 
@@ -57,15 +85,27 @@ final class BandClock {
 }
 
 enum OrbRenderer {
-    static let particleCount = 12
-    /// Two tilted rings orbit the sphere; their back halves pass behind it, for depth.
-    static let ringTilts: [Double] = [0.45, -0.75]
-    /// Lightning flickers to a new shape this many times a second.
-    static let boltRate: Double = 4
+    static let shaderName = "orbFire"
+    /// The bundle holding the compiled shader (the HUD module's resources).
+    static let shaderBundle = Bundle.module
+    static let particleCount = 14
 
-    /// How much the voice's bands push the aura out at angle `a` (radians, 0 = right, −π/2 = top):
-    /// low pitches at the top, high ones at the bottom, mirrored left and right, softened across
-    /// neighbouring bands so the outline bulges instead of spiking.
+    static func fire(size: CGSize, phase: Double, pose: OrbPose, bands: [CGFloat], colour: Highlight) -> Shader {
+        let (outer, inner) = colours(pose, colour)
+        return ShaderLibrary.bundle(shaderBundle)[dynamicMember: shaderName](
+            .float2(size), .float(Float(phase)), .float(Float(pose.intensity)),
+            .float(Float(OrbMotion.fireRadius * pose.coreScale)), .float(Float(pose.ripple)),
+            .color(outer), .color(inner), .floatArray(bands.map(Float.init)))
+    }
+
+    /// The fire's outer and inner colour: the highlight's two ends, or reds for an error.
+    static func colours(_ pose: OrbPose, _ colour: Highlight) -> (outer: Color, inner: Color) {
+        pose.isError ? (Color(hex: 0xC2304A), AuroraTheme.danger) : (AuroraTheme.end(colour), AuroraTheme.start(colour))
+    }
+
+    /// How much the voice's bands push the edge out at angle `a` (radians, 0 = right, −π/2 = top):
+    /// low pitches at the top, high ones at the bottom, mirrored left and right — as the shader does,
+    /// softened across neighbouring bands.
     static func bandValue(at a: Double, bands: [CGFloat]) -> CGFloat {
         guard bands.count > 1 else { return 0 }
         let u = (sin(a) + 1) / 2
@@ -78,167 +118,39 @@ enum OrbRenderer {
         return smoothed(i) * (1 - f) + smoothed(min(i + 1, bands.count - 1)) * f
     }
 
-    /// The band at `rank` when sorted loudest first (ties: lower pitch first).
-    static func loudestBand(rank: Int, bands: [CGFloat]) -> Int? {
-        let order = bands.indices.sorted { bands[$0] != bands[$1] ? bands[$0] > bands[$1] : $0 < $1 }
-        return rank < order.count ? order[rank] : nil
+    static func drawGlow(in context: inout GraphicsContext, size: CGSize, pose: OrbPose, colour: Highlight) {
+        let half = min(size.width, size.height) / 2
+        let centre = CGPoint(x: size.width / 2, y: size.height / 2)
+        let radius = half * 0.95
+        let (outer, inner) = colours(pose, colour)
+        context.fill(circle(centre, radius), with: .radialGradient(
+            Gradient(stops: [.init(color: inner.opacity(0.5 * pose.glow), location: 0),
+                             .init(color: outer.opacity(0.3 * pose.glow), location: 0.35),
+                             .init(color: outer.opacity(0), location: 1)]),
+            center: centre, startRadius: 0, endRadius: radius))
     }
 
-    static func draw(in context: inout GraphicsContext, size: CGSize, t: Double, pose: OrbPose,
-                     bands: [CGFloat] = [], colour: Highlight, reduceMotion: Bool) {
-        let side = min(size.width, size.height)
-        let centre = CGPoint(x: size.width / 2, y: size.height / 2)
-        let core = side * OrbMotion.coreShare * pose.coreScale
-        let start = pose.isError ? AuroraTheme.danger : AuroraTheme.start(colour)
-        let end = pose.isError ? Color(hex: 0xC2304A) : AuroraTheme.end(colour)
-        let outer = OrbMotion.outerRadius(pose, side: side)
-
-        // Glow: soft light fading to nothing at the edge, so the window corners stay clear.
-        context.fill(circle(centre, outer), with: .radialGradient(
-            Gradient(stops: [.init(color: start.opacity(0.55 * pose.glow), location: 0),
-                             .init(color: end.opacity(0.32 * pose.glow), location: 0.45),
-                             .init(color: end.opacity(0), location: 1)]),
-            center: centre, startRadius: core * 0.5, endRadius: outer))
-
-        rings(in: &context, centre: centre, core: core, t: t, pose: pose, colour: end, front: false)
-
-        // Aura: two strands shaped by the voice — each part of the ring swells with its own pitch
-        // band — over a slow drift so they never look frozen.
-        for strand in 0..<2 {
-            var aura = Path()
-            let phase = Double(strand) * 1.9
-            let drift = reduceMotion ? 0 : t * 0.5
-            for step in 0...96 {
-                let a = Double(step) / 96 * 2 * .pi
-                let idle = 0.025 * CGFloat(sin(3 * a + drift + phase))
-                let voice = pose.ripple * bandValue(at: a + Double(strand) * 0.2, bands: bands) * (strand == 0 ? 1 : 0.7)
-                let r = core * OrbMotion.auraRadius * (1 + idle + voice)
-                let p = CGPoint(x: centre.x + r * CGFloat(cos(a)), y: centre.y + r * CGFloat(sin(a)))
-                step == 0 ? aura.move(to: p) : aura.addLine(to: p)
-            }
-            context.stroke(aura, with: .color((strand == 0 ? start : end).opacity((0.25 + 0.5 * pose.glow)
-                    * (strand == 0 ? 1 : 0.6))),
-                           lineWidth: max(1, core * (strand == 0 ? 0.06 : 0.035)))
-        }
-
-        // Core: a lit sphere whose highlight slowly drifts around, like flowing light.
-        let drift = reduceMotion ? 0 : t * 0.5
-        let light = CGPoint(x: centre.x + core * 0.3 * CGFloat(cos(drift + 2.3)),
-                            y: centre.y + core * 0.3 * CGFloat(sin(drift + 2.3)))
-        context.fill(circle(centre, core), with: .radialGradient(
-            Gradient(colors: [.white.opacity(0.95), start, end]),
-            center: light, startRadius: 0, endRadius: core * 1.25))
-        context.stroke(circle(centre, core), with: .color(.white.opacity(0.25)), lineWidth: 0.75)
-
-        rings(in: &context, centre: centre, core: core, t: t, pose: pose, colour: start, front: true)
-
-        // Processing: two arcs chasing round the core.
-        if pose.spinOpacity > 0 {
-            let spin = reduceMotion ? 0 : t * 3
-            for half in 0..<2 {
-                var arc = Path()
-                let from = Angle(radians: spin + Double(half) * .pi)
-                arc.addArc(center: centre, radius: core * 1.55, startAngle: from,
-                           endAngle: from + .degrees(95), clockwise: false)
-                context.stroke(arc, with: .color(start.opacity(pose.spinOpacity)),
-                               style: StrokeStyle(lineWidth: max(1.5, core * 0.09), lineCap: .round))
-            }
-        }
-
-        lightning(in: &context, centre: centre, core: core, t: t, pose: pose, bands: bands, colour: start)
-
-        // Sparks: a few points orbiting inside the glow, livelier with the voice.
+    /// Sparks drifting around the fire. While you speak each one shines with its own pitch band;
+    /// otherwise they twinkle slowly.
+    static func drawSparks(in context: inout GraphicsContext, size: CGSize, t: Double, pose: OrbPose,
+                           bands: [CGFloat], colour: Highlight) {
         guard pose.particleOpacity > 0 else { return }
+        let half = min(size.width, size.height) / 2
+        let centre = CGPoint(x: size.width / 2, y: size.height / 2)
+        let (_, inner) = colours(pose, colour)
         let voiced = bands.contains { $0 > 0.02 }
         for i in 0..<particleCount {
             let seed = Double(i) * 1.618
-            let angle = seed * 2 * .pi + t * (0.15 + 0.08 * Double(i % 3)) * Double(pose.particleSpeed)
-            let drift = 0.5 + 0.5 * sin(t * 0.25 + seed * 3)
-            let radius = core * (1.4 + 0.65 * CGFloat(drift))
-            // Each spark belongs to a pitch band and shines with it; without a voice they twinkle slowly.
-            let twinkle = voiced && !bands.isEmpty
-                ? 0.25 + 0.75 * Double(bands[i * bands.count / particleCount])
-                : 0.55 + 0.45 * sin(t * (0.6 + 0.2 * Double(i % 4)) + seed)
+            let angle = seed * 2 * .pi + t * (0.05 + 0.04 * Double(i % 3)) * Double(pose.particleSpeed)
+            let drift = 0.5 + 0.5 * sin(t * 0.2 + seed * 3)
+            let radius = half * (0.42 + 0.28 * CGFloat(drift))
+            let shine = voiced
+                ? 0.25 + 0.75 * Double(bandValue(at: angle, bands: bands))
+                : 0.5 + 0.5 * sin(t * (0.5 + 0.15 * Double(i % 4)) + seed)
             let p = CGPoint(x: centre.x + radius * CGFloat(cos(angle)), y: centre.y + radius * CGFloat(sin(angle)))
-            let dot = max(0.8, core * 0.045)
-            context.fill(circle(p, dot), with: .color((i.isMultiple(of: 2) ? start : .white)
-                .opacity(Double(pose.particleOpacity) * twinkle)))
-        }
-    }
-
-    /// Tilted rings seen in perspective (flattened ellipses), each carrying a bright bead. Drawn in
-    /// two passes: the far halves before the core (dim, hidden by it), the near halves after.
-    private static func rings(in context: inout GraphicsContext, centre: CGPoint, core: CGFloat, t: Double,
-                              pose: OrbPose, colour: Color, front: Bool) {
-        guard pose.ringOpacity > 0 else { return }
-        let rx = core * OrbMotion.ringRadius
-        for (index, tilt) in ringTilts.enumerated() {
-            let ry = rx * CGFloat(0.22 + 0.06 * sin(t * 0.7 + Double(index)))
-            let turn = tilt + t * 0.06 * Double(pose.ringSpeed > 0 ? 1 : 0)
-            func point(_ theta: Double) -> CGPoint {
-                let x = rx * CGFloat(cos(theta)), y = ry * CGFloat(sin(theta))
-                return CGPoint(x: centre.x + x * CGFloat(cos(turn)) - y * CGFloat(sin(turn)),
-                               y: centre.y + x * CGFloat(sin(turn)) + y * CGFloat(cos(turn)))
-            }
-            // The near half is θ in 0…π (towards the viewer), the far half π…2π.
-            var path = Path()
-            let from = front ? 0.0 : Double.pi
-            for step in 0...48 {
-                let p = point(from + Double.pi * Double(step) / 48)
-                step == 0 ? path.move(to: p) : path.addLine(to: p)
-            }
-            let opacity = Double(pose.ringOpacity) * (front ? 0.85 : 0.35)
-            context.stroke(path, with: .color(colour.opacity(opacity)), lineWidth: max(0.8, core * 0.035))
-            // The bead travels the ring; it's brighter and bigger on the near side.
-            let theta = (t * pose.ringSpeed * (index == 0 ? 1 : -1.3) + Double(index) * 2)
-                .truncatingRemainder(dividingBy: 2 * .pi)
-            let near = sin(theta) >= 0
-            guard near == front else { continue }
-            let bead = max(1.2, core * (near ? 0.085 : 0.05))
-            let p = point(theta)
-            context.fill(circle(p, bead * 2.2), with: .color(colour.opacity(0.25 * opacity)))
-            context.fill(circle(p, bead), with: .color(.white.opacity(near ? 0.95 : 0.4)))
-        }
-    }
-
-    /// Jagged bolts that crackle out from the sphere's edge and flicker to new shapes several times a
-    /// second; the louder the voice, the more of them. Each is a blurred coloured stroke under a thin white one.
-    /// While you speak, bolts leap from where the loudest pitch bands push the aura (stronger
-    /// band, likelier bolt); otherwise they're placed at random.
-    private static func lightning(in context: inout GraphicsContext, centre: CGPoint, core: CGFloat, t: Double,
-                                  pose: OrbPose, bands: [CGFloat], colour: Color) {
-        guard pose.boltChance > 0, pose.maxBolts > 0 else { return }
-        let flicker = (t * boltRate).rounded(.down)
-        let voiced = bands.contains { $0 > 0.02 }
-        for i in 0..<pose.maxBolts {
-            let seed = flicker * 7.31 + Double(i) * 3.17
-            var angle = Seed.hash(seed + 0.11) * 2 * .pi
-            var chance = pose.boltChance
-            if voiced, let band = loudestBand(rank: i, bands: bands) {
-                chance *= min(1, Double(bands[band]) * 1.5)
-                let u = Double(band) / Double(bands.count - 1)
-                let side = asin(2 * u - 1)                                   // matches `bandValue`
-                angle = (Seed.hash(seed + 0.7) < 0.5 ? side : .pi - side) + (Seed.hash(seed + 0.9) - 0.5) * 0.5
-            }
-            guard Seed.hash(seed) < chance else { continue }
-            let length = 0.55 + 0.4 * Seed.hash(seed + 0.23)          // reaches 1.55…1.95 core radii
-            var bolt = Path()
-            let segments = 6
-            for s in 0...segments {
-                let along = CGFloat(s) / CGFloat(segments)
-                let r = core * (1 + CGFloat(length) * along)
-                let jitter = s == 0 ? 0 : core * 0.13 * CGFloat(Seed.hash(seed + Double(s) * 0.37) - 0.5) * 2
-                let a = angle + Double(along) * 0.25 * (Seed.hash(seed + 0.5) - 0.5)
-                let p = CGPoint(x: centre.x + r * CGFloat(cos(a)) - jitter * CGFloat(sin(a)),
-                                y: centre.y + r * CGFloat(sin(a)) + jitter * CGFloat(cos(a)))
-                s == 0 ? bolt.move(to: p) : bolt.addLine(to: p)
-            }
-            var glow = context
-            glow.addFilter(.blur(radius: max(1, core * 0.08)))
-            glow.stroke(bolt, with: .color(colour.opacity(0.9)),
-                        style: StrokeStyle(lineWidth: max(1.5, core * 0.1), lineCap: .round, lineJoin: .round))
-            context.stroke(bolt, with: .color(.white.opacity(0.9)),
-                           style: StrokeStyle(lineWidth: max(0.6, core * 0.025), lineCap: .round, lineJoin: .round))
+            let dot = max(0.7, half * 0.012 * (i.isMultiple(of: 3) ? 1.6 : 1))
+            context.fill(circle(p, dot * 2.5), with: .color(inner.opacity(0.25 * Double(pose.particleOpacity) * shine)))
+            context.fill(circle(p, dot), with: .color(.white.opacity(Double(pose.particleOpacity) * shine)))
         }
     }
 

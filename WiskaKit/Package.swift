@@ -21,7 +21,7 @@ let package = Package(
         .target(name: "Cleanup", dependencies: ["Core"]),
         .target(name: "Injection", dependencies: ["Core"]),
         .target(name: "Dictation", dependencies: ["Core"]),
-        .target(name: "HUD", dependencies: ["Core"]),
+        .target(name: "HUD", dependencies: ["Core"], resources: [.process("Shaders")]),
         .target(name: "Preferences", dependencies: ["Core"]),
         .target(name: "History", dependencies: ["Core"]),
         .target(name: "Parakeet", dependencies: [
