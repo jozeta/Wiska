@@ -8,7 +8,7 @@ final class OrbModel {
     var revision = 0
     @ObservationIgnored let presence = Presence()
     /// Previews drive the orb with a made-up voice instead of the microphone.
-    @ObservationIgnored var sampleLevel: ((Double) -> Float)?
+    @ObservationIgnored var sampleLevel: ((Double) -> AudioLevel)?
 }
 
 /// The Magical Orb: a luminous core in a soft glow, a rippling aura and a few drifting sparks.
@@ -18,21 +18,41 @@ struct OrbView: View {
     let model: OrbModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var clock = VoiceEnergy.Clock()
+    @State private var bands = BandClock()
 
     var body: some View {
         let _ = model.revision
         let idle = model.presence.mood() == .idle && model.sampleLevel == nil
         TimelineView(.animation(minimumInterval: idle ? 1.0 / 20 : nil, paused: idle && reduceMotion)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
-            let level = model.sampleLevel?(t) ?? model.presence.level
-            let energy = clock.advance(to: timeline.date, level: level)
+            let audio = model.sampleLevel?(t) ?? model.presence.audio
+            let energy = clock.advance(to: timeline.date, level: audio.level)
+            let shares = bands.advance(to: timeline.date, audio: audio)
             let mood = model.sampleLevel == nil ? model.presence.mood(at: timeline.date) : .listening(command: false)
             let pose = OrbMotion.pose(at: t, mood: mood, energy: energy, reduceMotion: reduceMotion)
             Canvas { context, size in
-                OrbRenderer.draw(in: &context, size: size, t: t, pose: pose, colour: model.colour,
+                OrbRenderer.draw(in: &context, size: size, t: t, pose: pose, bands: shares, colour: model.colour,
                                  reduceMotion: reduceMotion)
             }
         }
+    }
+}
+
+/// The voice's pitch bands, smoothed more gently than the waveform's bars, for the orb's shape.
+final class BandClock {
+    private var motion: WaveformMotion = {
+        var motion = WaveformMotion()
+        motion.attackTime = 0.06
+        motion.releaseTime = 0.35
+        return motion
+    }()
+    private var last: Date?
+
+    func advance(to now: Date, audio: AudioLevel) -> [CGFloat] {
+        let dt = last.map { min(now.timeIntervalSince($0), 1.0 / 20) } ?? 0
+        last = now
+        motion.step(audio, dt: dt)
+        return motion.shares
     }
 }
 
@@ -41,10 +61,31 @@ enum OrbRenderer {
     /// Two tilted rings orbit the sphere; their back halves pass behind it, for depth.
     static let ringTilts: [Double] = [0.45, -0.75]
     /// Lightning flickers to a new shape this many times a second.
-    static let boltRate: Double = 9
+    static let boltRate: Double = 4
+
+    /// How much the voice's bands push the aura out at angle `a` (radians, 0 = right, −π/2 = top):
+    /// low pitches at the top, high ones at the bottom, mirrored left and right, softened across
+    /// neighbouring bands so the outline bulges instead of spiking.
+    static func bandValue(at a: Double, bands: [CGFloat]) -> CGFloat {
+        guard bands.count > 1 else { return 0 }
+        let u = (sin(a) + 1) / 2
+        let x = u * Double(bands.count - 1)
+        func smoothed(_ i: Int) -> CGFloat {
+            let at = { bands[max(0, min(bands.count - 1, $0))] }
+            return 0.25 * at(i - 1) + 0.5 * at(i) + 0.25 * at(i + 1)
+        }
+        let i = Int(x.rounded(.down)), f = CGFloat(x - Double(i))
+        return smoothed(i) * (1 - f) + smoothed(min(i + 1, bands.count - 1)) * f
+    }
+
+    /// The band at `rank` when sorted loudest first (ties: lower pitch first).
+    static func loudestBand(rank: Int, bands: [CGFloat]) -> Int? {
+        let order = bands.indices.sorted { bands[$0] != bands[$1] ? bands[$0] > bands[$1] : $0 < $1 }
+        return rank < order.count ? order[rank] : nil
+    }
 
     static func draw(in context: inout GraphicsContext, size: CGSize, t: Double, pose: OrbPose,
-                     colour: Highlight, reduceMotion: Bool) {
+                     bands: [CGFloat] = [], colour: Highlight, reduceMotion: Bool) {
         let side = min(size.width, size.height)
         let centre = CGPoint(x: size.width / 2, y: size.height / 2)
         let core = side * OrbMotion.coreShare * pose.coreScale
@@ -61,16 +102,17 @@ enum OrbRenderer {
 
         rings(in: &context, centre: centre, core: core, t: t, pose: pose, colour: end, front: false)
 
-        // Aura: two strands that ripple and twist with the voice, out of step with each other.
+        // Aura: two strands shaped by the voice — each part of the ring swells with its own pitch
+        // band — over a slow drift so they never look frozen.
         for strand in 0..<2 {
             var aura = Path()
             let phase = Double(strand) * 1.9
-            let speed = 1 + Double(pose.ripple) * 9            // louder = faster churn
+            let drift = reduceMotion ? 0 : t * 0.5
             for step in 0...96 {
                 let a = Double(step) / 96 * 2 * .pi
-                let wave = sin(3 * a + t * 2.1 * speed + phase) * 0.5 + sin(5 * a - t * 3.3 * speed) * 0.3
-                    + sin(8 * a + t * 5.2 * speed + phase) * 0.2
-                let r = core * OrbMotion.auraRadius * (1 + pose.ripple * CGFloat(wave) * (strand == 0 ? 1 : 0.7))
+                let idle = 0.025 * CGFloat(sin(3 * a + drift + phase))
+                let voice = pose.ripple * bandValue(at: a + Double(strand) * 0.2, bands: bands) * (strand == 0 ? 1 : 0.7)
+                let r = core * OrbMotion.auraRadius * (1 + idle + voice)
                 let p = CGPoint(x: centre.x + r * CGFloat(cos(a)), y: centre.y + r * CGFloat(sin(a)))
                 step == 0 ? aura.move(to: p) : aura.addLine(to: p)
             }
@@ -103,16 +145,20 @@ enum OrbRenderer {
             }
         }
 
-        lightning(in: &context, centre: centre, core: core, t: t, pose: pose, colour: start)
+        lightning(in: &context, centre: centre, core: core, t: t, pose: pose, bands: bands, colour: start)
 
         // Sparks: a few points orbiting inside the glow, livelier with the voice.
         guard pose.particleOpacity > 0 else { return }
+        let voiced = bands.contains { $0 > 0.02 }
         for i in 0..<particleCount {
             let seed = Double(i) * 1.618
-            let angle = seed * 2 * .pi + t * (0.25 + 0.15 * Double(i % 3)) * Double(pose.particleSpeed)
-            let band = 0.5 + 0.5 * sin(t * 0.6 + seed * 3)
-            let radius = core * (1.4 + 0.65 * CGFloat(band))
-            let twinkle = 0.55 + 0.45 * sin(t * (2 + Double(i % 4)) + seed)
+            let angle = seed * 2 * .pi + t * (0.15 + 0.08 * Double(i % 3)) * Double(pose.particleSpeed)
+            let drift = 0.5 + 0.5 * sin(t * 0.25 + seed * 3)
+            let radius = core * (1.4 + 0.65 * CGFloat(drift))
+            // Each spark belongs to a pitch band and shines with it; without a voice they twinkle slowly.
+            let twinkle = voiced && !bands.isEmpty
+                ? 0.25 + 0.75 * Double(bands[i * bands.count / particleCount])
+                : 0.55 + 0.45 * sin(t * (0.6 + 0.2 * Double(i % 4)) + seed)
             let p = CGPoint(x: centre.x + radius * CGFloat(cos(angle)), y: centre.y + radius * CGFloat(sin(angle)))
             let dot = max(0.8, core * 0.045)
             context.fill(circle(p, dot), with: .color((i.isMultiple(of: 2) ? start : .white)
@@ -128,7 +174,7 @@ enum OrbRenderer {
         let rx = core * OrbMotion.ringRadius
         for (index, tilt) in ringTilts.enumerated() {
             let ry = rx * CGFloat(0.22 + 0.06 * sin(t * 0.7 + Double(index)))
-            let turn = tilt + t * 0.12 * Double(pose.ringSpeed > 0 ? 1 : 0)
+            let turn = tilt + t * 0.06 * Double(pose.ringSpeed > 0 ? 1 : 0)
             func point(_ theta: Double) -> CGPoint {
                 let x = rx * CGFloat(cos(theta)), y = ry * CGFloat(sin(theta))
                 return CGPoint(x: centre.x + x * CGFloat(cos(turn)) - y * CGFloat(sin(turn)),
@@ -157,14 +203,24 @@ enum OrbRenderer {
 
     /// Jagged bolts that crackle out from the sphere's edge and flicker to new shapes several times a
     /// second; the louder the voice, the more of them. Each is a blurred coloured stroke under a thin white one.
+    /// While you speak, bolts leap from where the loudest pitch bands push the aura (stronger
+    /// band, likelier bolt); otherwise they're placed at random.
     private static func lightning(in context: inout GraphicsContext, centre: CGPoint, core: CGFloat, t: Double,
-                                  pose: OrbPose, colour: Color) {
+                                  pose: OrbPose, bands: [CGFloat], colour: Color) {
         guard pose.boltChance > 0, pose.maxBolts > 0 else { return }
         let flicker = (t * boltRate).rounded(.down)
+        let voiced = bands.contains { $0 > 0.02 }
         for i in 0..<pose.maxBolts {
             let seed = flicker * 7.31 + Double(i) * 3.17
-            guard Seed.hash(seed) < pose.boltChance else { continue }
-            let angle = Seed.hash(seed + 0.11) * 2 * .pi
+            var angle = Seed.hash(seed + 0.11) * 2 * .pi
+            var chance = pose.boltChance
+            if voiced, let band = loudestBand(rank: i, bands: bands) {
+                chance *= min(1, Double(bands[band]) * 1.5)
+                let u = Double(band) / Double(bands.count - 1)
+                let side = asin(2 * u - 1)                                   // matches `bandValue`
+                angle = (Seed.hash(seed + 0.7) < 0.5 ? side : .pi - side) + (Seed.hash(seed + 0.9) - 0.5) * 0.5
+            }
+            guard Seed.hash(seed) < chance else { continue }
             let length = 0.55 + 0.4 * Seed.hash(seed + 0.23)          // reaches 1.55…1.95 core radii
             var bolt = Path()
             let segments = 6
@@ -206,7 +262,7 @@ public struct OrbPreview: View {
         OrbView(model: model)
             .frame(width: side, height: side)
             .onAppear {
-                model.sampleLevel = { t in Float(max(0, 0.32 + 0.22 * sin(t * 1.7) + 0.08 * sin(t * 6.1))) }
+                model.sampleLevel = { t in SampleVoice.level(at: t) }
                 model.colour = colour
                 model.revision += 1
             }

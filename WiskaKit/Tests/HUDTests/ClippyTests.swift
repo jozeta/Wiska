@@ -16,9 +16,21 @@ struct ClippyMotionTests {
         let closed = idle.filter { $0.eyeOpen < 0.5 }.count
         #expect(closed > 0)
         #expect(Double(closed) / Double(idle.count) < 0.08)
-        #expect(idle.allSatisfy { abs($0.bounce) < 0.5 })                // no hopping about
         #expect(idle.contains { abs($0.look.x) > 0.4 })                   // glances around now and then
         #expect(Double(idle.filter { abs($0.look.x) > 0.4 }.count) / Double(idle.count) < 0.4)
+    }
+
+    /// Now and then a small fidget (a hop, a twist, a stretch), discreet and mostly still.
+    @Test func idleFidgetsDiscreetly() {
+        let idle = poses(.idle, seconds: 120)
+        #expect(idle.contains { $0.bounce < -1 })                    // hops
+        #expect(idle.contains { abs($0.tilt) > 3 })                  // twists and turns
+        #expect(idle.allSatisfy { $0.bounce >= -4 && abs($0.tilt) <= 8 && abs($0.squash - 1) <= 0.07 })
+        let moving = idle.filter { $0.bounce < -0.3 || abs($0.tilt) > 1 || abs($0.squash - 1) > 0.02 }
+        #expect(Double(moving.count) / Double(idle.count) < 0.4)
+        // Not the same fidget every time.
+        let hops = idle.contains { $0.bounce < -1 }, twists = idle.contains { abs($0.tilt) > 3 && $0.bounce > -0.3 }
+        #expect(hops && twists)
     }
 
     @Test func blinksAreNotEvenlySpaced() {

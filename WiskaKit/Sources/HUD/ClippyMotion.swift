@@ -56,7 +56,13 @@ enum ClippyMotion {
         case .idle:
             let glance = glance(at: t)
             pose.look = glance
-            pose.tilt = reduceMotion ? 0 : Double(glance.x) * 4
+            if !reduceMotion {
+                let fidget = fidget(at: t)
+                pose.tilt = max(-7, min(7, Double(glance.x) * 4 + fidget.tilt))   // a glance and a twist together stay small
+                pose.bounce = fidget.bounce
+                pose.squash = fidget.squash
+                pose.brow = fidget.brow
+            }
         case .message:
             pose.look = CGPoint(x: 0, y: 0.35)
             pose.brow = 0.4
@@ -102,6 +108,30 @@ enum ClippyMotion {
         let slot = (t / 4).rounded(.down)
         let at = slot * 4 + hash(slot) * 2.6
         return t >= at && t < at + 0.13
+    }
+
+    enum Fidget: CaseIterable { case hop, twist, stretch, lean, browWiggle }
+
+    /// Idle fidgets: every 6-second slot may hold one small, short movement — a double hop, a
+    /// twist side to side, a stretch, a lean, a wiggle of the brows — picked and timed irregularly.
+    static func fidget(at t: Double) -> (bounce: CGFloat, tilt: Double, squash: CGFloat, brow: CGFloat) {
+        let rest: (bounce: CGFloat, tilt: Double, squash: CGFloat, brow: CGFloat) = (0, 0, 1, 0)
+        let slot = (t / 6).rounded(.down)
+        guard Seed.hash(slot + 0.31) < 0.7 else { return rest }
+        let duration = 1.4
+        let local = t - (slot * 6 + 0.5 + Seed.hash(slot + 0.43) * 3.8)
+        guard local > 0, local < duration else { return rest }
+        let p = local / duration
+        let envelope = sin(.pi * p)                              // eases in and out
+        let kind = Fidget.allCases[Int(Seed.hash(slot + 0.57) * Double(Fidget.allCases.count))]
+        let side: Double = Seed.hash(slot + 0.69) < 0.5 ? -1 : 1
+        switch kind {
+        case .hop: return (-3.5 * CGFloat(abs(sin(2 * .pi * p))), 0, 1 + 0.03 * CGFloat(envelope), 0)
+        case .twist: return (0, 6 * sin(2 * .pi * p) * side, 1, 0)
+        case .stretch: return (-1.2 * CGFloat(envelope), 0, 1 + 0.06 * CGFloat(envelope), 0.3 * CGFloat(envelope))
+        case .lean: return (0, 5 * envelope * side, 1, 0.2 * CGFloat(envelope))
+        case .browWiggle: return (0, 0, 1, 0.6 * CGFloat(sin(3 * .pi * p)))
+        }
     }
 
     /// Every 9-second slot may hold one 1.6 s glance to a side, eased in and out.

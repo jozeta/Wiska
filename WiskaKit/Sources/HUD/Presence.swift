@@ -1,3 +1,4 @@
+import Core
 import Foundation
 
 /// The mood a character-like theme (the orb, Clippy) shows, read from the same `HUDContent`
@@ -46,9 +47,11 @@ final class Presence {
         return true
     }
 
-    /// The microphone loudness to animate with (silent unless listening).
-    var level: Float {
-        if case .listening(let audio, _, _, _, _) = content { return audio.level }
-        return 0
+    /// The microphone frame to animate with (silent unless listening).
+    var audio: AudioLevel {
+        if case .listening(let audio, _, _, _, _) = content { return audio }
+        return .silent
     }
+
+    var level: Float { audio.level }
 }

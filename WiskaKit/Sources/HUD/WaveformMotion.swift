@@ -31,6 +31,9 @@ struct WaveformMotion {
     static let attack: Double = 0.015
     static let release: Double = 0.09
 
+    /// Rise and fall times; the orb uses slower ones than the waveform's bars.
+    var attackTime = WaveformMotion.attack
+    var releaseTime = WaveformMotion.release
     private var gateIsOpen = false
     private var heights = [CGFloat](repeating: 0, count: WaveformMotion.barCount)
 
@@ -47,7 +50,7 @@ struct WaveformMotion {
         let targets = gateIsOpen ? Self.targets(audio) : [CGFloat](repeating: 0, count: heights.count)
         for index in heights.indices {
             let target = targets[index]
-            let tau = target > heights[index] ? Self.attack : Self.release
+            let tau = target > heights[index] ? attackTime : releaseTime
             heights[index] += (target - heights[index]) * CGFloat(1 - exp(-dt / tau))
             if heights[index] < 0.002 && target == 0 { heights[index] = 0 }
         }
@@ -65,6 +68,9 @@ struct WaveformMotion {
             return loud * (baseShare + (1 - baseShare) * CGFloat(pow(share, 0.7)))
         }
     }
+
+    /// Each band's smoothed share, 0…1.
+    var shares: [CGFloat] { heights.map { min(1, $0) } }
 
     func bar(_ index: Int) -> CGFloat {
         WaveformView.minBar + min(1, heights[index]) * (WaveformView.maxBar - WaveformView.minBar)

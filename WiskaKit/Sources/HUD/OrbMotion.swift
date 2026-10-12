@@ -40,34 +40,34 @@ enum OrbMotion {
 
     static func pose(at t: Double, mood: Presence.Mood, energy: CGFloat, reduceMotion: Bool) -> OrbPose {
         let e = min(1, max(0, energy))
-        let breath = reduceMotion ? 0 : CGFloat(sin(t * 1.3))
+        // A slow breath, about one every ten seconds.
+        let breath = reduceMotion ? 0 : CGFloat(sin(t * 0.6))
         let calm: Double = reduceMotion ? 0 : 1
         switch mood {
         case .idle, .message:
-            return OrbPose(coreScale: 1 + 0.025 * breath, glow: 0.38 + 0.06 * breath, ripple: reduceMotion ? 0 : 0.025,
-                           spinOpacity: 0, particleOpacity: reduceMotion ? 0 : 0.3, particleSpeed: 0.4,
-                           boltChance: 0.05 * calm, maxBolts: 1, ringOpacity: 0.35, ringSpeed: 0.35 * calm,
-                           isError: false)
+            return OrbPose(coreScale: 1 + 0.04 * breath, glow: 0.38 + 0.08 * breath, ripple: reduceMotion ? 0 : 0.025,
+                           spinOpacity: 0, particleOpacity: reduceMotion ? 0 : 0.28, particleSpeed: 0.25,
+                           boltChance: 0, maxBolts: 0, ringOpacity: 0.35, ringSpeed: 0.25 * calm, isError: false)
         case .listening(let command):
-            // A gentle pulse even in silence, then the voice drives size, glow, ripple and lightning.
-            let pulse = reduceMotion ? 0 : CGFloat(sin(t * 3.2)) * (0.02 + 0.03 * e)
+            // The voice drives size, glow, the aura's shape (per pitch band), sparks and lightning.
+            let pulse = reduceMotion ? 0 : CGFloat(sin(t * 1.6)) * 0.02
             return OrbPose(coreScale: min(maxCoreScale, 1.04 + 0.24 * e + pulse),
                            glow: min(1, 0.5 + (command ? 0.1 : 0) + 0.45 * e),
                            ripple: reduceMotion ? 0 : 0.04 + 0.24 * e,
                            spinOpacity: 0, particleOpacity: reduceMotion ? 0 : 0.35 + 0.6 * e,
-                           particleSpeed: 0.7 + 2.2 * e,
-                           boltChance: calm * (0.12 + 0.7 * Double(e)), maxBolts: 1 + Int((4 * e).rounded()),
-                           ringOpacity: 0.45 + 0.5 * e, ringSpeed: calm * (0.6 + 2.4 * Double(e)), isError: false)
+                           particleSpeed: 0.35 + 1.0 * e,
+                           boltChance: calm * (0.08 + 0.5 * Double(e)), maxBolts: 1 + Int((2 * e).rounded()),
+                           ringOpacity: 0.45 + 0.5 * e, ringSpeed: calm * (0.4 + 1.2 * Double(e)), isError: false)
         case .working:
-            return OrbPose(coreScale: 1 + 0.03 * breath, glow: 0.55 + 0.08 * CGFloat(sin(t * 2.4)),
-                           ripple: reduceMotion ? 0 : 0.05, spinOpacity: 0.85,
-                           particleOpacity: reduceMotion ? 0 : 0.45, particleSpeed: 1.6,
-                           boltChance: 0.25 * calm, maxBolts: 2, ringOpacity: 0.6, ringSpeed: 1.8 * calm,
+            return OrbPose(coreScale: 1 + 0.03 * breath, glow: 0.55 + 0.06 * CGFloat(sin(t * 1.2)),
+                           ripple: reduceMotion ? 0 : 0.04, spinOpacity: 0.85,
+                           particleOpacity: reduceMotion ? 0 : 0.45, particleSpeed: 0.6,
+                           boltChance: 0.08 * calm, maxBolts: 1, ringOpacity: 0.6, ringSpeed: 0.8 * calm,
                            isError: false)
         case .success:
-            return OrbPose(coreScale: 1.1, glow: 0.95, ripple: reduceMotion ? 0 : 0.08, spinOpacity: 0,
-                           particleOpacity: reduceMotion ? 0 : 0.8, particleSpeed: 2.4,
-                           boltChance: 0.85 * calm, maxBolts: 5, ringOpacity: 0.9, ringSpeed: 3 * calm,
+            return OrbPose(coreScale: 1.1, glow: 0.95, ripple: reduceMotion ? 0 : 0.06, spinOpacity: 0,
+                           particleOpacity: reduceMotion ? 0 : 0.8, particleSpeed: 1.2,
+                           boltChance: 0.6 * calm, maxBolts: 3, ringOpacity: 0.9, ringSpeed: 1.5 * calm,
                            isError: false)
         case .error:
             return OrbPose(coreScale: 1, glow: 0.6, ripple: 0, spinOpacity: 0,
