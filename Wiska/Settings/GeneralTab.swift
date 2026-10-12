@@ -44,7 +44,7 @@ struct GeneralTab: View {
                      ? "The text is pasted where your cursor is."
                      : "The text is only copied — paste it with ⌘V where you want it.")
                     .font(.caption).foregroundStyle(.secondary)
-                Toggle("Show live preview in the notch", isOn: $settings.livePreview)
+                Toggle("Show live preview (Notch Dropdown and Clippy)", isOn: $settings.livePreview)
                 Text("The words appear under the waveform as you speak (Apple engine only).")
                     .font(.caption).foregroundStyle(.secondary)
             }

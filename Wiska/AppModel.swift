@@ -45,7 +45,8 @@ final class AppModel {
     private(set) var missingPermissions: [Permission] = []
     private(set) var dictationState: DictationController.State = .idle
 
-    @ObservationIgnored private let hud = HUDPanelController()
+    /// Shows dictation in the chosen theme (Settings ▸ Appearance); the controller never knows which.
+    @ObservationIgnored private let hud = DictationThemeController(theme: .notchDropdown)
     @ObservationIgnored private let hotkey = FnHotkeyMonitor()
     @ObservationIgnored private let apple: AppleTranscriber
     @ObservationIgnored private let parakeet: ParakeetTranscriber
@@ -185,12 +186,37 @@ final class AppModel {
         }
         // Load Parakeet after any download (also when Settings is closed).
         parakeetStore.onDownloaded = { [weak self] in self?.parakeetModelBecameReady() }
-        applyHighlight()
+        hud.savedOrigin = { [weak settings] theme in
+            switch theme {
+            case .orb: settings?.orbOrigin
+            case .clippy: settings?.clippyOrigin
+            case .notchDropdown, .expandedNotch: nil
+            }
+        }
+        hud.onMoved = { [weak self] theme, origin in
+            guard let self else { return }
+            switch theme {
+            case .orb: settings.orbOrigin = origin
+            case .clippy: settings.clippyOrigin = origin
+            case .notchDropdown, .expandedNotch: break
+            }
+        }
+        applyAppearance()
     }
 
-    /// Pushes the chosen colour to the capsule; called at launch and when Settings changes it.
-    func applyHighlight() {
+    /// Pushes the theme, its options and the colour to the dictation UI; called at launch and
+    /// whenever Settings ▸ Appearance changes them. A theme switch mid-dictation only moves
+    /// what's on screen: recording, recognition and insertion carry on.
+    func applyAppearance() {
         hud.highlight = settings.highlight
+        hud.options = ThemeOptions(orbSize: settings.orbSize, orbHighlight: settings.orbHighlight,
+                                   orbBehavior: settings.orbWindowBehavior,
+                                   clippyBehavior: settings.clippyWindowBehavior)
+        let theme = settings.dictationTheme
+        if hud.theme != theme {
+            Self.log.info("dictation theme: \(theme.rawValue, privacy: .public)")
+            hud.theme = theme
+        }
     }
 
     func start() {
@@ -527,10 +553,11 @@ final class AppModel {
         switch state {
         case .idle: .hidden
         case .listening: .listening(audio: audio, badge: controller.isCommand ? commandBadge : badge,
-                                    preview: controller.preview, handsFree: controller.isHandsFree)
-        case .editing: .working("Editing…")
-        case .writing: .working("Writing…")
-        case .preparingModel: .working("Downloading speech model…")
+                                    preview: controller.preview, handsFree: controller.isHandsFree,
+                                    isCommand: controller.isCommand)
+        case .editing: .working("Editing…", activity: .editing)
+        case .writing: .working("Writing…", activity: .writing)
+        case .preparingModel: .working("Downloading speech model…", activity: .preparing)
         case .transcribing, .cleaning, .injecting: .working("Transcribing…")
         case .failed(let failure): .error(failure.message)
         }
