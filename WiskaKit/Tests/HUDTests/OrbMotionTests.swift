@@ -11,14 +11,26 @@ struct OrbMotionTests {
         }
     }
 
-    @Test func idleFireDriftsVerySlowlyAndPulsates() {
+    @Test func idleFireDriftsSlowlyAndPulsesClearlyButCalmly() {
         let idle = poses(.idle, energy: 0)
         #expect(idle.allSatisfy { $0.flameSpeed > 0 && $0.flameSpeed <= 0.15 })
         let sizes = idle.map(\.coreScale)
-        #expect(sizes.max()! - sizes.min()! >= 0.05)                    // a visible pulse…
+        #expect(sizes.max()! - sizes.min()! >= 0.12)                    // an obvious pulse…
         let step = zip(sizes.dropFirst(8), sizes).map { abs($0 - $1) }.max()!
-        #expect(step < 0.012)                                           // …a slow one
+        #expect(step < 0.03)                                            // …that never jumps
+        let intensities = idle.map(\.intensity)
+        #expect(intensities.max()! - intensities.min()! >= 0.15)        // brightens and dims with it
+        // About one breath every five seconds: 6–10 swings through rest in 20 s.
+        let swings = zip(sizes.dropFirst(), sizes).filter { ($0 - 1) * ($1 - 1) < 0 }.count
+        #expect((6...10).contains(swings))
         #expect(idle.allSatisfy { $0.intensity < 0.45 })
+    }
+
+    @Test func busyFlamesAndSparksStayUnhurried() {
+        for mood in [Presence.Mood.working(.transcribing), .working(.editing), .success] {
+            #expect(poses(mood, energy: 0).allSatisfy { $0.flameSpeed <= 0.45 && $0.particleSpeed <= 0.6 })
+        }
+        #expect(poses(.listening(command: false), energy: 1).allSatisfy { $0.flameSpeed <= 0.6 && $0.particleSpeed <= 0.8 })
     }
 
     @Test func theVoiceFeedsTheFire() {
@@ -39,7 +51,7 @@ struct OrbMotionTests {
             let busy = poses(mood, energy: 0)
             #expect(busy.map(\.intensity).min()! > idle.map(\.intensity).max()! + 0.3)
             #expect(busy.map(\.glow).min()! > idle.map(\.glow).max()!)
-            #expect(busy.allSatisfy { $0.flameSpeed > idle[0].flameSpeed * 3 })
+            #expect(busy.allSatisfy { $0.flameSpeed > idle[0].flameSpeed * 2.5 })
         }
     }
 

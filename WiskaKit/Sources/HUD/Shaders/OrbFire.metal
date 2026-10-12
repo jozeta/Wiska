@@ -54,26 +54,38 @@ static float fbm(float2 p) {
     float t = phase;
     float2 q = p * 2.4;
     float2 warp = float2(fbm(q + float2(0.0, t * 0.6)), fbm(q + float2(5.2, -t * 0.5)));
-    float flames = fbm(q * 1.3 + 2.5 * warp + t * 0.3);
+    // Churning plasma, drifting upward like heat.
+    float flames = fbm(q * 1.3 + 2.5 * warp + float2(0.0, t * 0.9));
     float ridge = 1.0 - abs(2.0 * fbm(q * 2.1 + 3.0 * warp - t * 0.4) - 1.0);
-    float fine = 1.0 - abs(2.0 * fbm(q * 3.6 - 2.0 * warp + t * 0.25) - 1.0);
-    float veins = pow(ridge, 5.0) * 0.8 + pow(fine, 6.0) * 0.5;
+    float veins = pow(ridge, 6.0) * 0.6;
+    // Flame tongues streaming outward: noise read along each direction, sliding out with time
+    // (direction rather than angle, so there's no seam).
+    float2 dir = r > 0.0001 ? p / r : float2(0.0, 1.0);
+    float tongues = fbm(dir * 2.6 + warp * 1.2 + float2(r * 3.0 - t * 1.6, t * 0.2));
+    // Fire flickers: a gentle, irregular breathing of the light.
+    float flicker = 0.9 + 0.2 * noise(float2(t * 3.0, 1.7));
 
-    float edge = radius * (0.95 + 0.35 * flames + ripple * band);
-    float body = smoothstep(edge, edge * 0.35, r) * (0.55 + flames);
-    float core = exp(-r * r / (radius * radius * 0.12));
-    float wisps = veins * smoothstep(edge * 1.3, edge * 0.45, r);
+    float edge = radius * (0.95 + 0.35 * flames + 0.3 * (tongues - 0.5) + ripple * band);
+    float body = smoothstep(edge, edge * 0.3, r) * (0.55 + flames);
+    float licks = smoothstep(edge * 1.15, edge * 0.7, r) * smoothstep(0.45, 0.75, tongues);
+    float core = exp(-r * r / (radius * radius * 0.14));
+    float wisps = veins * smoothstep(edge * 1.2, edge * 0.45, r);
     float halo = exp(-r * r / (radius * radius * 1.1));
 
     float e = intensity;
-    float light = core * (0.55 + 0.9 * e)
-                + body * flames * (0.35 + 0.8 * e)
-                + wisps * (0.55 + 1.1 * e)
-                + halo * (0.18 + 0.5 * e);
+    float light = (core * (0.6 + 0.9 * e)
+                 + body * (0.4 + 0.8 * e)
+                 + licks * (0.4 + 0.7 * e)
+                 + wisps * (0.4 + 0.8 * e)
+                 + halo * (0.18 + 0.5 * e)) * flicker;
     light *= smoothstep(1.0, 0.72, r);                     // nothing reaches the window's edge
 
-    float3 colour = mix(float3(outer), float3(inner), clamp(body + wisps * 0.5, 0.0, 1.0));
-    colour = mix(colour, float3(1.0), clamp(core * 1.1 + wisps * 0.35 * e, 0.0, 1.0));
+    // A fire's colour ramp by heat: dim edge colour → highlight colour → its bright end → white-hot.
+    float heat = clamp(core * 0.95 + body * 0.45 * (0.6 + 0.6 * e) + licks * 0.3 + wisps * 0.3, 0.0, 1.3);
+    float3 cool = float3(outer), warm = float3(inner);
+    float3 colour = heat < 0.4 ? mix(cool * 0.55, cool, heat / 0.4)
+                  : heat < 0.75 ? mix(cool, warm, (heat - 0.4) / 0.35)
+                  : mix(warm, float3(1.0, 0.98, 0.94), clamp((heat - 0.85) / 0.45, 0.0, 1.0));
     float alpha = clamp(light, 0.0, 1.0);
     return half4(half3(colour * alpha), half(alpha));
 }

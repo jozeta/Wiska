@@ -130,8 +130,8 @@ enum OrbRenderer {
             center: centre, startRadius: 0, endRadius: radius))
     }
 
-    /// Sparks drifting around the fire. While you speak each one shines with its own pitch band;
-    /// otherwise they twinkle slowly.
+    /// Embers: sparks that float up off the fire and fade, slowly. While you speak each one
+    /// shines with the pitch band where it rose; otherwise they glow softly.
     static func drawSparks(in context: inout GraphicsContext, size: CGSize, t: Double, pose: OrbPose,
                            bands: [CGFloat], colour: Highlight) {
         guard pose.particleOpacity > 0 else { return }
@@ -141,16 +141,19 @@ enum OrbRenderer {
         let voiced = bands.contains { $0 > 0.02 }
         for i in 0..<particleCount {
             let seed = Double(i) * 1.618
-            let angle = seed * 2 * .pi + t * (0.05 + 0.04 * Double(i % 3)) * Double(pose.particleSpeed)
-            let drift = 0.5 + 0.5 * sin(t * 0.2 + seed * 3)
-            let radius = half * (0.42 + 0.28 * CGFloat(drift))
-            let shine = voiced
-                ? 0.25 + 0.75 * Double(bandValue(at: angle, bands: bands))
-                : 0.5 + 0.5 * sin(t * (0.5 + 0.15 * Double(i % 4)) + seed)
-            let p = CGPoint(x: centre.x + radius * CGFloat(cos(angle)), y: centre.y + radius * CGFloat(sin(angle)))
-            let dot = max(0.7, half * 0.012 * (i.isMultiple(of: 3) ? 1.6 : 1))
-            context.fill(circle(p, dot * 2.5), with: .color(inner.opacity(0.25 * Double(pose.particleOpacity) * shine)))
-            context.fill(circle(p, dot), with: .color(.white.opacity(Double(pose.particleOpacity) * shine)))
+            // Each ember's life runs 0 → 1 and starts over: rise, sway, fade in and out.
+            let rate = 0.12 * Double(pose.particleSpeed) * (0.7 + 0.15 * Double(i % 3))
+            let life = (Seed.hash(seed) + t * rate).truncatingRemainder(dividingBy: 1)
+            let start = Seed.hash(seed + 0.3) * 2 * .pi
+            let origin = CGPoint(x: centre.x + half * 0.4 * CGFloat(cos(start)),
+                                 y: centre.y + half * 0.3 * CGFloat(sin(start)))
+            let sway = half * 0.05 * CGFloat(sin(t * 0.6 + seed * 2))
+            let p = CGPoint(x: origin.x + sway * CGFloat(life), y: origin.y - half * 0.55 * CGFloat(life))
+            let shine = voiced ? 0.35 + 0.65 * Double(bandValue(at: start, bands: bands)) : 0.75
+            let fade = sin(.pi * life) * shine * Double(pose.particleOpacity)
+            let dot = max(0.7, half * 0.012 * (i.isMultiple(of: 3) ? 1.5 : 1)) * CGFloat(1 - 0.4 * life)
+            context.fill(circle(p, dot * 2.6), with: .color(inner.opacity(0.3 * fade)))
+            context.fill(circle(p, dot), with: .color(Color(red: 1, green: 0.97, blue: 0.9).opacity(fade)))
         }
     }
 
