@@ -63,7 +63,7 @@ struct OrbMotionTests {
     /// Wavy borders float round the fire: always a few, slow when idle, bigger and quicker with the voice.
     @Test func wavyBordersFloatAroundAndRespondToTheVoice() {
         let idle = poses(.idle, energy: 0)
-        #expect(idle.allSatisfy { (2...3).contains($0.waveCount) && $0.waveAmplitude > 0 && $0.waveSpeed <= 0.4 })
+        #expect(idle.allSatisfy { $0.waveCount == 3 && $0.waveAmplitude > 0 && $0.waveSpeed <= 0.4 })
         let quiet = poses(.listening(command: false), energy: 0.1)[0]
         let loud = poses(.listening(command: false), energy: 1)[0]
         #expect(loud.waveAmplitude > quiet.waveAmplitude * 2)
@@ -71,9 +71,51 @@ struct OrbMotionTests {
         #expect(poses(.idle, energy: 0, reduceMotion: true).allSatisfy { $0.waveSpeed == 0 })
     }
 
+    /// The lines are faint while idle and grow brighter once you speak, and while busy.
+    @Test func wavyBordersAreFaintWhenIdleAndBrightenWithTheVoice() {
+        let idle = poses(.idle, energy: 0)
+        #expect(idle.allSatisfy { $0.waveOpacity <= 0.15 })
+        let quiet = poses(.listening(command: false), energy: 0.1)[0]
+        let loud = poses(.listening(command: false), energy: 1)[0]
+        #expect(quiet.waveOpacity > idle.map(\.waveOpacity).max()!)
+        #expect(loud.waveOpacity > quiet.waveOpacity + 0.3)
+        #expect(poses(.working(.transcribing), energy: 0).allSatisfy { $0.waveOpacity >= 0.4 && $0.waveOpacity <= 0.7 })
+    }
+
+    /// Changing state cross-fades the orb instead of snapping, both ways; within a state the
+    /// voice still moves it at once.
+    @Test func statesBlendSmoothly() {
+        let idle = OrbMotion.pose(at: 0, mood: .idle, energy: 0, reduceMotion: false)
+        let busy = OrbMotion.pose(at: 0, mood: .working(.transcribing), energy: 0, reduceMotion: false)
+        let frame = 1.0 / 60
+        for (from, fromMood, to, toMood) in [(idle, Presence.Mood.idle, busy, Presence.Mood.working(.transcribing)),
+                                              (busy, .working(.transcribing), idle, .idle)] {
+            var transition = OrbTransition()
+            for _ in 0..<30 { _ = transition.pose(for: from, mood: fromMood, dt: frame) }
+            let first = transition.pose(for: to, mood: toMood, dt: frame)
+            #expect(abs(first.intensity - from.intensity) < abs(to.intensity - from.intensity) * 0.1)
+            #expect(abs(first.coreScale - from.coreScale) <= abs(to.coreScale - from.coreScale) * 0.1 + 0.001)
+            var pose = first
+            for _ in 0..<90 { pose = transition.pose(for: to, mood: toMood, dt: frame) }   // 1.5 s
+            #expect(pose == to)
+        }
+        // Within listening, a louder frame shows straight away (no lag on the voice).
+        var transition = OrbTransition()
+        let quiet = OrbMotion.pose(at: 0, mood: .listening(command: false), energy: 0.2, reduceMotion: false)
+        let loud = OrbMotion.pose(at: 0, mood: .listening(command: false), energy: 1, reduceMotion: false)
+        for _ in 0..<60 { _ = transition.pose(for: quiet, mood: .listening(command: false), dt: frame) }
+        #expect(transition.pose(for: loud, mood: .listening(command: false), dt: frame) == loud)
+        // The error's red fades out rather than snapping.
+        var fade = OrbTransition()
+        let error = OrbMotion.pose(at: 0, mood: .error, energy: 0, reduceMotion: false)
+        for _ in 0..<30 { _ = fade.pose(for: error, mood: .error, dt: frame) }
+        let next = fade.pose(for: idle, mood: .idle, dt: frame)
+        #expect(next.redness > 0.9 && next.redness < 1)
+    }
+
     @Test func errorsTurnRed() {
-        #expect(poses(.error, energy: 0).allSatisfy { $0.isError })
-        #expect(poses(.idle, energy: 0).allSatisfy { !$0.isError })
+        #expect(poses(.error, energy: 0).allSatisfy { $0.redness == 1 })
+        #expect(poses(.idle, energy: 0).allSatisfy { $0.redness == 0 })
     }
 
     /// The flames' ragged edge stays well inside the window (the shader fades out before its edge).

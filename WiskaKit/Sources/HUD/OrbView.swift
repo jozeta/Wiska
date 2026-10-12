@@ -20,17 +20,20 @@ struct OrbView: View {
     @State private var bands = BandClock()
     @State private var flames = FlameClock()
     @State private var waves = FlameClock()
+    @State private var transition = TransitionClock()
 
     var body: some View {
         let _ = model.revision
         let idle = model.presence.mood() == .idle && model.sampleLevel == nil
-        TimelineView(.animation(minimumInterval: idle ? 1.0 / 20 : nil, paused: idle && reduceMotion)) { timeline in
+        TimelineView(.animation(minimumInterval: idle ? 1.0 / 30 : nil, paused: idle && reduceMotion)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             let audio = model.sampleLevel?(t) ?? model.presence.audio
             let energy = clock.advance(to: timeline.date, level: audio.level)
             let shares = bands.advance(to: timeline.date, audio: audio)
             let mood = model.sampleLevel == nil ? model.presence.mood(at: timeline.date) : .listening(command: false)
-            let pose = OrbMotion.pose(at: t, mood: mood, energy: energy, reduceMotion: reduceMotion)
+            let pose = transition.advance(to: timeline.date, mood: mood,
+                                          target: OrbMotion.pose(at: t, mood: mood, energy: energy,
+                                                                 reduceMotion: reduceMotion))
             let phase = flames.advance(to: timeline.date, speed: pose.flameSpeed)
             let wavePhase = waves.advance(to: timeline.date, speed: pose.waveSpeed)
             ZStack {
@@ -66,6 +69,18 @@ final class FlameClock {
     }
 }
 
+/// Steps `OrbTransition` with the real frame time.
+final class TransitionClock {
+    private var transition = OrbTransition()
+    private var last: Date?
+
+    func advance(to now: Date, mood: Presence.Mood, target: OrbPose) -> OrbPose {
+        let dt = last.map { min(now.timeIntervalSince($0), 1.0 / 20) } ?? 0
+        last = now
+        return transition.pose(for: target, mood: mood, dt: dt)
+    }
+}
+
 /// The voice's pitch bands, smoothed more gently than the waveform's bars, for the orb's shape.
 final class BandClock {
     private var motion: WaveformMotion = {
@@ -97,9 +112,12 @@ enum OrbRenderer {
             .color(outer), .color(inner), .floatArray(bands.map(Float.init)))
     }
 
-    /// The fire's outer and inner colour: the highlight's two ends, or reds for an error.
+    /// The fire's outer and inner colour: the highlight's two ends, blending to reds for an error.
     static func colours(_ pose: OrbPose, _ colour: Highlight) -> (outer: Color, inner: Color) {
-        pose.isError ? (Color(hex: 0xC2304A), AuroraTheme.danger) : (AuroraTheme.end(colour), AuroraTheme.start(colour))
+        let red = Double(pose.redness)
+        guard red > 0 else { return (AuroraTheme.end(colour), AuroraTheme.start(colour)) }
+        return (AuroraTheme.end(colour).mix(with: Color(hex: 0xC2304A), by: red),
+                AuroraTheme.start(colour).mix(with: AuroraTheme.danger, by: red))
     }
 
     static func drawGlow(in context: inout GraphicsContext, size: CGSize, pose: OrbPose, colour: Highlight) {
@@ -135,7 +153,7 @@ enum OrbRenderer {
                 step == 0 ? path.move(to: p) : path.addLine(to: p)
             }
             let tint = index.isMultiple(of: 2) ? inner : outer
-            let strength = (0.3 + 0.55 * Double(pose.glow)) * (1 - 0.22 * k)
+            let strength = Double(pose.waveOpacity) * (1 - 0.22 * k)
             var glow = context
             glow.addFilter(.blur(radius: max(1, half * 0.025)))
             glow.stroke(path, with: .color(tint.opacity(0.6 * strength)), lineWidth: max(1.5, half * 0.03))
