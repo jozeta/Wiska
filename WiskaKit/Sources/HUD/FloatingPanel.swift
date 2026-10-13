@@ -12,7 +12,11 @@ final class FloatingPanel: NSPanel {
     var onMove: (() -> Void)?
     /// A drag ended at this origin.
     var onDragEnded: ((CGPoint) -> Void)?
+    /// The window became visible (true) or fully covered, off screen or on another Space (false):
+    /// the animation pauses while nobody can see it.
+    var onVisibilityChanged: ((Bool) -> Void)?
     private var screenObserver: NSObjectProtocol?
+    private var occlusionObserver: NSObjectProtocol?
 
     init(size: CGSize, behavior: FloatingWindowBehavior) {
         self.behavior = behavior
@@ -29,6 +33,14 @@ final class FloatingPanel: NSPanel {
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.keepOnScreen() }
+        }
+        occlusionObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification, object: self, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.onVisibilityChanged?(self.occlusionState.contains(.visible))
+            }
         }
     }
 
@@ -75,6 +87,9 @@ final class FloatingPanel: NSPanel {
     override func close() {
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         screenObserver = nil
+        if let occlusionObserver { NotificationCenter.default.removeObserver(occlusionObserver) }
+        occlusionObserver = nil
+        onVisibilityChanged = nil
         onMove = nil
         onDragEnded = nil
         super.close()

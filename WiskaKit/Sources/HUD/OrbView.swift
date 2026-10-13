@@ -9,6 +9,8 @@ final class OrbModel {
     @ObservationIgnored let presence = Presence()
     /// Previews drive the orb with a made-up voice instead of the microphone.
     @ObservationIgnored var sampleLevel: ((Double) -> AudioLevel)?
+    /// The window is fully covered or off screen: nothing is drawn until it shows again.
+    var isCovered = false
 }
 
 /// The Magical Orb: a ball of plasma fire (a Metal shader, `OrbFire.metal`). Driven by the voice (`VoiceEnergy` and the pitch bands, from the microphone frames the
@@ -22,10 +24,16 @@ struct OrbView: View {
     @State private var waves = FlameClock()
     @State private var transition = TransitionClock()
 
+    /// A covered orb never draws; Reduce Motion stills it while idle.
+    static func isPaused(idle: Bool, reduceMotion: Bool, covered: Bool) -> Bool {
+        covered || (idle && reduceMotion)
+    }
+
     var body: some View {
         let _ = model.revision
         let idle = model.presence.mood() == .idle && model.sampleLevel == nil
-        TimelineView(.animation(minimumInterval: idle ? 1.0 / 30 : nil, paused: idle && reduceMotion)) { timeline in
+        TimelineView(.animation(minimumInterval: idle ? 1.0 / 30 : nil,
+                                paused: Self.isPaused(idle: idle, reduceMotion: reduceMotion, covered: model.isCovered))) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             let audio = model.sampleLevel?(t) ?? model.presence.audio
             let energy = clock.advance(to: timeline.date, level: audio.level)

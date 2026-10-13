@@ -19,6 +19,8 @@ final class ClippyModel {
     @ObservationIgnored var pointerLook: (() -> CGPoint?)?
     /// Following the pointer keeps the timeline running while idle (even with Reduce Motion).
     var followsPointer = false
+    /// The window is fully covered or off screen: nothing is drawn until it shows again.
+    var isCovered = false
 }
 
 /// The character: an original drawing of a bent-wire paperclip with big eyes and heavy brows,
@@ -28,11 +30,17 @@ struct ClippyView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var clock = VoiceEnergy.Clock()
 
+    /// A covered Clippy never draws; Reduce Motion stills him while idle, unless his eyes follow the pointer.
+    static func isPaused(idle: Bool, reduceMotion: Bool, followsPointer: Bool, covered: Bool) -> Bool {
+        covered || (idle && reduceMotion && !followsPointer)
+    }
+
     var body: some View {
         let _ = model.revision
         let idle = model.presence.mood() == .idle
         TimelineView(.animation(minimumInterval: idle ? 1.0 / 24 : nil,
-                                paused: idle && reduceMotion && !model.followsPointer)) { timeline in
+                                paused: Self.isPaused(idle: idle, reduceMotion: reduceMotion,
+                                                      followsPointer: model.followsPointer, covered: model.isCovered))) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             let level = model.presence.level
             let energy = clock.advance(to: timeline.date, level: level)

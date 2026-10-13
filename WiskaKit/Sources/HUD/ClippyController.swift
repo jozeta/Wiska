@@ -36,6 +36,9 @@ final class ClippyController: DictationPresenter {
         bubble.contentView = hosting
         model.highlight = setup.highlight
         model.followsPointer = setup.options.clippyFollowsPointer
+        panel.onVisibilityChanged = { [weak model] visible in
+            if model?.isCovered == visible { model?.isCovered = !visible }
+        }
         model.pointerLook = { [weak panel] in
             guard let panel else { return nil }
             // The eyes sit about a third of the way down the character.

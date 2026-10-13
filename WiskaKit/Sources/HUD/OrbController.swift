@@ -18,6 +18,9 @@ final class OrbController: DictationPresenter {
         panel = FloatingPanel(size: CGSize(width: side, height: side), behavior: setup.options.orbBehavior)
         panel.contentView = DragHostingView(rootView: OrbView(model: model))
         panel.onDragEnded = setup.onMoved
+        panel.onVisibilityChanged = { [weak model] visible in
+            if model?.isCovered == visible { model?.isCovered = !visible }
+        }
         updateColour()
         panel.place(origin: setup.origin)
         panel.orderFrontRegardless()
