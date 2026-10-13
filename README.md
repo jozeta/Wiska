@@ -8,26 +8,17 @@ Private, on-device dictation for macOS. Hold **fn**, speak, release — your wor
 
 ## Download
 
-**[Download Wiska for macOS (Wiska.zip, about 19 MB)](https://github.com/jozeta/Wiska/releases/latest/download/Wiska.zip)** — or see all [releases](https://github.com/jozeta/Wiska/releases).
+**[Download Wiska for macOS (Wiska.zip, about 21 MB)](https://github.com/jozeta/Wiska/releases/latest/download/Wiska.zip)** — or see all [releases](https://github.com/jozeta/Wiska/releases).
 
-Requires macOS 26 or later on Apple Silicon. Unzip and move **Wiska.app** to your Applications folder.
+Requires macOS 26 or later on Apple Silicon. Unzip and move **Wiska.app** to your Applications folder, then open it.
 
-### "Apple could not verify Wiska…" — the security warning
+Wiska is signed with a Developer ID and **notarized by Apple**, so it opens like any other app (from version 1.3.1; older releases showed an "Apple could not verify…" warning). The SHA-256 checksum of each `Wiska.zip` is on its [release page](https://github.com/jozeta/Wiska/releases) if you want to check your download: `shasum -a 256 ~/Downloads/Wiska.zip`.
 
-The first time you open Wiska, macOS says it can't verify that the app is free of malware. That's expected: the app is signed, but it isn't **notarized** by Apple, which requires a paid Apple Developer membership. It doesn't mean anything is wrong with the app — but you should only bypass the warning for software you trust, so:
-
-- **Check the download (optional):** the SHA-256 checksum of each `Wiska.zip` is listed on its [release page](https://github.com/jozeta/Wiska/releases). In Terminal: `shasum -a 256 ~/Downloads/Wiska.zip`.
-- **Or build it yourself** from this source code (see [Building from source](#building-from-source)) — then no warning appears.
-
-To open it anyway:
-
-1. Open Wiska once and click **Done** in the warning.
-2. Go to **System Settings → Privacy & Security**, scroll down to *"Wiska" was blocked to protect your Mac* and click **Open Anyway**, then confirm with your password or Touch ID.
-3. From then on Wiska opens normally.
-
-From version 1.2, Wiska updates itself: it checks GitHub once a day and offers new versions (or use **Check for Updates…** in its menu). Updates are verified with Wiska's signing key and installed without this warning. Updating *to* 1.2 from an older version is a manual download one last time.
+Wiska updates itself: it checks GitHub once a day and offers new versions (or use **Check for Updates…** in its menu). Updates are verified with Wiska's signing key before they're installed.
 
 Wiska then asks for the permissions it needs — **Microphone** (to hear you), **Accessibility** and **Input Monitoring** (to notice the fn key and paste the text). Everything is processed on your Mac; see [Privacy](#privacy).
+
+**Updating to 1.3.1 from an older version:** because Wiska is now signed differently, macOS asks for these permissions once more. If Wiska says *Setup needed* although a switch in System Settings looks on, turn that switch off and on again.
 
 ## Features
 
@@ -149,7 +140,7 @@ cd WiskaKit && swift test
 
 Design notes and implementation plans for each milestone are in `docs/superpowers/`.
 
-To make a release, `scripts/release.sh NOTES.md` builds, signs and zips the app and writes the Sparkle `appcast.xml` that existing copies update from, with the release notes shown in their update window (see the comments at its top). A build of your own checks the same GitHub feed, but it only installs updates signed with this project's key.
+To make a release, `scripts/release.sh NOTES.md` builds the app, signs it with the Developer ID, has Apple notarize it, zips it and writes the Sparkle `appcast.xml` that existing copies update from, with the release notes shown in their update window (see the comments at its top). A build of your own checks the same GitHub feed, but it only installs updates signed with this project's key.
 
 ## License
 
