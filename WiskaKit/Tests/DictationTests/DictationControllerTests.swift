@@ -295,7 +295,8 @@ struct DictationControllerTests {
         let controller = makeController(maxDuration: .milliseconds(50))
         controller.handle(en)
         audio.emit([0.4])
-        try await Task.sleep(for: .milliseconds(150))
+        // The limit fires on its own timer: wait for it (up to 2 s under load).
+        for _ in 0..<200 where controller.state == .listening { try await Task.sleep(for: .milliseconds(10)) }
         await controller.currentTask?.value
         #expect(injector.injected == ["cleaned: hello world"])
         #expect(controller.state == .idle)
