@@ -19,7 +19,7 @@ public enum OnboardingStep: String, CaseIterable, Identifiable, Sendable {
     public var reason: String {
         switch self {
         case .microphone: "to hear you — only while you hold fn"
-        case .inputMonitoring: "to notice the fn key"
+        case .inputMonitoring: "to notice the fn key — comes with Accessibility after a restart"
         case .accessibility: "to paste where you type"
         case .fnKey: "so holding fn doesn't open emoji or switch input"
         case .tryIt: "hold fn, say hi, release"

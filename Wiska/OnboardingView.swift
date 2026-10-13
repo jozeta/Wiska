@@ -55,10 +55,14 @@ struct OnboardingView: View {
     @ViewBuilder
     private func action(for step: OnboardingStep, done: Bool, settings: SettingsStore) -> some View {
         switch step {
-        case .microphone, .inputMonitoring, .accessibility:
+        case .microphone, .accessibility:
             if !done {
                 Button("Allow…") { permission(for: step).requestOrOpenSettings() }
             }
+        case .inputMonitoring:
+            // Nothing to click: macOS allows it with Accessibility, from Wiska's next launch,
+            // and Wiska offers that restart itself.
+            EmptyView()
         case .fnKey:
             HStack {
                 Button("Open Keyboard Settings") {
@@ -75,7 +79,6 @@ struct OnboardingView: View {
 
     private func permission(for step: OnboardingStep) -> Permission {
         switch step {
-        case .inputMonitoring: .inputMonitoring
         case .accessibility: .accessibility
         default: .microphone
         }

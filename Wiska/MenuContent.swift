@@ -44,8 +44,15 @@ struct MenuContent: View {
         if !model.missingPermissions.isEmpty {
             Divider()
             ForEach(model.missingPermissions) { permission in
-                Button("Allow \(permission.title) \(permission.reason)…") {
-                    permission.openSettings()
+                if permission == .inputMonitoring {
+                    // Follows Accessibility, from the next launch: nothing to allow by hand.
+                    if !model.missingPermissions.contains(.accessibility) {
+                        Button("Restart Wiska to finish setup") { model.relaunch() }
+                    }
+                } else {
+                    Button("Allow \(permission.title) \(permission.reason)…") {
+                        permission.openSettings()
+                    }
                 }
             }
         }

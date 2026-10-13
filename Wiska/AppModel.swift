@@ -76,6 +76,8 @@ final class AppModel {
     /// fn+⌃: "Edit" with a selection, "Write" without, "Command" when the app doesn't say.
     @ObservationIgnored private var commandBadge = "Command"
     @ObservationIgnored private var handsFreeLatch = HandsFreeLatch()
+    /// Offers a restart once Microphone and Accessibility are on (the fn listener follows then).
+    @ObservationIgnored private var restartOffer = RestartOffer()
     /// The last dictation's text, kept for "Paste last dictation" (also when history is off).
     @ObservationIgnored private var lastDictationText: String?
     @ObservationIgnored private lazy var pasteLastShortcut = GlobalShortcut { [weak self] in self?.pasteLastDictation() }
@@ -715,6 +717,46 @@ final class AppModel {
         if !missing.contains(.inputMonitoring) && !hotkey.isRunning {
             startHotkey()
         }
+        let now = RestartOffer.Permissions(microphone: !missing.contains(.microphone),
+                                           accessibility: !missing.contains(.accessibility),
+                                           inputMonitoring: !missing.contains(.inputMonitoring))
+        if restartOffer.update(now) {
+            // After this poll returns: the alert runs its own event loop.
+            DispatchQueue.main.async { [weak self] in self?.offerRestart() }
+        }
+    }
+
+    /// "Restart Wiska?" once Microphone and Accessibility are allowed: macOS lets Wiska listen to
+    /// the fn key only from its next launch.
+    private func offerRestart() {
+        Self.log.notice("setup: offering a restart")
+        NSApp.activate()
+        let alert = NSAlert()
+        alert.messageText = "Restart Wiska?"
+        alert.informativeText = "Microphone and Accessibility are allowed. Wiska needs to restart to apply them and start listening for the fn key."
+        alert.addButton(withTitle: "Restart")
+        alert.addButton(withTitle: "Later")
+        if alert.runModal() == .alertFirstButtonReturn {
+            relaunch()
+        } else {
+            Self.log.notice("setup: restart postponed")
+        }
+    }
+
+    /// Quits and opens Wiska again (a helper waits for this copy to quit first).
+    func relaunch() {
+        Self.log.notice("setup: restarting")
+        let helper = Process()
+        helper.executableURL = URL(fileURLWithPath: "/bin/sh")
+        helper.arguments = ["-c", "while /bin/kill -0 \"$1\" 2>/dev/null; do /bin/sleep 0.2; done; /usr/bin/open \"$0\"",
+                            Bundle.main.bundlePath, String(ProcessInfo.processInfo.processIdentifier)]
+        do {
+            try helper.run()
+        } catch {
+            Self.log.error("setup: restart failed: \(Log.summary(error), privacy: .public)")
+            return
+        }
+        NSApp.terminate(nil)
     }
 
     private func startHotkey() {
