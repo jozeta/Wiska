@@ -25,6 +25,10 @@ final class AppModel {
     let dictionaryStore: DictionaryStore
     let snippetStore: SnippetStore
     let commandStore: CommandStore
+    /// Words the user fixed after a dictation, offered in the Dictionary tab.
+    let corrections = CorrectionSuggestions()
+    @ObservationIgnored private let correctionWatcher = CorrectionWatcher()
+    @ObservationIgnored private var lexicon: SpellCheckerLexicon!
     let history: HistoryStore?
     @ObservationIgnored private var retentionTask: Task<Void, Never>?
     @ObservationIgnored private var updateTask: Task<Void, Never>?
@@ -150,6 +154,7 @@ final class AppModel {
             isSecureInput: { IsSecureEventInputEnabled() }
         )
         self.cleanupRewriter = cleanupRewriter
+        self.lexicon = lexicon
         fileCleaner = CleanupPipeline(level: { settings.cleanupLevel == .off ? .light : settings.cleanupLevel },
                                       rewriter: cleanupRewriter,
                                       dictionary: { dictionaryStore.dictionary },
@@ -176,6 +181,8 @@ final class AppModel {
         controller.onChange = { [weak self] state, audio in
             guard let self else { return }
             let finishedCopy = state == .idle && dictationState == .injecting && settings.outputMode == .clipboard
+            // A new dictation: the last one's correction watch ends now.
+            if state == .listening && dictationState != .listening { correctionWatcher.finish() }
             if dictationState != state { dictationState = state }
             // A hands-free dictation that ended any way but fn/Esc must not leave fn locked.
             if handsFreeLatch.update(listening: state == .listening, handsFree: controller.isHandsFree) {
@@ -197,6 +204,9 @@ final class AppModel {
             if record.pasted && !settings.firstDictationDone { settings.firstDictationDone = true }
             history?.add(record, retention: settings.historyRetention)
             if !record.finalText.isEmpty { lastDictationText = record.finalText }
+            if record.pasted && settings.outputMode == .insert && settings.learnFromCorrections {
+                watchForCorrections(of: record.finalText)
+            }
             if !record.finalText.isEmpty, let app = record.appBundleID, app != Bundle.main.bundleIdentifier {
                 settings.noteRecentApp(app)
             }
@@ -277,6 +287,35 @@ final class AppModel {
 
     var modelUpdateAvailable: Bool {
         if case .updateAvailable = modelUpdates.state { true } else { false }
+    }
+
+    /// After a paste: a word the user then fixes in that text becomes a dictionary suggestion.
+    private func watchForCorrections(of pasted: String) {
+        correctionWatcher.watch { [weak self] before, after in
+            guard let self else { return }
+            let dictionary = dictionaryStore.dictionary
+            let found = CorrectionFinder.corrections(before: before, after: after, pasted: pasted,
+                                                     isKnownWord: { [lexicon] in lexicon!.isKnown($0) })
+                .filter { correction in
+                    !dictionary.replacements.contains { $0.heard.caseInsensitiveCompare(correction.heard) == .orderedSame }
+                }
+            guard !found.isEmpty else { return }
+            Self.log.notice("corrections: \(found.count) noticed")
+            let new = found.filter { corrections.note($0) }
+            if let first = new.first {
+                flash("“\(first.heard)” → “\(first.written)”? Add it in Settings → Dictionary", for: .seconds(3))
+            }
+        }
+    }
+
+    /// A suggestion accepted in the Dictionary tab: the misheard form becomes a replacement, and a
+    /// single unknown word also a dictionary word (it helps recognition).
+    func acceptCorrection(_ correction: Correction) {
+        dictionaryStore.addReplacement(heard: correction.heard, written: correction.written)
+        if !correction.written.contains(" "), !lexicon.isKnown(correction.written) {
+            dictionaryStore.addWord(correction.written)
+        }
+        corrections.accept(correction)
     }
 
     /// Settings → General → "Paste last dictation": registers the chosen shortcut (or none).

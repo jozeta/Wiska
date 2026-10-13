@@ -291,6 +291,13 @@ final class SettingsStoreTests {
         #expect(PasteLastShortcut.controlOptionCommandV.carbonModifiers == 4096 | 2048 | 256)
     }
 
+    @Test func learnFromCorrectionsDefaultsOnAndPersists() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.learnFromCorrections)
+        store.learnFromCorrections = false
+        #expect(!SettingsStore(defaults: defaults).learnFromCorrections)
+    }
+
     @Test func modelUpdateSettings() {
         let store = SettingsStore(defaults: defaults)
         #expect(store.modelUpdateInterval == 7)

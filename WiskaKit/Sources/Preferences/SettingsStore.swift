@@ -22,6 +22,7 @@ public final class SettingsStore {
         static let firstDictationDone = "firstDictationDone"
         static let handsFreeSilence = "handsFreeSilence"
         static let livePreview = "livePreview"
+        static let learnFromCorrections = "learnFromCorrections"
         static let outputMode = "outputMode"
         static let pasteLastShortcut = "pasteLastShortcut"
         static let languageModel = "languageModel"
@@ -202,6 +203,10 @@ public final class SettingsStore {
     }
     /// Show the words as they're heard, under the waveform in the notch.
     public var livePreview: Bool { didSet { defaults.set(livePreview, forKey: Key.livePreview) } }
+    /// After a paste, notice words the user fixes and suggest them for the dictionary.
+    public var learnFromCorrections: Bool {
+        didSet { defaults.set(learnFromCorrections, forKey: Key.learnFromCorrections) }
+    }
     /// Paste the finished text into the app, or only copy it.
     public var outputMode: OutputMode { didSet { defaults.set(outputMode.rawValue, forKey: Key.outputMode) } }
     /// Pastes the last dictation again, in any app.
@@ -317,6 +322,7 @@ public final class SettingsStore {
         firstDictationDone = defaults.bool(forKey: Key.firstDictationDone)
         handsFreeSilence = defaults.object(forKey: Key.handsFreeSilence) as? TimeInterval ?? 30
         livePreview = defaults.object(forKey: Key.livePreview) as? Bool ?? true
+        learnFromCorrections = defaults.object(forKey: Key.learnFromCorrections) as? Bool ?? true
         outputMode = Self.read(defaults, Key.outputMode, OutputMode.insert)
         pasteLastShortcut = Self.read(defaults, Key.pasteLastShortcut, PasteLastShortcut.controlOptionV)
         languageModel = Self.read(defaults, Key.languageModel, LanguageModelChoice.apple)

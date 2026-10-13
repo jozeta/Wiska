@@ -45,7 +45,7 @@ Wiska then asks for the permissions it needs — **Microphone** (to hear you), *
 - **Saved commands** — name instructions you use often ("formal", "fix", "shorter", "bullets" ship by default) and start a command with the name. Settings → Commands.
 - **Local model (optional)** — download Gemma 4 E4B (5.2 GB) in Settings → Models, then choose it in Settings → Cleanup, for better grammar and Swedish, also on Macs without Apple Intelligence. *Fix grammar* corrects mistakes like "I has a apple". *Compare models…* shows how it does against Apple Intelligence on your Mac. Gemma and KB-Whisper are let go from memory after 10 minutes unused (change it in Settings → Models → Memory).
 - **KB-Whisper for Swedish (optional)** — download the National Library of Sweden's Whisper (1.1 GB) in Settings → Models and switch it on in Settings → Speech; Swedish dictations are re-transcribed by it for fewer mishearings. *Compare on my voice…* measures each engine on your own reading.
-- **Personal dictionary** — names and terms spelled your way, plus custom replacements.
+- **Personal dictionary** — names and terms spelled your way, plus custom replacements. When you fix a misheard name right after dictating, Wiska suggests adding it (Settings → Dictionary; only the word pair is kept).
 - **History** — search and filter past dictations, see exactly what cleanup changed, and track words per day, time saved, top apps and languages. Kept for as long as you choose (or not at all).
 - **Insert or copy** — paste into the active app, or only copy to the clipboard.
 - **Paste the last dictation again** — ⌃⌥V (or another shortcut, Settings → General) or the menu, when the text landed in the wrong place.

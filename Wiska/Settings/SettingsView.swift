@@ -12,7 +12,7 @@ struct SettingsView: View {
                 Tab("Models", systemImage: "arrow.down.circle") { ModelsTab(model: model) }
                 Tab("Languages", systemImage: "globe") { LanguagesTab(model: model) }
                 Tab("Cleanup", systemImage: "sparkles") { CleanupTab(model: model) }
-                Tab("Dictionary", systemImage: "character.book.closed") { DictionaryTab(store: model.dictionaryStore) }
+                Tab("Dictionary", systemImage: "character.book.closed") { DictionaryTab(store: model.dictionaryStore, model: model) }
                 Tab("Snippets", systemImage: "text.badge.plus") { SnippetsTab(store: model.snippetStore) }
                 Tab("Commands", systemImage: "command") { CommandsTab(store: model.commandStore) }
             }
