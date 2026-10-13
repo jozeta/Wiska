@@ -219,9 +219,14 @@ struct TranscribeFileView: View {
         task = Task {
             let started = ContinuousClock.now
             do {
-                text = try await model.finishMeeting(language: language, cleanUp: cleanUp) { step, fraction in
-                    phase = step == .transcribing ? .transcribing(fraction) : .cleaningUp(fraction)
+                // Work in progress: speaker naming UI still to come; notes go above the transcript.
+                let result = try await model.finishMeeting(language: language, cleanUp: cleanUp,
+                                                           identifySpeakers: model.speakerModel.isInstalled,
+                                                           writeNotes: true) { step, fraction in
+                    phase = step == .cleaningUp ? .cleaningUp(fraction) : .transcribing(fraction)
                 }
+                let transcript = MeetingTranscription.transcript(result.segments)
+                text = result.notes.map { "Notes\n\n\($0)\n\nTranscript\n\n\(transcript)" } ?? transcript
                 let seconds = Int((ContinuousClock.now - started).seconds.rounded())
                 summary = text.isEmpty ? "No speech found." : "\(Log.words(text).formatted()) words in \(seconds) s"
                 phase = .done

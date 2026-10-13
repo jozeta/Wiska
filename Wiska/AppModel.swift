@@ -25,6 +25,9 @@ final class AppModel {
     let dictionaryStore: DictionaryStore
     let snippetStore: SnippetStore
     let commandStore: CommandStore
+    /// Speaker diarization models (~14 MB): tell the voices on a call apart. Downloaded on request.
+    let speakerModel = ParakeetModelStore(directory: SpeakerDiarizer.modelDirectory, downloader: DiarizerDownloader(),
+                                          name: "speaker")
     /// Records calls and meetings (the Mac's audio and the microphone) for a transcript.
     @ObservationIgnored let meetingRecorder = MeetingRecorder()
     /// Which tab the Transcribe window opens on (menu: Transcribe Audio File… or Record Meeting…).
@@ -370,7 +373,26 @@ final class AppModel {
 
     /// Menu → Transcribe Audio File…: the recording in pieces, with the engine a dictation in
     /// `language` would use. `progress` runs on the main actor, 0…1.
-    enum FileStep { case transcribing, cleaningUp }
+    enum FileStep { case transcribing, cleaningUp, identifyingSpeakers, writingNotes }
+
+    /// A transcribed meeting: who said what (names are given in the window), and notes.
+    struct MeetingResult {
+        var segments: [MeetingSegment]
+        var notes: String?
+    }
+
+    /// The model that writes meeting notes: the chosen one when it's there, else the other.
+    var notesGenerator: MeetingNotes.Generate? {
+        let gemmaReady = gemma.isAvailable
+        if settings.languageModel == .gemma && gemmaReady {
+            return { [gemma] system, prompt in try await gemma.generate(system: system, prompt: prompt, maxTokens: 1_024) }
+        }
+        if MeetingNotes.appleAvailable { return MeetingNotes.apple }
+        if gemmaReady {
+            return { [gemma] system, prompt in try await gemma.generate(system: system, prompt: prompt, maxTokens: 1_024) }
+        }
+        return nil
+    }
 
     func transcribeFile(_ url: URL, language: LanguageChoice, cleanUp: Bool = false,
                         progress: @escaping @MainActor (FileStep, Double) -> Void) async throws -> FileTranscription.Result {
@@ -397,15 +419,30 @@ final class AppModel {
 
     /// Stops the meeting recording and turns it into a "[0:05] You: …" transcript. The audio is
     /// deleted afterwards: only the text is kept, and only if the user copies or saves it.
-    func finishMeeting(language: LanguageChoice, cleanUp: Bool,
-                       progress: @escaping @MainActor (FileStep, Double) -> Void) async throws -> String {
-        guard let recording = try await meetingRecorder.stop() else { return "" }
+    func finishMeeting(language: LanguageChoice, cleanUp: Bool, identifySpeakers: Bool, writeNotes: Bool,
+                       progress: @escaping @MainActor (FileStep, Double) -> Void) async throws -> MeetingResult {
+        guard let recording = try await meetingRecorder.stop() else { return MeetingResult(segments: []) }
         defer { try? FileManager.default.removeItem(at: recording.folder) }
         let you = (try? await runBlocking { try AudioFileLoader.samples(from: recording.you) }) ?? []
         let others = (try? await runBlocking { try AudioFileLoader.samples(from: recording.others) }) ?? []
         Self.log.notice("meeting: \(String(format: "%.1f", Double(max(you.count, others.count)) / AudioChunk.sampleRate / 60), privacy: .public) min recorded")
         if cleanUp { fileCleaner.prewarm() }
-        var segments = try await MeetingTranscription.run(you: you, others: others, session: { [weak self] _ in
+        var turns: [MeetingTurn]?
+        if identifySpeakers && speakerModel.isInstalled && !others.isEmpty {
+            progress(.identifyingSpeakers, 0)
+            do {
+                let start = ContinuousClock.now
+                let voices = try await SpeakerDiarizer.segments(in: others)
+                    .map { VoiceSegment(speaker: $0.speaker, start: $0.start, end: $0.end) }
+                turns = MeetingTranscription.turns(from: voices, sampleCount: others.count)
+                Self.log.notice("meeting: \(Set(voices.map(\.speaker)).count) voices on the call, \(turns?.count ?? 0) turns, in \(Log.ms(ContinuousClock.now - start), privacy: .public)")
+                if turns?.isEmpty == true { turns = nil }   // nothing found: the call as one speaker
+            } catch {
+                Self.log.error("meeting: speakers not told apart: \(Log.summary(error), privacy: .public)")
+            }
+            progress(.identifyingSpeakers, 1)
+        }
+        var segments = try await MeetingTranscription.run(you: you, others: others, othersTurns: turns, session: { [weak self] _ in
             guard let self else { throw CancellationError() }
             return try await transcriber(for: language).makeSession(language: language)
         }, progress: { progress(.transcribing, $0) })
@@ -416,7 +453,21 @@ final class AppModel {
             }
         }
         Self.log.notice("meeting: \(segments.count) segments")
-        return MeetingTranscription.transcript(segments)
+        var notes: String?
+        if writeNotes, !segments.isEmpty, let generate = notesGenerator {
+            let start = ContinuousClock.now
+            let heard: Language? = if case .fixed(let fixed) = language { fixed } else { nil }
+            do {
+                notes = try await MeetingNotes.write(MeetingTranscription.transcript(segments), language: heard,
+                                                     generate: generate, progress: { progress(.writingNotes, $0) })
+                Self.log.notice("meeting: notes written in \(Log.ms(ContinuousClock.now - start), privacy: .public)")
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                Self.log.error("meeting: notes failed: \(Log.summary(error), privacy: .public)")
+            }
+        }
+        return MeetingResult(segments: segments, notes: notes)
     }
 
     /// Throws away a recording in progress.
