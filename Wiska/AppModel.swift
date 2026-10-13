@@ -14,6 +14,7 @@ import Observation
 import Parakeet
 import Preferences
 import SpeechToText
+import Updates
 
 @MainActor @Observable
 final class AppModel {
@@ -38,6 +39,8 @@ final class AppModel {
     let kbWhisper: KBWhisperRecognizer
     /// Checks whether a newer KB-Whisper has been published (Settings → Models).
     let kbWhisperUpdates: ModelUpdateChecker
+    /// Wiska's own updates (Sparkle, from GitHub releases).
+    let updater = AppUpdater()
     @ObservationIgnored private var cleanupRewriter: SwitchingRewriter!
     @ObservationIgnored private var appleEditor: FoundationModelsEditor!
     @ObservationIgnored private var localRewriter: LocalRewriter!
@@ -308,7 +311,7 @@ final class AppModel {
     /// `language` would use. `progress` runs on the main actor, 0…1.
     func transcribeFile(_ url: URL, language: LanguageChoice,
                         progress: @escaping @MainActor (Double) -> Void) async throws -> FileTranscription.Result {
-        let samples = try await Task.detached { try AudioFileLoader.samples(from: url) }.value
+        let samples = try await runBlocking { try AudioFileLoader.samples(from: url) }
         let minutes = Double(samples.count) / AudioChunk.sampleRate / 60
         Self.log.notice("file: \(String(format: "%.1f", minutes), privacy: .public) min of audio, \(String(describing: language), privacy: .public)")
         let start = ContinuousClock.now
@@ -355,7 +358,7 @@ final class AppModel {
         let missing = missingPermissions.isEmpty ? "none" : missingPermissions.map { "\($0)" }.joined(separator: ", ")
         let header = [versionLine, settingsLine, "missing permissions: \(missing)"].joined(separator: "\n")
         do {
-            let text = try await Task.detached { try Diagnostics.collect(header: header) }.value
+            let text = try await runBlocking { try Diagnostics.collect(header: header) }
             AXSelectionReader.clipboardWillBeWrittenByWiska(.general)
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(text, forType: .string)

@@ -55,6 +55,21 @@ struct GeneralTab: View {
                 Text("The words appear under the waveform as you speak (Apple engine only).")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section("Updates") {
+                Toggle("Check for Wiska updates automatically", isOn: Binding(
+                    get: { model.updater.checksAutomatically },
+                    set: { model.updater.checksAutomatically = $0 }))
+                HStack {
+                    Button("Check Now") { model.updater.checkForUpdates() }
+                        .disabled(!model.updater.canCheckForUpdates)
+                    if let checked = model.updater.lastChecked {
+                        Text("Last checked \(checked.formatted(.relative(presentation: .named)))")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Text("Once a day Wiska asks GitHub whether a newer release exists; it sends nothing about you. An update is checked against Wiska's signing key before it's installed.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("Permissions") {
                 LabeledContent("Status", value: model.missingPermissions.isEmpty ? "All granted" : "Setup needed")
                 Button("Open Setup…") { OnboardingWindow.open(openWindow) }

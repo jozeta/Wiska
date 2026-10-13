@@ -5,13 +5,14 @@ let package = Package(
     name: "WiskaKit",
     platforms: [.macOS("26.0")],
     products: [
-        .library(name: "WiskaKit", targets: ["Core", "Hotkey", "Audio", "SpeechToText", "Cleanup", "Injection", "Dictation", "HUD", "Preferences", "Parakeet", "History", "LocalModel", "KBWhisper"]),
+        .library(name: "WiskaKit", targets: ["Core", "Hotkey", "Audio", "SpeechToText", "Cleanup", "Injection", "Dictation", "HUD", "Preferences", "Parakeet", "History", "LocalModel", "KBWhisper", "Updates"]),
     ],
     dependencies: [
         .package(url: "https://github.com/FluidInference/FluidAudio", exact: "0.17.7"),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm", exact: "3.32.3"),
         .package(url: "https://github.com/ml-explore/mlx-swift", exact: "0.32.3"),
         .package(url: "https://github.com/huggingface/swift-transformers", exact: "1.3.4"),
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0"),
     ],
     targets: [
         .target(name: "Core"),
@@ -38,6 +39,7 @@ let package = Package(
                       url: "https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-b5454-xcframework.zip",
                       checksum: "e57f8c48933000acabc13bb913fbe82805d483a2deff692cc6738836bd92393b"),
         .target(name: "KBWhisper", dependencies: ["Core", "whisper"]),
+        .target(name: "Updates", dependencies: ["Core", .product(name: "Sparkle", package: "Sparkle")]),
         .testTarget(name: "KBWhisperTests", dependencies: ["KBWhisper"]),
         .testTarget(name: "LocalModelTests", dependencies: ["LocalModel", "Cleanup"]),
         .testTarget(name: "CoreTests", dependencies: ["Core"]),

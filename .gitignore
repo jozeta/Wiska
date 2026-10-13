@@ -8,3 +8,4 @@ build/
 Local.xcconfig
 .superpowers/
 build-release/
+build-release.log

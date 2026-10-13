@@ -65,6 +65,12 @@ struct MenuContent: View {
             HistoryWindow.open(openWindow)
         }
         .keyboardShortcut("y")
+        if let version = model.updater.availableVersion {
+            Button("Update to Wiska \(version)…") { model.updater.checkForUpdates() }
+        } else {
+            Button("Check for Updates…") { model.updater.checkForUpdates() }
+                .disabled(!model.updater.canCheckForUpdates)
+        }
         Button("Settings…") { showSettings() }
         .keyboardShortcut(",")
         Button("Quit Wiska") {

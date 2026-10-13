@@ -23,7 +23,9 @@ To open it anyway:
 
 1. Open Wiska once and click **Done** in the warning.
 2. Go to **System Settings → Privacy & Security**, scroll down to *"Wiska" was blocked to protect your Mac* and click **Open Anyway**, then confirm with your password or Touch ID.
-3. From then on Wiska opens normally. (After an update you may have to do this once more.)
+3. From then on Wiska opens normally.
+
+From version 1.2, Wiska updates itself: it checks GitHub once a day and offers new versions (or use **Check for Updates…** in its menu). Updates are verified with Wiska's signing key and installed without this warning. Updating *to* 1.2 from an older version is a manual download one last time.
 
 Wiska then asks for the permissions it needs — **Microphone** (to hear you), **Accessibility** and **Input Monitoring** (to notice the fn key and paste the text). Everything is processed on your Mac; see [Privacy](#privacy).
 
@@ -41,11 +43,15 @@ Wiska then asks for the permissions it needs — **Microphone** (to hear you), *
 - **Edit by voice** — select text, hold **fn+⌃**, say "make this more formal" or "translate to Swedish", and the selection is rewritten in place (⌘Z undoes it).
 - **Write with nothing selected** — hold fn+⌃ with the cursor in a text field and say what to write ("reply that I'll be there at three"). Wiska uses the text around the cursor (read on your Mac, never stored) as context.
 - **Saved commands** — name instructions you use often ("formal", "fix", "shorter", "bullets" ship by default) and start a command with the name. Settings → Commands.
-- **Local model (optional)** — download Gemma 4 E4B (5.2 GB) in Settings → Models, then choose it in Settings → Cleanup, for better grammar and Swedish, also on Macs without Apple Intelligence. *Fix grammar* corrects mistakes like "I has a apple". *Compare models…* shows how it does against Apple Intelligence on your Mac.
+- **Local model (optional)** — download Gemma 4 E4B (5.2 GB) in Settings → Models, then choose it in Settings → Cleanup, for better grammar and Swedish, also on Macs without Apple Intelligence. *Fix grammar* corrects mistakes like "I has a apple". *Compare models…* shows how it does against Apple Intelligence on your Mac. Gemma and KB-Whisper are let go from memory after 10 minutes unused (change it in Settings → Models → Memory).
 - **KB-Whisper for Swedish (optional)** — download the National Library of Sweden's Whisper (1.1 GB) in Settings → Models and switch it on in Settings → Speech; Swedish dictations are re-transcribed by it for fewer mishearings. *Compare on my voice…* measures each engine on your own reading.
 - **Personal dictionary** — names and terms spelled your way, plus custom replacements.
 - **History** — search and filter past dictations, see exactly what cleanup changed, and track words per day, time saved, top apps and languages. Kept for as long as you choose (or not at all).
 - **Insert or copy** — paste into the active app, or only copy to the clipboard.
+- **Paste the last dictation again** — ⌃⌥V (or another shortcut, Settings → General) or the menu, when the text landed in the wrong place.
+- **Transcribe audio files** — voice memos, meetings, interviews (up to three hours; m4a, mp3, wav…) to text with your speech engine settings: Wiska's menu → Transcribe Audio File….
+- **Speed stats** — History → Stats shows how long each speech engine typically takes from releasing fn to the text, split into transcription, cleanup and paste.
+- **Automatic updates** — Wiska checks GitHub for new releases and installs them itself (Settings → General → Updates).
 
 ## Dictation themes
 
@@ -101,6 +107,7 @@ Clippy here is an original drawing in the spirit of the Office assistant; Wiska 
 | Select text, hold fn+⌃, say an instruction | Edit the selection |
 | Nothing selected, hold fn+⌃, say what to write | Write at the cursor |
 | Hold fn+⌃, start with a saved command ("formal") | Use its instruction |
+| ⌃⌥V | Paste the last dictation again |
 
 With the Magical Orb or Clippy, drag them with the mouse to move them.
 
@@ -110,7 +117,7 @@ Settings has a **Help** tab with examples, voice commands for each of your langu
 
 ## Privacy
 
-Speech recognition, cleanup and editing all run on your Mac. Wiska makes no network requests except downloading models when you ask for them (Apple's language assets, or Parakeet, KB-Whisper and Gemma from Hugging Face in Settings → Models) and, for downloaded models, a small check whether a newer version exists (weekly by default) — turn it off with Settings → Models → Check for model updates → Never. History is stored locally in `~/Library/Application Support/Wiska` and can be turned off.
+Speech recognition, cleanup and editing all run on your Mac. Wiska makes no network requests except downloading models when you ask for them (Apple's language assets, or Parakeet, KB-Whisper and Gemma from Hugging Face in Settings → Models) and, for downloaded models, a small check whether a newer version exists (weekly by default) — turn it off with Settings → Models → Check for model updates → Never. Once a day Wiska also asks GitHub whether a newer Wiska exists (it sends nothing about you) — turn it off in Settings → General → Updates. History is stored locally in `~/Library/Application Support/Wiska` and can be turned off.
 
 ## When something goes wrong
 
@@ -133,13 +140,15 @@ You can also open Console.app and search for `subsystem:Wiska`. The log never co
    open build/Build/Products/Debug/Wiska.app
    ```
 
-The app's logic lives in the Swift package `WiskaKit` (modules Core, Hotkey, Audio, SpeechToText, Parakeet, KBWhisper, LocalModel, Cleanup, Injection, Dictation, HUD, Preferences, History). Run its tests with:
+The app's logic lives in the Swift package `WiskaKit` (modules Core, Hotkey, Audio, SpeechToText, Parakeet, KBWhisper, LocalModel, Cleanup, Injection, Dictation, HUD, Preferences, History, Updates). Run its tests with:
 
 ```sh
 cd WiskaKit && swift test
 ```
 
 Design notes and implementation plans for each milestone are in `docs/superpowers/`.
+
+To make a release, `scripts/release.sh` builds, signs and zips the app and writes the Sparkle `appcast.xml` that existing copies update from (see the comments at its top). A build of your own checks the same GitHub feed, but it only installs updates signed with this project's key.
 
 ## License
 
