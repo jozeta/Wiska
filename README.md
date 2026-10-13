@@ -39,7 +39,7 @@ Wiska then asks for the permissions it needs — **Microphone** (to hear you), *
 - **Two speech engines** — Apple's on-device speech recognition or NVIDIA Parakeet (runs locally on the Neural Engine), chosen per language.
 - **Smart cleanup** — filler words and false starts removed by Apple Intelligence on-device, with a safety check that never lets the model answer or invent text.
 - **Styles per app** — Casual in Messages and Slack, Formal in Mail, exactly-what-you-said in terminals and code editors. Spoken lists become numbered lists, emails get their greeting and sign-off on their own lines, and numbers become digits ("three thirty" → 3:30).
-- **Voice commands** — "new line", "new paragraph" and "scratch that", in every language.
+- **Voice commands** — "new line", "new paragraph", "scratch that" (removes everything before it), "delete last sentence" or "undo that", and punctuation said aloud ("comma", "question mark", "full stop"…), in every language.
 - **Edit by voice** — select text, hold **fn+⌃**, say "make this more formal" or "translate to Swedish", and the selection is rewritten in place (⌘Z undoes it).
 - **Write with nothing selected** — hold fn+⌃ with the cursor in a text field and say what to write ("reply that I'll be there at three"). Wiska uses the text around the cursor (read on your Mac, never stored) as context.
 - **Saved commands** — name instructions you use often ("formal", "fix", "shorter", "bullets" ship by default) and start a command with the name. Settings → Commands.

@@ -15,6 +15,9 @@ public enum VoiceCommands {
             .last?.upperBound {
             result = String(result[cut...])
         }
+        result = deleteSentences(rules.deleteSentence, in: result,
+                                 blockedAfter: rules.determiners.union(rules.infinitiveMarkers))
+        result = punctuate(result, marks: rules.spokenMarks, determiners: rules.determiners)
         result = replace(rules.newParagraph, in: result, with: "\n\n", blockedAfter: rules.determiners)
         result = replace(rules.newLine, in: result, with: "\n", blockedAfter: rules.determiners)
         // Trim spaces only: a trailing "\n" from a final "new line" is intentional.
@@ -47,6 +50,47 @@ public enum VoiceCommands {
             if !afterSentenceEnd, let previousWord, blocked.contains(previousWord) { return nil }
             return range
         }
+    }
+
+    /// "I like cats. I hate dogs. Delete last sentence." → "I like cats.": each command removes
+    /// itself and the sentence before it, left to right.
+    private static func deleteSentences(_ phrases: [String], in text: String, blockedAfter blocked: Set<String>) -> String {
+        guard !phrases.isEmpty else { return text }
+        var result = text
+        while let command = commandMatches(phrases, in: result, blockedAfter: blocked).first {
+            let before = result[..<command.lowerBound]
+            // The sentence's own closing mark isn't its start: skip it, then find the one before.
+            let body = before.trimmingCharacters(in: .whitespaces.union(CharacterSet(charactersIn: ".!?")))
+            let start = body.lastIndex { ".!?\n".contains($0) }.map { body.index(after: $0) } ?? body.startIndex
+            let kept = String(body[..<start]).trimmingCharacters(in: .whitespaces)
+            let rest = String(result[command.upperBound...]).trimmingCharacters(in: .whitespaces)
+            result = [kept, rest].filter { !$0.isEmpty }.joined(separator: " ")
+        }
+        return result
+    }
+
+    /// "Hello comma how are you question mark" → "Hello, how are you?". Longer phrases first
+    /// ("point-virgule" before "point"); a sentence mark capitalises the next word.
+    private static func punctuate(_ text: String, marks: [SpokenMark], determiners: Set<String>) -> String {
+        var result = text
+        let ordered = marks.flatMap { mark in mark.phrases.map { (phrase: $0, mark: mark) } }
+            .sorted { $0.phrase.count > $1.phrase.count }
+        for (phrase, mark) in ordered {
+            for range in commandMatches([phrase], in: result, blockedAfter: mark.isNoun ? determiners : []).reversed() {
+                let atEnd = range.upperBound == result.endIndex
+                if mark.onlyAtEnd && !atEnd { continue }
+                // A number before it: a decimal comma or point ("drei Komma fünf"), not a mark.
+                let previous = result[..<range.lowerBound].split(whereSeparator: \.isWhitespace).last
+                if let previous, previous.allSatisfy(\.isNumber) { continue }
+                let after = result[range.upperBound...]
+                var next = String(after)
+                if ".?!".contains(mark.mark), let first = next.first, first.isLetter {
+                    next = first.uppercased() + next.dropFirst()
+                }
+                result = String(result[..<range.lowerBound]) + mark.mark + (atEnd ? "" : " ") + next
+            }
+        }
+        return result
     }
 
     private static func replace(_ phrases: [String], in text: String, with replacement: String,

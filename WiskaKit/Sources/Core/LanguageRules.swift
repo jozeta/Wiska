@@ -19,6 +19,10 @@ public struct LanguageRules: Sendable, Equatable {
     public var infinitiveMarkers: Set<String>
     /// Doubled words that are correct ("I had had enough", "die Frau, die die Zeitung liest").
     public var legitimateRepeats: Set<String>
+    /// Punctuation said aloud ("question mark").
+    public var spokenMarks: [SpokenMark] = []
+    /// Removes the sentence said before it ("delete last sentence", "undo that").
+    public var deleteSentence: [String] = []
 
     public init(fillerSounds: Set<String>, softFillers: Set<String>, fillerPhrases: [[String]],
                 questionWords: Set<String>, numberWords: Set<String>,
@@ -56,6 +60,8 @@ public struct LanguageRules: Sendable, Equatable {
             all.determiners.formUnion(rules.determiners)
             all.infinitiveMarkers.formUnion(rules.infinitiveMarkers)
             all.legitimateRepeats.formUnion(rules.legitimateRepeats)
+            all.spokenMarks += rules.spokenMarks
+            all.deleteSentence += rules.deleteSentence
         }
         // A filler sound in one language can be a real word in another (English "um" is
         // Portuguese "a"): when the language is unknown, keep the word.
@@ -72,6 +78,8 @@ extension Language {
     public var rules: LanguageRules {
         var rules = baseRules
         rules.numberWords.formUnion(formatRules.numberExtras)
+        rules.spokenMarks = spokenMarks
+        rules.deleteSentence = deleteSentencePhrases
         return rules
     }
 

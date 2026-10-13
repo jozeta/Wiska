@@ -26,11 +26,15 @@ struct HelpTab: View {
                 ForEach(languages, id: \.self) { language in
                     let rules = language.rules
                     LabeledContent("\(language.flag) \(language.displayName)") {
-                        Text("“\(rules.newLine[0])” · “\(rules.newParagraph[0])” · “\(rules.scratchThat[0])”")
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("“\(rules.newLine[0])” · “\(rules.newParagraph[0])” · “\(rules.scratchThat[0])” · “\(rules.deleteSentence[0])”")
+                            Text(rules.spokenMarks.filter { !$0.onlyAtEnd }.prefix(4).map { "“\($0.phrases[0])” \($0.mark)" }
+                                .joined(separator: " · "))
+                        }
+                        .foregroundStyle(.secondary)
                     }
                 }
-                Text("New line, new paragraph, and remove what you just said.")
+                Text("New line, new paragraph, remove everything you said before, remove the last sentence (“\(Language.english.rules.deleteSentence[1])” too) — and punctuation said aloud: comma, full stop, question mark, exclamation mark, colon, semicolon.")
                     .font(.caption).foregroundStyle(.secondary)
                 tip("Lists", "Pause between items: “first eggs, second milk, third bread” becomes a numbered list.")
             }
