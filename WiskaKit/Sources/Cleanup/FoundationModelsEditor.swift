@@ -63,11 +63,9 @@ public final class FoundationModelsEditor: TextEditor {
         }
         let words = (instruction + " " + (context ?? "")).split(whereSeparator: \.isWhitespace).count
         let respond = respond
-        let output = try await answer("write", words: words) {
-            try await respond(EditPrompts.writeInstructions,
-                              EditPrompts.writePrompt(instruction: instruction, context: context))
+        return try await EditPrompts.write(instruction: instruction, context: context) { system, prompt in
+            try await answer("write", words: words) { try await respond(system, prompt) }
         }
-        return try EditPrompts.cleanWritten(output, context: context)
     }
 
     /// The model's answer within the time limit, logged by size and time (never by content).

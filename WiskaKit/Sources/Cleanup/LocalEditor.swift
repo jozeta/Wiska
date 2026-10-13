@@ -32,10 +32,9 @@ public final class LocalEditor: TextEditor {
 
     public func write(instruction: String, context: String?, language: Language?) async throws -> String {
         let words = (instruction + " " + (context ?? "")).split(whereSeparator: \.isWhitespace).count
-        let output = try await answer("write", system: EditPrompts.writeInstructions,
-                                      prompt: EditPrompts.writePrompt(instruction: instruction, context: context),
-                                      words: words, maxTokens: 512)
-        return try EditPrompts.cleanWritten(output, context: context)
+        return try await EditPrompts.write(instruction: instruction, context: context) { system, prompt in
+            try await answer("write", system: system, prompt: prompt, words: words, maxTokens: 512)
+        }
     }
 
     private func answer(_ task: String, system: String, prompt: String, words: Int, maxTokens: Int) async throws -> String {

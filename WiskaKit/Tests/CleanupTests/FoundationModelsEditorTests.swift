@@ -179,6 +179,28 @@ struct FoundationModelsEditorTests {
         #expect(try await marker.write(instruction: "reply", context: nil, language: nil) == "See you.")
     }
 
+    /// A first answer that only repeats the surrounding text gets one firmer retry.
+    @Test func aCopiedAnswerIsRetriedOnceWithAFirmerInstruction() async throws {
+        let context = "The meeting moves to Thursday because the room is booked on Wednesday afternoon.\n[cursor]"
+        let copy = "The meeting moves to Thursday, because the room is booked on Wednesday afternoon."
+        var systems: [String] = []
+        let editor = FoundationModelsEditor(isAvailable: { true }, respond: { system, _ in
+            systems.append(system)
+            return systems.count == 1 ? copy : "I'll update the invitation tonight."
+        }, timeout: { _ in .seconds(5) })
+        #expect(try await editor.write(instruction: "reply", context: context, language: nil)
+                == "I'll update the invitation tonight.")
+        #expect(systems == [EditPrompts.writeInstructions, EditPrompts.retryWriteInstructions])
+
+        var calls = 0
+        let stubborn = FoundationModelsEditor(isAvailable: { true }, respond: { _, _ in calls += 1; return copy },
+                                              timeout: { _ in .seconds(5) })
+        await #expect(throws: EditError.failed) {
+            try await stubborn.write(instruction: "reply", context: context, language: nil)
+        }
+        #expect(calls == 2)
+    }
+
     /// The share that's logged when a write is rejected for copying.
     @Test func copiedShareMeasuresTheCopy() throws {
         let context = "The meeting moves to Thursday because the room is booked on Wednesday afternoon.\n[cursor]"

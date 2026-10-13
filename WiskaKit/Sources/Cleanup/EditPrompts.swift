@@ -51,6 +51,26 @@ enum EditPrompts {
     Match its language and tone. Output only the text to insert.
     """
 
+    /// The second try, after an answer that only repeated the surrounding text.
+    static let retryWriteInstructions = writeInstructions + """
+     Your previous answer repeated the surrounding text. Write only the new text the instruction asks for: \
+    do not include, repeat, rewrite or summarise any of the surrounding text.
+    """
+
+    /// Writes at the cursor with `ask` (system, prompt → answer). An answer that can't be pasted
+    /// (it repeats the surrounding text, or nothing is left of it) gets one more try with a firmer
+    /// instruction before the write fails.
+    static func write(instruction: String, context: String?,
+                      ask: (_ system: String, _ prompt: String) async throws -> String) async throws -> String {
+        let prompt = writePrompt(instruction: instruction, context: context)
+        do {
+            return try cleanWritten(try await ask(writeInstructions, prompt), context: context)
+        } catch EditError.failed {
+            log.notice("write: asking once more with a firmer instruction")
+            return try cleanWritten(try await ask(retryWriteInstructions, prompt), context: context)
+        }
+    }
+
     static func writePrompt(instruction: String, context: String?) -> String {
         "Instruction: \(instruction)\n\nSurrounding text:\n" + (context.map { "<<<\n\($0)\n>>>" } ?? "(none)")
     }
