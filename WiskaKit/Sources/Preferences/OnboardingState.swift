@@ -1,6 +1,8 @@
 /// The first-run checklist.
 public enum OnboardingStep: String, CaseIterable, Identifiable, Sendable {
-    case microphone, inputMonitoring, accessibility, fnKey, tryIt
+    // Accessibility before Input Monitoring: macOS judges the request to listen to the fn key
+    // through Accessibility, and refuses it (without a prompt) while Accessibility is off.
+    case microphone, accessibility, inputMonitoring, fnKey, tryIt
 
     public var id: String { rawValue }
 

@@ -119,7 +119,7 @@ public final class DictationController {
             currentTask = Task { await finishDictation() }
         case .cancel:
             guard state == .listening else { return }
-            Self.log.notice("cancelled after \(self.audioSeconds) s of audio")
+            Self.log.notice("cancelled after \(self.audioSeconds, privacy: .public) s of audio")
             cancelListening()
             isCommand = false
         case .lockHandsFree:
@@ -228,17 +228,17 @@ public final class DictationController {
             state = .transcribing
             transcript = try await session.finish()
         } catch {
-            Self.log.error("transcription failed after \(self.audioSeconds) s of audio: \(Log.summary(error), privacy: .public)")
+            Self.log.error("transcription failed after \(self.audioSeconds, privacy: .public) s of audio: \(Log.summary(error), privacy: .public)")
             fail(.transcription(String(describing: error)))
             return
         }
         guard !transcript.text.isEmpty else {
-            Self.log.notice("no words heard in \(self.audioSeconds) s of audio")
+            Self.log.notice("no words heard in \(self.audioSeconds, privacy: .public) s of audio")
             fail(.noSpeech)
             return
         }
         transcriptionTime = ContinuousClock.now - transcribeStart
-        Self.log.notice("transcribed \(Log.words(transcript.text)) words (\(self.audioSeconds) s of audio) by \((transcript.engine ?? self.activeTranscriber?.engine)?.rawValue ?? "?", privacy: .public), \(transcript.language?.rawValue ?? "language unknown", privacy: .public), in \(Log.ms(self.transcriptionTime), privacy: .public)")
+        Self.log.notice("transcribed \(Log.words(transcript.text)) words (\(self.audioSeconds, privacy: .public) s of audio) by \((transcript.engine ?? self.activeTranscriber?.engine)?.rawValue ?? "?", privacy: .public), \(transcript.language?.rawValue ?? "language unknown", privacy: .public), in \(Log.ms(self.transcriptionTime), privacy: .public)")
         Self.log.debug("transcript: \(transcript.text, privacy: .private)")
         if isCommand {
             await runCommand(transcript)

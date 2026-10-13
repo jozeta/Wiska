@@ -5,8 +5,9 @@ import CoreGraphics
 
 enum Permission: CaseIterable, Identifiable {
     case microphone
-    case inputMonitoring
+    // Before Input Monitoring: macOS judges that request through Accessibility.
     case accessibility
+    case inputMonitoring
 
     var id: Self { self }
 
