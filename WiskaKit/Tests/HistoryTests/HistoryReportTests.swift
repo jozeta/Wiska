@@ -27,6 +27,39 @@ struct HistoryReportTests {
         #expect(result.timeSaved == 40.0 / 40 * 60 - 15)
     }
 
+    func timed(_ engine: SpeechEngine, latency: TimeInterval, transcription: TimeInterval, cleanup: TimeInterval,
+               pasted: Bool = true) -> DictationRecord {
+        DictationRecord(date: Self.now, appBundleID: nil, language: .english, engine: engine, rawText: "a b",
+                        finalText: "a b", pasted: pasted, latency: latency, transcriptionTime: transcription,
+                        cleanupTime: cleanup)
+    }
+
+    /// Speed: medians per engine over measured, pasted dictations; the busiest engine first.
+    @Test func speedIsTheMedianPerEngine() {
+        let result = report([
+            timed(.parakeet, latency: 0.5, transcription: 0.2, cleanup: 0.1),
+            timed(.parakeet, latency: 0.9, transcription: 0.4, cleanup: 0.3),
+            timed(.parakeet, latency: 3.0, transcription: 2.0, cleanup: 0.5),
+            timed(.apple, latency: 1.2, transcription: 0.6, cleanup: 0.4),
+            timed(.apple, latency: 0, transcription: 0, cleanup: 0),            // before 1.2: not measured
+            timed(.apple, latency: 9, transcription: 9, cleanup: 0, pasted: false),
+        ])
+        #expect(result.speed.map(\.engine) == [.parakeet, .apple])
+        let parakeet = result.speed[0]
+        #expect(parakeet.dictations == 3)
+        #expect(parakeet.total == 0.9)
+        #expect(parakeet.transcription == 0.4)
+        #expect(parakeet.cleanup == 0.3)
+        #expect(result.speed[1].dictations == 1)
+        #expect(result.speed[1].total == 1.2)
+        #expect(report([record(3)]).speed.isEmpty)
+    }
+
+    @Test func medianOfAnEvenCountIsTheMiddlePair() {
+        #expect(HistoryReport.median([1, 4, 2, 3]) == 2.5)
+        #expect(HistoryReport.median([]) == 0)
+    }
+
     @Test func emptyDaysAreZero() {
         let result = report([record(5, daysAgo: 2)])
         #expect(result.buckets.count == 7)

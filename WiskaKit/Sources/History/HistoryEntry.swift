@@ -12,6 +12,10 @@ final class HistoryEntry {
     var finalText: String
     var pasted: Bool
     var duration: Double = 0
+    // Added in 1.2: older entries read 0 (not measured).
+    var latency: Double = 0
+    var transcriptionTime: Double = 0
+    var cleanupTime: Double = 0
 
     init(_ record: DictationRecord) {
         date = record.date
@@ -22,12 +26,16 @@ final class HistoryEntry {
         finalText = record.finalText
         pasted = record.pasted
         duration = record.duration
+        latency = record.latency
+        transcriptionTime = record.transcriptionTime
+        cleanupTime = record.cleanupTime
     }
 
     var record: DictationRecord {
         DictationRecord(date: date, appBundleID: appBundleID,
                         language: languageRaw.flatMap(Language.init(rawValue:)),
                         engine: SpeechEngine(rawValue: engineRaw) ?? .apple,
-                        rawText: rawText, finalText: finalText, pasted: pasted, duration: duration)
+                        rawText: rawText, finalText: finalText, pasted: pasted, duration: duration,
+                        latency: latency, transcriptionTime: transcriptionTime, cleanupTime: cleanupTime)
     }
 }

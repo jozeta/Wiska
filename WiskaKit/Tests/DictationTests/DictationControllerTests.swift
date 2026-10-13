@@ -421,6 +421,20 @@ struct DictationControllerTests {
         #expect(records.value.first?.duration == 1.5)
     }
 
+    /// History's Speed stats: each step's time, and release → paste covering them all.
+    @Test func recordCarriesTheTimings() async throws {
+        let controller = makeController()
+        let records = recording(controller)
+        controller.handle(en)
+        controller.handle(.finish)
+        await controller.currentTask?.value
+        let record = try #require(records.value.first)
+        #expect(record.latency > 0)
+        #expect(record.transcriptionTime > 0)
+        #expect(record.cleanupTime > 0)
+        #expect(record.latency >= record.transcriptionTime + record.cleanupTime)
+    }
+
     // MARK: Hands-free
 
     @Test func lockOutsideListeningIsIgnored() {

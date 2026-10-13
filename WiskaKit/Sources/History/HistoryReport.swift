@@ -22,6 +22,16 @@ public struct HistoryReport: Equatable, Sendable {
         }
     }
 
+    /// How fast one speech engine has been, as medians in seconds (typical, not thrown by one slow load).
+    public struct EngineSpeed: Equatable, Sendable {
+        public let engine: SpeechEngine
+        public let dictations: Int
+        /// Release of fn → text pasted.
+        public let total: TimeInterval
+        public let transcription: TimeInterval
+        public let cleanup: TimeInterval
+    }
+
     public static let maxApps = 5
     /// Longer spans get one bar per week.
     public static let weeklyAfterDays = 60
@@ -34,6 +44,8 @@ public struct HistoryReport: Equatable, Sendable {
     public var bucketIsWeek = false
     public var topApps: [AppWords] = []
     public var shares: [Language: Double] = [:]
+    /// Engines used in the period, most dictations first; only dictations whose speed was measured (1.2 and later).
+    public var speed: [EngineSpeed] = []
 
     public static func compute(_ records: [DictationRecord], period: HistoryPeriod, now: Date,
                                calendar: Calendar = .current) -> HistoryReport {
@@ -83,6 +95,21 @@ public struct HistoryReport: Equatable, Sendable {
         for record in included { if let language = record.language { perLanguage[language, default: 0] += count(record) } }
         let known = perLanguage.values.reduce(0, +)
         if known > 0 { report.shares = perLanguage.filter { $0.value > 0 }.mapValues { Double($0) / Double(known) } }
+
+        let measured = Dictionary(grouping: included.filter { $0.latency > 0 }, by: \.engine)
+        report.speed = measured.map { engine, records in
+            EngineSpeed(engine: engine, dictations: records.count, total: median(records.map(\.latency)),
+                        transcription: median(records.map(\.transcriptionTime)), cleanup: median(records.map(\.cleanupTime)))
+        }
+        .sorted { $0.dictations != $1.dictations ? $0.dictations > $1.dictations : $0.engine.rawValue < $1.engine.rawValue }
         return report
+    }
+
+    /// The middle value (the mean of the middle two for an even count); 0 when empty.
+    static func median(_ values: [TimeInterval]) -> TimeInterval {
+        let sorted = values.sorted()
+        guard !sorted.isEmpty else { return 0 }
+        let middle = sorted.count / 2
+        return sorted.count.isMultiple(of: 2) ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
     }
 }

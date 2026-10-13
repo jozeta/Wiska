@@ -62,6 +62,9 @@ public final class DictationController {
     private var resetTask: Task<Void, Never>?
     private var silence: SilenceWatch?
     private var previewTask: Task<Void, Never>?
+    /// This dictation's measured steps, for history's Speed stats.
+    private var transcriptionTime: Duration = .zero
+    private var cleanupTime: Duration = .zero
 
     public init(
         audio: any AudioSource,
@@ -205,6 +208,8 @@ public final class DictationController {
 
     private func finishDictation() async {
         let releasedAt = ContinuousClock.now
+        transcriptionTime = .zero
+        cleanupTime = .zero
         timeoutTask?.cancel()
         // Keep recording briefly: people release fn on the last syllable (minor b).
         if releaseTail > .zero { try? await Task.sleep(for: releaseTail) }
@@ -228,7 +233,8 @@ public final class DictationController {
             fail(.noSpeech)
             return
         }
-        Self.log.notice("transcribed \(Log.words(transcript.text)) words (\(self.audioSeconds) s of audio) by \((transcript.engine ?? self.activeTranscriber?.engine)?.rawValue ?? "?", privacy: .public), \(transcript.language?.rawValue ?? "language unknown", privacy: .public), in \(Log.ms(ContinuousClock.now - transcribeStart), privacy: .public)")
+        transcriptionTime = ContinuousClock.now - transcribeStart
+        Self.log.notice("transcribed \(Log.words(transcript.text)) words (\(self.audioSeconds) s of audio) by \((transcript.engine ?? self.activeTranscriber?.engine)?.rawValue ?? "?", privacy: .public), \(transcript.language?.rawValue ?? "language unknown", privacy: .public), in \(Log.ms(self.transcriptionTime), privacy: .public)")
         Self.log.debug("transcript: \(transcript.text, privacy: .private)")
         if isCommand {
             await runCommand(transcript)
@@ -242,7 +248,8 @@ public final class DictationController {
             context.language = transcript.language
             let cleanStart = ContinuousClock.now
             finalText = try await cleaner.clean(transcript.text, context: context)
-            Self.log.notice("cleaned \(Log.words(transcript.text)) → \(Log.words(finalText)) words in \(Log.ms(ContinuousClock.now - cleanStart), privacy: .public)")
+            cleanupTime = ContinuousClock.now - cleanStart
+            Self.log.notice("cleaned \(Log.words(transcript.text)) → \(Log.words(finalText)) words in \(Log.ms(self.cleanupTime), privacy: .public)")
             // Voice commands can remove everything ("scratch that" alone): nothing to paste.
             guard !finalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 Self.log.notice("nothing left to paste after voice commands")
@@ -262,7 +269,7 @@ public final class DictationController {
         }
         let latency = ContinuousClock.now - releasedAt
         lastLatency = latency
-        record(transcript, finalText, pasted: true)   // after measuring: saving isn't latency
+        record(transcript, finalText, pasted: true, latency: latency)   // after measuring: saving isn't latency
         Self.log.notice("pasted; release→inject \(latency.formatted(.units(allowed: [.milliseconds])), privacy: .public)")
         state = .idle
         if currentChoice == .automatic, let language = transcript.language {
@@ -325,12 +332,13 @@ public final class DictationController {
         String(format: "%.1f", Double(capturedSamples) / AudioChunk.sampleRate)
     }
 
-    private func record(_ transcript: Transcript, _ finalText: String, pasted: Bool) {
+    private func record(_ transcript: Transcript, _ finalText: String, pasted: Bool, latency: Duration = .zero) {
         onDictationFinished?(DictationRecord(
             date: Date(), appBundleID: context.appBundleID, language: transcript.language,
             engine: transcript.engine ?? activeTranscriber?.engine ?? .apple, rawText: transcript.text,
             finalText: finalText, pasted: pasted,
-            duration: Double(capturedSamples) / AudioChunk.sampleRate))
+            duration: Double(capturedSamples) / AudioChunk.sampleRate,
+            latency: latency.seconds, transcriptionTime: transcriptionTime.seconds, cleanupTime: cleanupTime.seconds))
     }
 
     private func cancelListening(endState: State = .idle) {

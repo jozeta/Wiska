@@ -263,6 +263,9 @@ private struct StatsPane: View {
                         .frame(height: 160)
                     }
                     section("Top apps") { TopApps(apps: report.topApps, highlight: highlight) }
+                    if !report.speed.isEmpty {
+                        section("Speed") { SpeedChart(speed: report.speed, highlight: highlight) }
+                    }
                     let split = StatsFormatter.languagePercents(DictationStats(words: report.words,
                                                                                timeSaved: report.timeSaved,
                                                                                shares: report.shares))
@@ -317,6 +320,52 @@ private struct StatsPane: View {
             Text(title).font(.headline)
             content()
         }
+    }
+}
+
+/// From releasing fn to the text appearing, per speech engine: typical (median) times, split
+/// into turning the audio into words, cleaning them up, and the rest (the release tail and pasting).
+private struct SpeedChart: View {
+    let speed: [HistoryReport.EngineSpeed]
+    let highlight: Highlight
+
+    private struct Step: Identifiable {
+        let engine: String
+        let name: String
+        let seconds: Double
+        var id: String { engine + name }
+    }
+
+    private var steps: [Step] {
+        speed.flatMap { entry in
+            let name = entry.engine.displayName
+            let rest = max(0, entry.total - entry.transcription - entry.cleanup)
+            return [Step(engine: name, name: "Transcription", seconds: entry.transcription),
+                    Step(engine: name, name: "Cleanup", seconds: entry.cleanup),
+                    Step(engine: name, name: "Paste", seconds: rest)]
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Chart(steps) { step in
+                BarMark(x: .value("Seconds", step.seconds), y: .value("Engine", step.engine))
+                    .foregroundStyle(by: .value("Step", step.name))
+            }
+            .chartForegroundStyleScale(["Transcription": AuroraTheme.color(highlight, at: 0),
+                                        "Cleanup": AuroraTheme.color(highlight, at: 0.5),
+                                        "Paste": AuroraTheme.color(highlight, at: 1)])
+            .chartXAxisLabel("seconds, release → text")
+            .frame(height: CGFloat(speed.count) * 34 + 50)
+            ForEach(speed, id: \.engine) { entry in
+                Text("\(entry.engine.displayName): typically \(Self.format(entry.total)) from release to text, over \(entry.dictations) \(entry.dictations == 1 ? "dictation" : "dictations")")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    static func format(_ seconds: TimeInterval) -> String {
+        seconds < 1 ? "\(Int((seconds * 1000).rounded())) ms" : String(format: "%.1f s", seconds)
     }
 }
 
