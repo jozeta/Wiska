@@ -69,14 +69,12 @@ enum Permission: CaseIterable, Identifiable {
         case .microphone:
             if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined { request() } else { openSettings() }
         case .inputMonitoring, .accessibility:
-            // macOS shows these prompts only once per app and can't tell us whether it did,
-            // so remember our own first request.
-            if wasPrompted {
-                openSettings()
-            } else {
-                markPrompted()
-                request()
-            }
+            // Always ask: asking is what puts Wiska in System Settings' list, and after the
+            // permission was reset (or Wiska re-signed) it must ask again to be listed. macOS
+            // shows its prompt only once per app, so after that, open the list as well.
+            let asked = wasPrompted
+            request()
+            if asked { openSettings() } else { markPrompted() }
         }
     }
 
