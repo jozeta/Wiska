@@ -49,6 +49,24 @@ struct ModelRuntimeTests {
         try await Task.sleep(for: .milliseconds(300))
         #expect(await tracker.runs == 0)
     }
+
+    /// Settings → Models → "Free memory after": a new limit applies to the model in memory now.
+    @Test func aShorterIdleLimitLetsTheModelGo() async throws {
+        let runtime = ModelRuntime<Int>(idleLimit: .seconds(60)) { _ in 1 }
+        _ = try await runtime.load(from: directory)
+        await runtime.setIdleLimit(.milliseconds(50))
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(await runtime.isLoaded == false)
+    }
+
+    /// "Never": the model stays until Wiska quits.
+    @Test func noIdleLimitKeepsTheModel() async throws {
+        let runtime = ModelRuntime<Int>(idleLimit: .milliseconds(50)) { _ in 1 }
+        await runtime.setIdleLimit(nil)
+        _ = try await runtime.load(from: directory)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(await runtime.isLoaded)
+    }
 }
 
 /// Cancel at the moment a download starts: no crash ("task created in an invalidated session").

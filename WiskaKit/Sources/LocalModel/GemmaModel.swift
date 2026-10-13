@@ -20,7 +20,7 @@ public final class GemmaModel: LocalGenerator {
                 runtime: GemmaRuntime = GemmaRuntime(release: MLXLoadedModel.releaseMemory, loader: MLXLoadedModel.load)) {
         self.store = store
         self.runtime = runtime
-        // The runtime lets the model go after 30 idle minutes: "Loaded" must follow, and the next
+        // The runtime lets the model go after its idle limit (Settings → Models): "Loaded" must follow, and the next
         // fn press must load it again.
         let unloaded: @MainActor @Sendable () -> Void = { [weak self] in self?.isLoaded = false }
         Task { await runtime.setOnUnload(unloaded) }
@@ -61,6 +61,12 @@ public final class GemmaModel: LocalGenerator {
     }
 
     /// Forgets a load error and tries again, without downloading again (Settings → Try again).
+    /// Settings → Models → "Free memory after" (nil: keep until Wiska quits).
+    public func setIdleLimit(_ limit: Duration?) {
+        let runtime = runtime
+        Task { await runtime.setIdleLimit(limit) }
+    }
+
     public func retryLoading() {
         loadError = nil
         prepare()

@@ -27,6 +27,7 @@ public final class SettingsStore {
         static let fixGrammar = "fixGrammar"
         static let useKBWhisper = "useKBWhisper"
         static let modelUpdateInterval = "modelUpdateInterval"
+        static let modelIdleMinutes = "modelIdleMinutes"
         static let lastModelUpdateCheck = "lastModelUpdateCheck"
         static let lastGemmaUpdateCheck = "lastGemmaUpdateCheck"
         static let lastKBWhisperUpdateCheck = "lastKBWhisperUpdateCheck"
@@ -212,6 +213,15 @@ public final class SettingsStore {
     public var useKBWhisper: Bool { didSet { defaults.set(useKBWhisper, forKey: Key.useKBWhisper) } }
 
     public static let modelUpdateIntervals = [0, 1, 7, 30]
+    public static let modelIdleChoices = [5, 10, 30, 60, 0]
+    /// Minutes a downloaded model (Gemma, KB-Whisper) stays in memory unused; 0 = until Wiska quits.
+    public var modelIdleMinutes: Int {
+        didSet { defaults.set(modelIdleMinutes, forKey: Key.modelIdleMinutes) }
+    }
+    /// The idle limit for the model runtimes; nil keeps them until Wiska quits.
+    public var modelIdleLimit: Duration? {
+        modelIdleMinutes > 0 ? .seconds(modelIdleMinutes * 60) : nil
+    }
     /// Days between automatic checks for a newer Parakeet model; 0 = never.
     public var modelUpdateInterval: Int {
         didSet { defaults.set(modelUpdateInterval, forKey: Key.modelUpdateInterval) }
@@ -307,6 +317,8 @@ public final class SettingsStore {
         fixGrammar = defaults.object(forKey: Key.fixGrammar) as? Bool ?? true
         useKBWhisper = defaults.object(forKey: Key.useKBWhisper) as? Bool ?? false
         modelUpdateInterval = defaults.object(forKey: Key.modelUpdateInterval) as? Int ?? 7
+        let idle = defaults.object(forKey: Key.modelIdleMinutes) as? Int ?? 10
+        modelIdleMinutes = Self.modelIdleChoices.contains(idle) ? idle : 10
         lastModelUpdateCheck = defaults.object(forKey: Key.lastModelUpdateCheck) as? Date
         lastGemmaUpdateCheck = defaults.object(forKey: Key.lastGemmaUpdateCheck) as? Date
         lastKBWhisperUpdateCheck = defaults.object(forKey: Key.lastKBWhisperUpdateCheck) as? Date

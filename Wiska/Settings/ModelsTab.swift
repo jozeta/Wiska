@@ -24,6 +24,17 @@ struct ModelsTab: View {
             Section("Cleanup and commands") {
                 GemmaModelCard(model: model)
             }
+            Section("Memory") {
+                Picker("Free a model's memory after", selection: Binding(
+                    get: { settings.modelIdleMinutes },
+                    set: { settings.modelIdleMinutes = $0; model.applyModelMemory() })) {
+                    ForEach(SettingsStore.modelIdleChoices, id: \.self) { minutes in
+                        Text(Self.idleLabel(minutes)).tag(minutes)
+                    }
+                }
+                Text("Gemma (about 5 GB) and KB-Whisper (about 1.5 GB) stay in memory while you use them and are let go after this long unused. Loading one again takes a few seconds and starts when you press fn.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("Updates") {
                 Picker("Check for model updates", selection: $settings.modelUpdateInterval) {
                     ForEach(SettingsStore.modelUpdateIntervals, id: \.self) { days in
@@ -35,6 +46,14 @@ struct ModelsTab: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    static func idleLabel(_ minutes: Int) -> String {
+        switch minutes {
+        case 0: "Never (until Wiska quits)"
+        case 60: "1 hour unused"
+        default: "\(minutes) minutes unused"
+        }
     }
 
     static func intervalLabel(_ days: Int) -> String {

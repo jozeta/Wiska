@@ -11,7 +11,8 @@ public actor ModelRuntime<Model: Sendable> {
     public typealias Loader = @Sendable (URL) async throws -> Model
 
     private let loader: Loader
-    private let idleLimit: Duration
+    /// nil: kept until Wiska quits.
+    private var idleLimit: Duration?
     /// Frees what the model library keeps after the model is dropped (MLX's buffer cache for Gemma).
     private let release: @Sendable () -> Void
     private var onUnload: (@MainActor @Sendable () -> Void)?
@@ -21,7 +22,7 @@ public actor ModelRuntime<Model: Sendable> {
     /// Bumped by every unload: a load that finishes under an older generation is thrown away.
     private var generation = 0
 
-    public init(idleLimit: Duration = .seconds(1_800), release: @escaping @Sendable () -> Void = {},
+    public init(idleLimit: Duration? = .seconds(1_800), release: @escaping @Sendable () -> Void = {},
                 loader: @escaping Loader) {
         self.idleLimit = idleLimit
         self.release = release
@@ -34,6 +35,14 @@ public actor ModelRuntime<Model: Sendable> {
     }
 
     public var isLoaded: Bool { model != nil }
+
+    /// How long the model may sit unused before it's let go (nil: never). Applies to the model
+    /// in memory now, counting from this moment.
+    public func setIdleLimit(_ limit: Duration?) {
+        guard limit != idleLimit else { return }
+        idleLimit = limit
+        if model != nil { scheduleUnload() }
+    }
 
     public func load(from directory: URL) async throws -> Model {
         if let model { return model }
@@ -110,7 +119,8 @@ public actor ModelRuntime<Model: Sendable> {
 
     private func scheduleUnload() {
         idleTask?.cancel()
-        let limit = idleLimit
+        idleTask = nil
+        guard let limit = idleLimit else { return }
         idleTask = Task { [weak self] in
             try? await Task.sleep(for: limit)
             guard !Task.isCancelled else { return }

@@ -221,6 +221,7 @@ final class AppModel {
 
     func start() {
         logLaunch()
+        applyModelMemory()
         refreshPermissions()
         syncAppleLanguages()   // also frees slots leaked by an earlier run
         warmUpParakeetIfSelected()
@@ -258,6 +259,12 @@ final class AppModel {
 
     var modelUpdateAvailable: Bool {
         if case .updateAvailable = modelUpdates.state { true } else { false }
+    }
+
+    /// Settings → Models → "Free memory after": how long Gemma and KB-Whisper stay loaded unused.
+    func applyModelMemory() {
+        gemma.setIdleLimit(settings.modelIdleLimit)
+        kbWhisper.setIdleLimit(settings.modelIdleLimit)
     }
 
     /// One line per launch with the version and the settings that shape a dictation, so a log

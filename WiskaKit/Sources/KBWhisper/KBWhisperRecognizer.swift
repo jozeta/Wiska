@@ -27,6 +27,12 @@ public final class KBWhisperRecognizer: BatchRecognizer {
 
     public var isReady: Bool { store.isInstalled && loadError == nil }
 
+    /// Settings → Models → "Free memory after" (nil: keep until Wiska quits).
+    public func setIdleLimit(_ limit: Duration?) {
+        let runtime = runtime
+        Task { await runtime.setIdleLimit(limit) }
+    }
+
     public func prepare() {
         guard isReady else { return }
         let runtime = runtime

@@ -269,6 +269,18 @@ final class SettingsStoreTests {
         #expect(SettingsStore(defaults: defaults).outputMode == .clipboard)
     }
 
+    @Test func modelIdleMinutesDefaultsToTenAndPersists() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.modelIdleMinutes == 10)
+        #expect(store.modelIdleLimit == .seconds(600))
+        store.modelIdleMinutes = 0
+        let reloaded = SettingsStore(defaults: defaults)
+        #expect(reloaded.modelIdleMinutes == 0)
+        #expect(reloaded.modelIdleLimit == nil)
+        defaults.set(7, forKey: "modelIdleMinutes")
+        #expect(SettingsStore(defaults: defaults).modelIdleMinutes == 10)
+    }
+
     @Test func modelUpdateSettings() {
         let store = SettingsStore(defaults: defaults)
         #expect(store.modelUpdateInterval == 7)
