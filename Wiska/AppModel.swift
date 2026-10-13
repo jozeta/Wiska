@@ -313,12 +313,36 @@ final class AppModel {
     /// One line per launch with the version and the settings that shape a dictation, so a log
     /// excerpt says what the app was set up to do.
     private func logLaunch() {
+        Self.log.notice("\(self.versionLine, privacy: .public)")
+        Self.log.notice("\(self.settingsLine, privacy: .public)")
+    }
+
+    private var versionLine: String {
         let info = Bundle.main.infoDictionary
         let version = "\(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))"
-        let os = ProcessInfo.processInfo.operatingSystemVersionString
+        return "Wiska \(version) on macOS \(ProcessInfo.processInfo.operatingSystemVersionString)"
+    }
+
+    private var settingsLine: String {
         let languages = settings.enabledLanguages.map(\.rawValue).joined(separator: ",")
-        Self.log.notice("Wiska \(version, privacy: .public) on macOS \(os, privacy: .public)")
-        Self.log.notice("settings: engine \(self.settings.engine.rawValue, privacy: .public) (\(String(describing: self.settings.engineMode), privacy: .public)), languages \(languages, privacy: .public), mode \(self.settings.languageMode.rawValue, privacy: .public), model \(String(describing: self.settings.languageModel), privacy: .public), cleanup \(String(describing: self.settings.cleanupLevel), privacy: .public), grammar \(self.settings.fixGrammar), KB-Whisper \(self.settings.useKBWhisper), output \(String(describing: self.settings.outputMode), privacy: .public), theme \(self.settings.dictationTheme.rawValue, privacy: .public)")
+        return "settings: engine \(settings.engine.rawValue) (\(settings.engineMode)), languages \(languages), mode \(settings.languageMode.rawValue), model \(settings.languageModel), cleanup \(settings.cleanupLevel), grammar \(settings.fixGrammar), KB-Whisper \(settings.useKBWhisper), output \(settings.outputMode), theme \(settings.dictationTheme.rawValue), model memory \(settings.modelIdleMinutes) min"
+    }
+
+    /// Settings → Help → Copy diagnostics: the version, the settings now, and Wiska's log since it
+    /// started, on the clipboard. False when the log couldn't be read.
+    func copyDiagnostics() async -> Bool {
+        let missing = missingPermissions.isEmpty ? "none" : missingPermissions.map { "\($0)" }.joined(separator: ", ")
+        let header = [versionLine, settingsLine, "missing permissions: \(missing)"].joined(separator: "\n")
+        do {
+            let text = try await Task.detached { try Diagnostics.collect(header: header) }.value
+            AXSelectionReader.clipboardWillBeWrittenByWiska(.general)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            return true
+        } catch {
+            Self.log.error("diagnostics: log not readable: \(Log.summary(error), privacy: .public)")
+            return false
+        }
     }
 
     func applyRetention() {

@@ -5,6 +5,9 @@ import SwiftUI
 /// Short instructions and examples, inside Settings.
 struct HelpTab: View {
     let model: AppModel
+    @State private var diagnostics = DiagnosticsState.idle
+
+    enum DiagnosticsState { case idle, collecting, copied, failed }
 
     var body: some View {
         let languages = model.settings.enabledLanguages
@@ -65,6 +68,24 @@ struct HelpTab: View {
                 tip("Nothing is typed", "Check Accessibility in System Settings → Privacy & Security, or switch After dictation to Copy to clipboard only.")
                 tip("No cleanup or editing", "Cleanup and editing need Apple Intelligence (System Settings → Apple Intelligence & Siri) or the Gemma model (download it in Settings → Models, choose it in Cleanup).")
                 tip("Wrong words", "Add names and terms in the Dictionary tab.")
+            }
+            Section("Reporting a problem") {
+                HStack {
+                    Button("Copy diagnostics") {
+                        diagnostics = .collecting
+                        Task { diagnostics = await model.copyDiagnostics() ? .copied : .failed }
+                    }
+                    .disabled(diagnostics == .collecting)
+                    switch diagnostics {
+                    case .idle: EmptyView()
+                    case .collecting: ProgressView().controlSize(.small)
+                    case .copied: Label("Copied — paste it into your report", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    case .failed: Text("Couldn't read the log").foregroundStyle(.red)
+                    }
+                }
+                Text("Puts Wiska's version, your settings and what it logged since it started on the clipboard. It has word counts, timings and error types — never what you said or the text you were working in.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
