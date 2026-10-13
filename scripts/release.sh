@@ -54,7 +54,7 @@ TOOLS=$(dirname $(find build-release/SourcePackages/artifacts -name generate_app
 $TOOLS/generate_appcast --download-url-prefix "https://github.com/jozeta/Wiska/releases/download/v$VERSION/" \
     --link https://github.com/jozeta/Wiska --embed-release-notes $DIST
 grep -q 'sparkle:edSignature' $DIST/appcast.xml || { echo "appcast.xml has no EdDSA signature." >&2; exit 1; }
-grep -q '<description>' $DIST/appcast.xml || { echo "appcast.xml has no release notes." >&2; exit 1; }
+grep -q '<description' $DIST/appcast.xml || { echo "appcast.xml has no release notes." >&2; exit 1; }
 
 SIZE=$(stat -f %z $DIST/Wiska.zip)
 SHA=$(shasum -a 256 $DIST/Wiska.zip | cut -d' ' -f1)
