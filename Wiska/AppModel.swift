@@ -323,6 +323,12 @@ final class AppModel {
         corrections.accept(correction)
     }
 
+    /// The menu bar menu was shown: when a click seems to do nothing, the log tells whether
+    /// Wiska got it at all.
+    func menuOpened() {
+        Self.log.notice("menu opened")
+    }
+
     /// Settings → General → "Paste last dictation": registers the chosen shortcut (or none).
     func applyPasteLastShortcut() {
         let shortcut = settings.pasteLastShortcut

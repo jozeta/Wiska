@@ -8,6 +8,7 @@ struct MenuContent: View {
 
     var body: some View {
         Text(model.statusLine)
+            .onAppear { model.menuOpened() }
         Text(model.languageStatus)
         if let stats = model.statsLine {
             Text(stats)

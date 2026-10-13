@@ -56,8 +56,14 @@ sign $SPARKLE
 find $APP/Contents -type f \( -name '*.dylib' -o -name '*.so' \) -print0 | while IFS= read -r -d '' library; do
     sign "$library"
 done
-sign --preserve-metadata=entitlements,requirements,flags $APP
+# Not the requirements: Xcode wrote them for the development certificate, and an app that doesn't
+# meet its own designated requirement can't be given Accessibility or Input Monitoring.
+sign --preserve-metadata=entitlements,flags $APP
 codesign --verify --deep --strict $APP
+TEAM=$(codesign -dv $APP 2>&1 | awk -F= '/^TeamIdentifier/{print $2}')
+REQUIREMENT=$(codesign -d -r- $APP 2>&1 | sed -n 's/^designated => //p')
+[[ $REQUIREMENT == *"subject.OU] = \"$TEAM\""* ]] || { echo "Designated requirement doesn't name team $TEAM: $REQUIREMENT" >&2; exit 1; }
+codesign --verify --strict -R "=$REQUIREMENT" $APP   # the app meets its own requirement
 
 DIST=build-release/dist
 mkdir -p $DIST
