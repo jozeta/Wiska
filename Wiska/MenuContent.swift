@@ -58,6 +58,9 @@ struct MenuContent: View {
         Button("Setup…") {
             OnboardingWindow.open(openWindow)
         }
+        Button("Transcribe Audio File…") {
+            TranscribeFileWindow.open(openWindow)
+        }
         Button("History…") {
             HistoryWindow.open(openWindow)
         }

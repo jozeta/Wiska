@@ -19,6 +19,9 @@ struct WiskaApp: App {
         Window(HistoryWindow.title, id: HistoryWindow.id) {
             HistoryView(store: model.history, settings: model.settings)
         }
+        Window(TranscribeFileWindow.title, id: TranscribeFileWindow.id) {
+            TranscribeFileView(model: model)
+        }
         Window(OnboardingWindow.title, id: OnboardingWindow.id) {
             OnboardingView(model: model)
         }

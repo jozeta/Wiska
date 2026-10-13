@@ -84,7 +84,7 @@ public enum Language: String, Sendable, CaseIterable, Codable {
 }
 
 /// Which language(s) one dictation should be transcribed in.
-public enum LanguageChoice: Sendable, Equatable {
+public enum LanguageChoice: Sendable, Hashable {
     case fixed(Language)
     case automatic
 }

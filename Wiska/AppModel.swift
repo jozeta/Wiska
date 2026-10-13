@@ -304,6 +304,27 @@ final class AppModel {
         }
     }
 
+    /// Menu → Transcribe Audio File…: the recording in pieces, with the engine a dictation in
+    /// `language` would use. `progress` runs on the main actor, 0…1.
+    func transcribeFile(_ url: URL, language: LanguageChoice,
+                        progress: @escaping @MainActor (Double) -> Void) async throws -> FileTranscription.Result {
+        let samples = try await Task.detached { try AudioFileLoader.samples(from: url) }.value
+        let minutes = Double(samples.count) / AudioChunk.sampleRate / 60
+        Self.log.notice("file: \(String(format: "%.1f", minutes), privacy: .public) min of audio, \(String(describing: language), privacy: .public)")
+        let start = ContinuousClock.now
+        do {
+            let result = try await FileTranscription.run(samples, session: { [weak self] in
+                guard let self else { throw CancellationError() }
+                return try await transcriber(for: language).makeSession(language: language)
+            }, progress: progress)
+            Self.log.notice("file: \(Log.words(result.text)) words in \(Log.ms(ContinuousClock.now - start), privacy: .public)")
+            return result
+        } catch {
+            Self.log.error("file transcription failed: \(Log.summary(error), privacy: .public)")
+            throw error
+        }
+    }
+
     /// Settings → Models → "Free memory after": how long Gemma and KB-Whisper stay loaded unused.
     func applyModelMemory() {
         gemma.setIdleLimit(settings.modelIdleLimit)
