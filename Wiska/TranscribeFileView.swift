@@ -27,6 +27,7 @@ struct TranscribeFileView: View {
         case idle
         case loading
         case transcribing(Double)
+        case cleaningUp(Double)
         case done
         case failed(String)
     }
@@ -38,6 +39,7 @@ struct TranscribeFileView: View {
     @State private var summary = ""
     @State private var task: Task<Void, Never>?
     @State private var dropTargeted = false
+    @AppStorage("transcribeFileCleanUp") private var cleanUp = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -48,6 +50,9 @@ struct TranscribeFileView: View {
                     .foregroundStyle(file == nil ? .secondary : .primary)
                     .lineLimit(1).truncationMode(.middle)
                 Spacer()
+                Toggle("Clean up", isOn: $cleanUp)
+                    .help("Remove fillers and fix punctuation, as for a dictation (words like “new line” stay words)")
+                    .disabled(isBusy)
                 Picker("Language", selection: $language) {
                     Text("Auto-detect").tag(LanguageChoice.automatic)
                     ForEach(model.settings.enabledLanguages, id: \.self) { language in
@@ -101,11 +106,9 @@ struct TranscribeFileView: View {
         case .loading:
             HStack { ProgressView().controlSize(.small); Text("Reading the file…") }
         case .transcribing(let fraction):
-            HStack {
-                ProgressView(value: fraction)
-                Text("\(Int(fraction * 100))%").monospacedDigit().frame(width: 40, alignment: .trailing)
-                Button("Stop") { task?.cancel() }
-            }
+            progressRow("Transcribing", fraction)
+        case .cleaningUp(let fraction):
+            progressRow("Cleaning up", fraction)
         case .done:
             Text(summary).font(.caption).foregroundStyle(.secondary)
         case .failed(let message):
@@ -113,9 +116,18 @@ struct TranscribeFileView: View {
         }
     }
 
+    private func progressRow(_ title: String, _ fraction: Double) -> some View {
+        HStack {
+            Text(title).frame(width: 90, alignment: .leading)
+            ProgressView(value: fraction)
+            Text("\(Int(fraction * 100))%").monospacedDigit().frame(width: 40, alignment: .trailing)
+            Button("Stop") { task?.cancel() }
+        }
+    }
+
     private var isBusy: Bool {
         switch phase {
-        case .loading, .transcribing: true
+        case .loading, .transcribing, .cleaningUp: true
         default: false
         }
     }
@@ -133,11 +145,12 @@ struct TranscribeFileView: View {
         text = ""
         phase = .loading
         let language = language
+        let cleanUp = cleanUp
         task = Task {
             let started = ContinuousClock.now
             do {
-                let result = try await model.transcribeFile(url, language: language) { fraction in
-                    phase = .transcribing(fraction)
+                let result = try await model.transcribeFile(url, language: language, cleanUp: cleanUp) { step, fraction in
+                    phase = step == .transcribing ? .transcribing(fraction) : .cleaningUp(fraction)
                 }
                 text = result.text
                 let seconds = Int((ContinuousClock.now - started).seconds.rounded())

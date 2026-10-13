@@ -46,7 +46,8 @@ struct FileTranscriptionTests {
         let result = try await FileTranscription.run(samples, every: 10, searching: 3,
                                                      session: { CountingSession() },
                                                      progress: { progress.append($0) })
-        let pieces = result.text.split(separator: " ").map { Int($0.dropFirst())! }
+        let pieces = result.text.split(whereSeparator: \.isWhitespace).map { Int($0.dropFirst())! }
+        #expect(result.text.components(separatedBy: "\n\n").count == 3)   // a paragraph per piece
         #expect(pieces.reduce(0, +) == samples.count)
         #expect(pieces.count == 3)
         #expect(result.language == .swedish)
@@ -60,3 +61,40 @@ struct FileTranscriptionTests {
         #expect(result.text.isEmpty)
     }
 }
+
+/// Cleaning a transcript: paragraph by paragraph, in chunks a model can handle.
+@MainActor
+struct FileCleanupTests {
+    @Test func chunksFollowSentencesAndStayShort() {
+        let sentence = "One two three four five six seven eight nine ten."
+        let text = Array(repeating: sentence, count: 20).joined(separator: " ")
+        let chunks = FileTranscription.chunks(text, maxWords: 35)
+        #expect(chunks.allSatisfy { Log.words($0) <= 35 })
+        #expect(chunks.allSatisfy { $0.hasSuffix(".") })
+        #expect(chunks.joined(separator: " ") == text)
+    }
+
+    @Test func aSentenceLongerThanAChunkIsKeptWhole() {
+        let long = Array(repeating: "word", count: 50).joined(separator: " ") + "."
+        #expect(FileTranscription.chunks(long, maxWords: 20) == [long])
+    }
+
+    @Test func cleanUpKeepsParagraphsAndReportsProgress() async throws {
+        var progress: [Double] = []
+        let text = "first part. second part.\n\nthird part."
+        let cleaned = try await FileTranscription.cleanUp(text, maxWords: 2, clean: { $0.uppercased() },
+                                                          progress: { progress.append($0) })
+        #expect(cleaned == "FIRST PART. SECOND PART.\n\nTHIRD PART.")
+        #expect(progress.last == 1)
+    }
+
+    @Test func aChunkThatFailsToCleanIsKeptAsItWas() async throws {
+        let cleaned = try await FileTranscription.cleanUp("keep me. clean me.", maxWords: 2, clean: { chunk in
+            if chunk.hasPrefix("keep") { throw TestFailure() }
+            return chunk.uppercased()
+        }, progress: { _ in })
+        #expect(cleaned == "keep me. CLEAN ME.")
+    }
+}
+
+private struct TestFailure: Error {}

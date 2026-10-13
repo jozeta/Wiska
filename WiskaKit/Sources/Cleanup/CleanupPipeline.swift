@@ -51,7 +51,8 @@ public final class CleanupPipeline: TextCleaner {
         let rules = context.language?.rules ?? LanguageRules.merged(context.enabledLanguages)
         let format = context.language?.formatRules ?? FormatRules.merged(context.enabledLanguages)
         // Snippets first: their text never passes through cleanup (placeholders stand in).
-        let extracted = SnippetExpander.extract(VoiceCommands.apply(text, rules: rules), snippets: snippets())
+        let commanded = context.isRecording ? text : VoiceCommands.apply(text, rules: rules)
+        let extracted = SnippetExpander.extract(commanded, snippets: context.isRecording ? [] : snippets())
         let slots = extracted.slots
         // The dictionary is spelling, not cleanup: it applies at every level.
         let corrected = DictionaryCorrector.apply(extracted.text, dictionary: dictionary, isKnownWord: isKnownWord)
@@ -63,7 +64,9 @@ public final class CleanupPipeline: TextCleaner {
         }
         let style = style(context.category)
         let grammar = grammar()
-        let deadline = ContinuousClock.now + (rewriter.preferredTimeout ?? timeout)
+        // A model's own wish (Gemma: 2.5 s) or this pipeline's limit, whichever is longer: a
+        // dictation gets the model's, a recording's paragraph the file pipeline's minute.
+        let deadline = ContinuousClock.now + max(rewriter.preferredTimeout ?? timeout, timeout)
         var lines: [FormattedLine] = []
         for segment in corrected.components(separatedBy: "\n") {
             if SnippetExpander.isPlaceholderLine(segment) {
@@ -73,13 +76,13 @@ public final class CleanupPipeline: TextCleaner {
             }
             let cleaned = await cleanSegment(segment, level: level, dictionary: dictionary, rules: rules,
                                              language: context.language, style: style, grammar: grammar, deadline: deadline)
-            if let list = ListFormatter.format(cleaned, rules: format) {
+            if !context.isRecording, let list = ListFormatter.format(cleaned, rules: format) {
                 lines += list.map { FormattedLine(text: $0, isPlain: false) }
             } else {
                 lines.append(FormattedLine(text: cleaned, isPlain: true))
             }
         }
-        if context.category == .email { lines = EmailLayout.format(lines, rules: format) }
+        if context.category == .email && !context.isRecording { lines = EmailLayout.format(lines, rules: format) }
         let finished = lines.map { line in
             line.isPlain && !line.text.isEmpty
                 ? StyleFinisher.finish(line.text, style: style, dictionary: dictionary) : line.text

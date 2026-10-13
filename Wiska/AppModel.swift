@@ -45,6 +45,9 @@ final class AppModel {
     @ObservationIgnored private var appleEditor: FoundationModelsEditor!
     @ObservationIgnored private var localRewriter: LocalRewriter!
     @ObservationIgnored private var localEditor: LocalEditor!
+    /// Cleans transcribed recordings: the same models and dictionary as dictation, a minute per
+    /// paragraph instead of a second, and Light when cleanup is set to Off (the user asked for it).
+    @ObservationIgnored private var fileCleaner: CleanupPipeline!
     private(set) var missingPermissions: [Permission] = []
     private(set) var dictationState: DictationController.State = .idle
 
@@ -147,6 +150,12 @@ final class AppModel {
             isSecureInput: { IsSecureEventInputEnabled() }
         )
         self.cleanupRewriter = cleanupRewriter
+        fileCleaner = CleanupPipeline(level: { settings.cleanupLevel == .off ? .light : settings.cleanupLevel },
+                                      rewriter: cleanupRewriter,
+                                      dictionary: { dictionaryStore.dictionary },
+                                      isKnownWord: { lexicon.isKnown($0) },
+                                      grammar: { settings.fixGrammar },
+                                      timeout: .seconds(60))
         self.appleEditor = appleEditor
         self.localRewriter = localRewriter
         self.localEditor = localEditor
@@ -309,23 +318,42 @@ final class AppModel {
 
     /// Menu → Transcribe Audio File…: the recording in pieces, with the engine a dictation in
     /// `language` would use. `progress` runs on the main actor, 0…1.
-    func transcribeFile(_ url: URL, language: LanguageChoice,
-                        progress: @escaping @MainActor (Double) -> Void) async throws -> FileTranscription.Result {
+    enum FileStep { case transcribing, cleaningUp }
+
+    func transcribeFile(_ url: URL, language: LanguageChoice, cleanUp: Bool = false,
+                        progress: @escaping @MainActor (FileStep, Double) -> Void) async throws -> FileTranscription.Result {
         let samples = try await runBlocking { try AudioFileLoader.samples(from: url) }
         let minutes = Double(samples.count) / AudioChunk.sampleRate / 60
         Self.log.notice("file: \(String(format: "%.1f", minutes), privacy: .public) min of audio, \(String(describing: language), privacy: .public)")
         let start = ContinuousClock.now
         do {
+            if cleanUp { fileCleaner.prewarm() }   // load the model while the audio is transcribed
             let result = try await FileTranscription.run(samples, session: { [weak self] in
                 guard let self else { throw CancellationError() }
                 return try await transcriber(for: language).makeSession(language: language)
-            }, progress: progress)
+            }, progress: { progress(.transcribing, $0) })
             Self.log.notice("file: \(Log.words(result.text)) words in \(Log.ms(ContinuousClock.now - start), privacy: .public)")
-            return result
+            guard cleanUp, !result.text.isEmpty else { return result }
+            return FileTranscription.Result(text: try await cleanTranscript(result.text, language: result.language,
+                                                                             progress: { progress(.cleaningUp, $0) }),
+                                            language: result.language)
         } catch {
             Self.log.error("file transcription failed: \(Log.summary(error), privacy: .public)")
             throw error
         }
+    }
+
+    /// A recording's transcript, tidied like a dictation but word for word: no voice commands.
+    func cleanTranscript(_ text: String, language: Language?,
+                         progress: @escaping @MainActor (Double) -> Void) async throws -> String {
+        var context = DictationContext(language: language, enabledLanguages: settings.enabledLanguages)
+        context.isRecording = true
+        let start = ContinuousClock.now
+        let cleaned = try await FileTranscription.cleanUp(text, clean: { [fileCleaner] chunk in
+            try await fileCleaner!.clean(chunk, context: context)
+        }, progress: progress)
+        Self.log.notice("file: cleaned \(Log.words(text)) → \(Log.words(cleaned)) words in \(Log.ms(ContinuousClock.now - start), privacy: .public)")
+        return cleaned
     }
 
     /// Settings → Models → "Free memory after": how long Gemma and KB-Whisper stay loaded unused.

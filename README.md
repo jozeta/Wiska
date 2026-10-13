@@ -49,7 +49,7 @@ Wiska then asks for the permissions it needs — **Microphone** (to hear you), *
 - **History** — search and filter past dictations, see exactly what cleanup changed, and track words per day, time saved, top apps and languages. Kept for as long as you choose (or not at all).
 - **Insert or copy** — paste into the active app, or only copy to the clipboard.
 - **Paste the last dictation again** — ⌃⌥V (or another shortcut, Settings → General) or the menu, when the text landed in the wrong place.
-- **Transcribe audio files** — voice memos, meetings, interviews (up to three hours; m4a, mp3, wav…) to text with your speech engine settings: Wiska's menu → Transcribe Audio File….
+- **Transcribe audio files** — voice memos, meetings, interviews (up to three hours; m4a, mp3, wav…) to text with your speech engine settings, optionally cleaned up like a dictation (fillers out, punctuation fixed; words like "new line" stay words): Wiska's menu → Transcribe Audio File….
 - **Speed stats** — History → Stats shows how long each speech engine typically takes from releasing fn to the text, split into transcription, cleanup and paste.
 - **Automatic updates** — Wiska checks GitHub for new releases and installs them itself (Settings → General → Updates).
 

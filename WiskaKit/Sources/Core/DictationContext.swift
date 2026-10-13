@@ -8,6 +8,9 @@ public struct DictationContext: Sendable, Equatable {
     public var enabledLanguages: [Language]
     /// The kind of app being dictated into (decides style and formatting).
     public var category: AppCategory
+    /// A recording (an audio file, a meeting): every word was said to someone, not to Wiska — no
+    /// voice commands, snippets or list formatting.
+    public var isRecording = false
 
     public init(appBundleID: String? = nil, language: Language? = nil,
                 enabledLanguages: [Language] = [.english, .swedish], category: AppCategory = .other) {
