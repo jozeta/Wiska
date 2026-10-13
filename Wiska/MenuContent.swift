@@ -59,6 +59,11 @@ struct MenuContent: View {
             OnboardingWindow.open(openWindow)
         }
         Button("Transcribe Audio File…") {
+            model.transcribeMode = .file
+            TranscribeFileWindow.open(openWindow)
+        }
+        Button(model.meetingRecorder.isRecording ? "Recording Meeting…" : "Record Meeting…") {
+            model.transcribeMode = .meeting
             TranscribeFileWindow.open(openWindow)
         }
         Button("History…") {

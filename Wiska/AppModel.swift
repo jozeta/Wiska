@@ -25,6 +25,11 @@ final class AppModel {
     let dictionaryStore: DictionaryStore
     let snippetStore: SnippetStore
     let commandStore: CommandStore
+    /// Records calls and meetings (the Mac's audio and the microphone) for a transcript.
+    @ObservationIgnored let meetingRecorder = MeetingRecorder()
+    /// Which tab the Transcribe window opens on (menu: Transcribe Audio File… or Record Meeting…).
+    var transcribeMode = TranscribeMode.file
+    enum TranscribeMode: Hashable { case file, meeting }
     /// Words the user fixed after a dictation, offered in the Dictionary tab.
     let corrections = CorrectionSuggestions()
     @ObservationIgnored private let correctionWatcher = CorrectionWatcher()
@@ -379,6 +384,37 @@ final class AppModel {
         } catch {
             Self.log.error("file transcription failed: \(Log.summary(error), privacy: .public)")
             throw error
+        }
+    }
+
+    /// Stops the meeting recording and turns it into a "[0:05] You: …" transcript. The audio is
+    /// deleted afterwards: only the text is kept, and only if the user copies or saves it.
+    func finishMeeting(language: LanguageChoice, cleanUp: Bool,
+                       progress: @escaping @MainActor (FileStep, Double) -> Void) async throws -> String {
+        guard let recording = try await meetingRecorder.stop() else { return "" }
+        defer { try? FileManager.default.removeItem(at: recording.folder) }
+        let you = (try? await runBlocking { try AudioFileLoader.samples(from: recording.you) }) ?? []
+        let others = (try? await runBlocking { try AudioFileLoader.samples(from: recording.others) }) ?? []
+        Self.log.notice("meeting: \(String(format: "%.1f", Double(max(you.count, others.count)) / AudioChunk.sampleRate / 60), privacy: .public) min recorded")
+        if cleanUp { fileCleaner.prewarm() }
+        var segments = try await MeetingTranscription.run(you: you, others: others, session: { [weak self] _ in
+            guard let self else { throw CancellationError() }
+            return try await transcriber(for: language).makeSession(language: language)
+        }, progress: { progress(.transcribing, $0) })
+        if cleanUp {
+            for index in segments.indices {
+                segments[index].text = try await cleanTranscript(segments[index].text, language: nil, progress: { _ in })
+                progress(.cleaningUp, Double(index + 1) / Double(segments.count))
+            }
+        }
+        Self.log.notice("meeting: \(segments.count) segments")
+        return MeetingTranscription.transcript(segments)
+    }
+
+    /// Throws away a recording in progress.
+    func discardMeeting() async {
+        if let recording = try? await meetingRecorder.stop() {
+            try? FileManager.default.removeItem(at: recording.folder)
         }
     }
 

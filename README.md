@@ -50,6 +50,7 @@ Wiska then asks for the permissions it needs — **Microphone** (to hear you), *
 - **Insert or copy** — paste into the active app, or only copy to the clipboard.
 - **Paste the last dictation again** — ⌃⌥V (or another shortcut, Settings → General) or the menu, when the text landed in the wrong place.
 - **Transcribe audio files** — voice memos, meetings, interviews (up to three hours; m4a, mp3, wav…) to text with your speech engine settings, optionally cleaned up like a dictation (fillers out, punctuation fixed; words like "new line" stay words): Wiska's menu → Transcribe Audio File….
+- **Record meetings** — Wiska's menu → Record Meeting… records a call (Zoom, Teams, FaceTime…) and your microphone, then writes a transcript with times, split into "You" and "Others". Needs the Screen & System Audio Recording permission; the audio is deleted once it's transcribed. Use headphones for a clean split, and tell the others you're recording.
 - **Speed stats** — History → Stats shows how long each speech engine typically takes from releasing fn to the text, split into transcription, cleanup and paste.
 - **Automatic updates** — Wiska checks GitHub for new releases and installs them itself (Settings → General → Updates).
 
