@@ -327,7 +327,8 @@ struct DictationControllerTests {
         controller.handle(en)
         audio.emit([0.3])
         audio.stop()
-        try await Task.sleep(for: .milliseconds(50))
+        // The stream's end reaches the session task asynchronously: wait for it (up to 2 s under load).
+        for _ in 0..<200 where controller.state == .listening { try await Task.sleep(for: .milliseconds(10)) }
         await controller.currentTask?.value
         #expect(injector.injected == ["cleaned: hello world"])
         #expect(controller.state == .idle)

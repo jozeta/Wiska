@@ -41,7 +41,7 @@ public enum FileTranscription {
 
     /// Where to cut: about every `seconds`, at the quietest tenth of a second within `window`
     /// seconds before or after. None for audio shorter than one and a half pieces.
-    static func cuts(_ samples: [Float], every seconds: Double, searching window: Double) -> [Int] {
+    nonisolated static func cuts(_ samples: [Float], every seconds: Double, searching window: Double) -> [Int] {
         let rate = Int(AudioChunk.sampleRate)
         let step = Int(seconds * Double(rate))
         let reach = Int(window * Double(rate))

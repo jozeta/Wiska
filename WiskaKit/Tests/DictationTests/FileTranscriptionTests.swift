@@ -14,8 +14,8 @@ private final class CountingSession: TranscriptionSession {
     func cancel() {}
 }
 
-@MainActor
-struct FileTranscriptionTests {
+/// Pure sample math: off the main actor, so it never holds up the timing-sensitive controller tests.
+struct FileTranscriptionCutTests {
     /// A tone with a quiet gap at `gap` seconds.
     func tone(seconds: Double, gapAt gap: Double) -> [Float] {
         let rate = AudioChunk.sampleRate
@@ -36,7 +36,10 @@ struct FileTranscriptionTests {
     @Test func shortAudioIsOnePiece() {
         #expect(FileTranscription.cuts([Float](repeating: 0.1, count: 16_000), every: 10, searching: 3).isEmpty)
     }
+}
 
+@MainActor
+struct FileTranscriptionTests {
     @Test func everyPieceIsTranscribedAndJoinedInOrder() async throws {
         var progress: [Double] = []
         let samples = [Float](repeating: 0.1, count: 25 * 16_000)
