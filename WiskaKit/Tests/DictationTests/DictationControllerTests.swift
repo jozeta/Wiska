@@ -113,8 +113,9 @@ struct DictationControllerTests {
         controller.handle(en)
         audio.emit(level: AudioLevel(level: 0.5, bands: [-40, -30]))
         audio.emit(level: AudioLevel(level: 0.7, bands: [-20, -35]))
-        try? await Task.sleep(for: .milliseconds(20))
-        #expect(controller.audioLevel == AudioLevel(level: 0.7, bands: [-20, -35]))
+        let latest = AudioLevel(level: 0.7, bands: [-20, -35])
+        for _ in 0..<200 where controller.audioLevel != latest { try? await Task.sleep(for: .milliseconds(10)) }
+        #expect(controller.audioLevel == latest)
         controller.handle(.finish)
         await controller.currentTask?.value
         #expect(controller.audioLevel == .silent)

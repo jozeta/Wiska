@@ -196,7 +196,11 @@ public final class DictationController {
             return session
         }
         levelTask = Task { [weak self] in
-            for await level in capture.levels { self?.pushLevel(level) }
+            for await level in capture.levels {
+                // A frame already on its way when listening stopped must not bring the waveform back.
+                guard !Task.isCancelled else { return }
+                self?.pushLevel(level)
+            }
         }
         timeoutTask = Task { [weak self, maxDuration] in
             try? await Task.sleep(for: maxDuration)
