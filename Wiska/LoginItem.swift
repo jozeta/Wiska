@@ -1,3 +1,4 @@
+import Core
 import Foundation
 import Observation
 import ServiceManagement
@@ -23,6 +24,7 @@ final class LoginItem {
             if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
             error = nil
         } catch {
+            Log.logger("App").error("login item \(enabled ? "register" : "unregister", privacy: .public) failed: \(Log.summary(error), privacy: .public)")
             self.error = error.localizedDescription
         }
         refresh()

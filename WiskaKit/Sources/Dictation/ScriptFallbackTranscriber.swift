@@ -7,6 +7,7 @@ import Foundation
 /// `fallback` (Apple), which only knows the user's languages.
 @MainActor
 public final class ScriptFallbackTranscriber: Transcriber {
+    static let log = Log.logger("Dictation")
     private let primary: any Transcriber
     private let fallback: any Transcriber
 
@@ -65,13 +66,16 @@ final class ScriptFallbackSession: TranscriptionSession {
         guard ScriptFallbackTranscriber.hasForeignLetters(transcript.text), fallback.isReady(for: choice) else {
             return transcript
         }
+        ScriptFallbackTranscriber.log.notice("heard another alphabet; re-transcribing with \(self.fallback.engine.rawValue, privacy: .public)")
         do {
             let session = try await fallback.makeSession(language: choice)
             for chunk in chunks { session.append(chunk) }
             var retry = try await session.finish()
             retry.engine = fallback.engine
+            if retry.text.isEmpty { ScriptFallbackTranscriber.log.notice("re-transcription heard nothing; keeping the first") }
             return retry.text.isEmpty ? transcript : retry
         } catch {
+            ScriptFallbackTranscriber.log.notice("re-transcription failed: \(Log.summary(error), privacy: .public); keeping the first")
             return transcript
         }
     }

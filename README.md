@@ -112,6 +112,16 @@ Settings has a **Help** tab with examples, voice commands for each of your langu
 
 Speech recognition, cleanup and editing all run on your Mac. Wiska makes no network requests except downloading models when you ask for them (Apple's language assets, or Parakeet, KB-Whisper and Gemma from Hugging Face in Settings → Models) and, for downloaded models, a small check whether a newer version exists (weekly by default) — turn it off with Settings → Models → Check for model updates → Never. History is stored locally in `~/Library/Application Support/Wiska` and can be turned off.
 
+## When something goes wrong
+
+Wiska writes what it does to the macOS log. Each dictation gets a line for each step: which engine and language, how many words, how long each step took, and why a step failed. To see the last hour, run this in Terminal:
+
+```sh
+/usr/bin/log show --last 1h --predicate 'subsystem == "Wiska"' --style compact
+```
+
+You can also open Console.app and search for `subsystem:Wiska`. The log never contains what you said, your selection or the text around your cursor: only word counts, timings and error types. That makes it safe to paste into a bug report.
+
 ## Building from source
 
 1. Install Xcode 26, and its Metal Toolchain (needed by the MLX and whisper.cpp engines and the Magical Orb's shader): `xcodebuild -downloadComponent MetalToolchain`.

@@ -36,14 +36,17 @@ public final class SwitchingEditor: TextEditor {
     /// A selection too long for one model is too long for both; anything else may work on the other.
     private func withFallback(_ run: @MainActor (any TextEditor) async throws -> String) async throws -> String {
         let models = models
-        guard let first = models.first else { throw EditError.unavailable }
+        guard let first = models.first else {
+            Self.log.notice("command: no language model available")
+            throw EditError.unavailable
+        }
         do {
             return try await run(first.editor)
         } catch EditError.tooLong {
             throw EditError.tooLong
         } catch {
             guard models.count > 1 else { throw error }
-            Self.log.notice("command by \(first.name, privacy: .public) failed; trying \(models[1].name, privacy: .public)")
+            Self.log.notice("command by \(first.name, privacy: .public) failed (\(Log.summary(error), privacy: .public)); trying \(models[1].name, privacy: .public)")
             return try await run(models[1].editor)
         }
     }

@@ -214,12 +214,13 @@ final class AppModel {
                                    clippyFollowsPointer: settings.clippyFollowsPointer)
         let theme = settings.dictationTheme
         if hud.theme != theme {
-            Self.log.info("dictation theme: \(theme.rawValue, privacy: .public)")
+            Self.log.notice("dictation theme: \(theme.rawValue, privacy: .public)")
             hud.theme = theme
         }
     }
 
     func start() {
+        logLaunch()
         refreshPermissions()
         syncAppleLanguages()   // also frees slots leaked by an earlier run
         warmUpParakeetIfSelected()
@@ -257,6 +258,17 @@ final class AppModel {
 
     var modelUpdateAvailable: Bool {
         if case .updateAvailable = modelUpdates.state { true } else { false }
+    }
+
+    /// One line per launch with the version and the settings that shape a dictation, so a log
+    /// excerpt says what the app was set up to do.
+    private func logLaunch() {
+        let info = Bundle.main.infoDictionary
+        let version = "\(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))"
+        let os = ProcessInfo.processInfo.operatingSystemVersionString
+        let languages = settings.enabledLanguages.map(\.rawValue).joined(separator: ",")
+        Self.log.notice("Wiska \(version, privacy: .public) on macOS \(os, privacy: .public)")
+        Self.log.notice("settings: engine \(self.settings.engine.rawValue, privacy: .public) (\(String(describing: self.settings.engineMode), privacy: .public)), languages \(languages, privacy: .public), mode \(self.settings.languageMode.rawValue, privacy: .public), model \(String(describing: self.settings.languageModel), privacy: .public), cleanup \(String(describing: self.settings.cleanupLevel), privacy: .public), grammar \(self.settings.fixGrammar), KB-Whisper \(self.settings.useKBWhisper), output \(String(describing: self.settings.outputMode), privacy: .public), theme \(self.settings.dictationTheme.rawValue, privacy: .public)")
     }
 
     func applyRetention() {
@@ -488,7 +500,11 @@ final class AppModel {
 
     private func refreshPermissions() {
         let missing = Permission.allCases.filter { !$0.isGranted }
-        if missing != missingPermissions { missingPermissions = missing }
+        if missing != missingPermissions {
+            let names = missing.isEmpty ? "none" : missing.map { String(describing: $0) }.joined(separator: ", ")
+            Self.log.notice("missing permissions: \(names, privacy: .public)")
+            missingPermissions = missing
+        }
         if !missing.contains(.inputMonitoring) && !hotkey.isRunning {
             startHotkey()
         }
@@ -517,6 +533,9 @@ final class AppModel {
             canStart: missingPermissions.isEmpty   // minor d
         )
         let mapped = CommandMapper.map(event, context: context)
+        if !context.canStart, case .pressed = event {
+            Self.log.notice("fn pressed, but dictation is blocked by missing permissions")
+        }
         // A quick tap may be the first half of a double-tap: keep the capsule up meanwhile.
         if case .tapped = event { holdHideUntil = Date().addingTimeInterval(0.45) }
         if let command = mapped.command {

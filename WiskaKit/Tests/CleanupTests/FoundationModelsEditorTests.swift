@@ -179,6 +179,19 @@ struct FoundationModelsEditorTests {
         #expect(try await marker.write(instruction: "reply", context: nil, language: nil) == "See you.")
     }
 
+    /// The share that's logged when a write is rejected for copying.
+    @Test func copiedShareMeasuresTheCopy() throws {
+        let context = "The meeting moves to Thursday because the room is booked on Wednesday afternoon.\n[cursor]"
+        let copy = try #require(EditPrompts.copiedShare(
+            "The meeting moves to Thursday, because the room is booked on Wednesday afternoon.", context: context))
+        #expect(copy > 0.9)
+        let fresh = try #require(EditPrompts.copiedShare(
+            "Sounds good, I will update the invitation for everyone tonight.", context: context))
+        #expect(fresh == 0)
+        #expect(EditPrompts.copiedShare("Too short to tell.", context: context) == nil)
+        #expect(EditPrompts.copiedShare("Sounds good, I will update the invitation tonight.", context: nil) == nil)
+    }
+
     @Test func cleanWrittenAndEditedAreShared() throws {
         #expect(try EditPrompts.cleanWritten(">>> See you at three.", context: "Thanks.[cursor]") == " See you at three.")
         #expect(throws: EditError.failed) { try EditPrompts.cleanWritten("  ", context: nil) }

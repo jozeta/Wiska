@@ -5,6 +5,7 @@ import Foundation
 /// (Apple Intelligence, Gemma), so they're measured on equal terms.
 @MainActor
 enum EditPrompts {
+    private static let log = Log.logger("Cleanup")
     /// A rewrite produces about as many tokens as it reads, and both must fit the on-device
     /// model's ~4,096-token context: about 600 words in, 600 out.
     static let maxWords = 600
@@ -99,21 +100,30 @@ enum EditPrompts {
 
     /// Most of the answer's words appear in the context in the same order (runs of 4 words).
     static func mostlyCopies(_ written: String, context: String?) -> Bool {
-        guard let context else { return false }
+        (copiedShare(written, context: context) ?? 0) > 0.6
+    }
+
+    /// The share of the answer's words that appear in the context in the same order (runs of 4
+    /// words); nil when the answer or the context is too short to tell.
+    static func copiedShare(_ written: String, context: String?) -> Double? {
+        guard let context else { return nil }
         let words = PhraseMatcher.bareWords(written)
         let source = PhraseMatcher.bareWords(context.replacingOccurrences(of: CursorContext.marker, with: " "))
-        guard words.count >= 8, source.count >= 4 else { return false }
+        guard words.count >= 8, source.count >= 4 else { return nil }
         let grams = Set((0...(source.count - 4)).map { source[$0..<$0 + 4].joined(separator: " ") })
         var covered = Array(repeating: false, count: words.count)
         for i in 0...(words.count - 4) where grams.contains(words[i..<i + 4].joined(separator: " ")) {
             for j in i..<i + 4 { covered[j] = true }
         }
-        return Double(covered.filter { $0 }.count) / Double(words.count) > 0.6
+        return Double(covered.filter { $0 }.count) / Double(words.count)
     }
     /// An edit's answer, ready to paste over the selection.
     static func cleanEdited(original: String, output: String) throws -> String {
         let edited = rewrap(original: original, edited: output)
-        guard !edited.isEmpty else { throw EditError.failed }
+        guard !edited.isEmpty else {
+            log.notice("edit rejected: empty answer (selection \(Log.words(original)) words)")
+            throw EditError.failed
+        }
         return edited
     }
 
@@ -123,9 +133,22 @@ enum EditPrompts {
         // even start with the fence that closes the context (">>> I'll be there").
         let unmarked = output.replacing(/(?i)\[\s*cursor\s*\]/, with: "")
             .replacing(/^(\s*(<<<|>>>))+/, with: "").replacing(/((<<<|>>>)\s*)+$/, with: "")
-        let written = removeEcho(rewrap(original: "", edited: unmarked), context: context)
+        let unwrapped = rewrap(original: "", edited: unmarked)
+        let written = removeEcho(unwrapped, context: context)
+        // Sizes only: the answer and the context are the user's text.
+        let sizes = "answer \(Log.words(output)) words, context \(Log.words(context)) words"
+        if written.count < unwrapped.count {
+            log.notice("write: removed \(Log.words(unwrapped) - Log.words(written)) echoed words (\(sizes, privacy: .public))")
+        }
+        guard !written.isEmpty else {
+            log.notice("write rejected: nothing left after removing markers and echo (\(sizes, privacy: .public))")
+            throw EditError.failed
+        }
         // A rewrite of the surrounding text instead of new text would paste it twice.
-        guard !written.isEmpty, !mostlyCopies(written, context: context) else { throw EditError.failed }
+        if let share = copiedShare(written, context: context), share > 0.6 {
+            log.notice("write rejected: \(Int(share * 100))% copies the surrounding text (\(sizes, privacy: .public))")
+            throw EditError.failed
+        }
         return fitToCursor(written, context: context)
     }
 

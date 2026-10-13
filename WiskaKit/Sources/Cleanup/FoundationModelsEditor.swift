@@ -5,6 +5,7 @@ import FoundationModels
 /// Command mode: rewrites the selected text following a spoken instruction, on-device.
 @MainActor
 public final class FoundationModelsEditor: TextEditor {
+    private static let log = Log.logger("Cleanup")
 
     private let isAvailable: @MainActor () -> Bool
     private let respond: @MainActor (_ instructions: String, _ prompt: String) async throws -> String
@@ -40,33 +41,48 @@ public final class FoundationModelsEditor: TextEditor {
 
     public func edit(_ text: String, instruction: String, language: Language?) async throws -> String {
         let words = text.split(whereSeparator: \.isWhitespace).count
-        guard words <= EditPrompts.maxWords else { throw EditError.tooLong }
-        guard isAvailable() else { throw EditError.unavailable }
+        guard words <= EditPrompts.maxWords else {
+            Self.log.notice("apple edit: selection too long (\(words) words, limit \(EditPrompts.maxWords))")
+            throw EditError.tooLong
+        }
+        guard isAvailable() else {
+            Self.log.notice("apple edit: Apple Intelligence unavailable")
+            throw EditError.unavailable
+        }
         let respond = respond
-        let output: String
-        do {
-            output = try await EditPrompts.race(within: timeout(words)) {
-                try await respond(EditPrompts.instructions, EditPrompts.prompt(text: text, instruction: instruction))
-            }
-        } catch {
-            throw Self.editError(for: error)
+        let output = try await answer("edit", words: words) {
+            try await respond(EditPrompts.instructions, EditPrompts.prompt(text: text, instruction: instruction))
         }
         return try EditPrompts.cleanEdited(original: text, output: output)
     }
 
     public func write(instruction: String, context: String?, language: Language?) async throws -> String {
-        guard isAvailable() else { throw EditError.unavailable }
+        guard isAvailable() else {
+            Self.log.notice("apple write: Apple Intelligence unavailable")
+            throw EditError.unavailable
+        }
         let words = (instruction + " " + (context ?? "")).split(whereSeparator: \.isWhitespace).count
         let respond = respond
-        let output: String
-        do {
-            output = try await EditPrompts.race(within: timeout(words)) {
-                try await respond(EditPrompts.writeInstructions,
-                                  EditPrompts.writePrompt(instruction: instruction, context: context))
-            }
-        } catch {
-            throw Self.editError(for: error)
+        let output = try await answer("write", words: words) {
+            try await respond(EditPrompts.writeInstructions,
+                              EditPrompts.writePrompt(instruction: instruction, context: context))
         }
         return try EditPrompts.cleanWritten(output, context: context)
+    }
+
+    /// The model's answer within the time limit, logged by size and time (never by content).
+    private func answer(_ task: String, words: Int,
+                        _ work: @escaping @MainActor () async throws -> String) async throws -> String {
+        let start = ContinuousClock.now
+        let limit = timeout(words)
+        do {
+            let output = try await EditPrompts.race(within: limit, work)
+            Self.log.notice("apple \(task, privacy: .public): \(Log.words(output)) words in \(Log.ms(ContinuousClock.now - start), privacy: .public) (input \(words) words)")
+            return output
+        } catch {
+            let mapped = Self.editError(for: error)
+            Self.log.notice("apple \(task, privacy: .public) failed after \(Log.ms(ContinuousClock.now - start), privacy: .public) (limit \(Log.ms(limit), privacy: .public), input \(words) words): \(Log.summary(error), privacy: .public) → \(String(describing: mapped), privacy: .public)")
+            throw mapped
+        }
     }
 }

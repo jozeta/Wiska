@@ -6,6 +6,7 @@ import Core
 /// copied with ⌘C for apps that don't expose it (Electron, browsers), with the clipboard restored.
 @MainActor
 public final class AXSelectionReader: SelectionReader {
+    private static let log = Log.logger("Injection")
     private let pasteboard: NSPasteboard
     private let accessibilitySelection: @MainActor () -> String?
     private let accessibilityContext: @MainActor () -> (text: String, cursor: Int)?
@@ -28,12 +29,21 @@ public final class AXSelectionReader: SelectionReader {
     }
 
     public func selectedText() async -> String? {
-        if let text = Self.nonBlank(accessibilitySelection()) { return text }
+        if let text = Self.nonBlank(accessibilitySelection()) {
+            Self.log.notice("selection: read through Accessibility")
+            return text
+        }
         // The field says nothing is selected: ⌘C would only beep, or copy the whole line.
-        if selectionIsEmpty() { return nil }
+        if selectionIsEmpty() {
+            Self.log.notice("selection: none (the field reports an empty selection)")
+            return nil
+        }
         let snapshot = PasteboardSnapshot.capture(pasteboard)
         let before = pasteboard.changeCount
-        do { try sendCopy() } catch { return nil }
+        do { try sendCopy() } catch {
+            Self.log.error("selection: ⌘C could not be sent: \(Log.summary(error), privacy: .public)")
+            return nil
+        }
         let deadline = ContinuousClock.now + copyTimeout
         while pasteboard.changeCount == before, ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(20))
@@ -41,10 +51,13 @@ public final class AXSelectionReader: SelectionReader {
         guard pasteboard.changeCount != before else {
             // Nothing copied (yet): leave the clipboard alone, but undo a copy that lands late.
             undoLateCopy(after: before, restoring: snapshot)
+            Self.log.notice("selection: none (⌘C copied nothing within \(Log.ms(self.copyTimeout), privacy: .public))")
             return nil
         }
-        let text = Self.isLineCopy(pasteboard) ? nil : Self.nonBlank(pasteboard.string(forType: .string))
+        let lineCopy = Self.isLineCopy(pasteboard)
+        let text = lineCopy ? nil : Self.nonBlank(pasteboard.string(forType: .string))
         snapshot.restore(to: pasteboard)
+        Self.log.notice("selection: \(lineCopy ? "none (⌘C copied the whole line)" : text == nil ? "none (⌘C copied no text)" : "copied with ⌘C", privacy: .public)")
         return text
     }
 
@@ -117,7 +130,10 @@ public final class AXSelectionReader: SelectionReader {
 
     /// Read on-device for the model only; never stored or logged.
     public func surroundingText() async -> String? {
-        guard let found = accessibilityContext() else { return nil }
+        guard let found = accessibilityContext() else {
+            Self.log.notice("text around the cursor: the app doesn't expose it")
+            return nil
+        }
         let window = CursorContext.window(text: found.text, cursor: found.cursor)
         return window.isEmpty ? nil : window
     }

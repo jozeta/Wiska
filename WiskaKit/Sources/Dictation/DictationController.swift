@@ -116,17 +116,21 @@ public final class DictationController {
             currentTask = Task { await finishDictation() }
         case .cancel:
             guard state == .listening else { return }
+            Self.log.notice("cancelled after \(self.audioSeconds) s of audio")
             cancelListening()
             isCommand = false
         case .lockHandsFree:
             guard state == .listening, !isHandsFree else { return }
             silence = SilenceWatch(timeout: handsFreeSilence())
             isHandsFree = true
+            Self.log.notice("hands-free on")
         case .makeCommand:
             guard state == .listening else { return }
+            if !isCommand { Self.log.notice("command mode on") }
             isCommand = true
         case .switchLanguage(let choice):
             guard state == .listening, choice != currentChoice else { return }
+            Self.log.notice("language switched to \(String(describing: choice), privacy: .public)")
             // Stay in .listening throughout so the HUD doesn't collapse and reopen.
             cancelListening(endState: .listening)
             startListening(choice)
@@ -149,6 +153,7 @@ public final class DictationController {
         do {
             capture = try audio.start()
         } catch {
+            Self.log.error("microphone did not start: \(Log.summary(error), privacy: .public)")
             fail(.audio(String(describing: error)))
             return
         }
@@ -156,6 +161,7 @@ public final class DictationController {
         // Chosen once per dictation, for its language: changing engines mid-hold affects the next one.
         let transcriber = transcriberProvider(choice)
         activeTranscriber = transcriber
+        Self.log.notice("listening: \(String(describing: choice), privacy: .public), \(transcriber.engine.rawValue, privacy: .public)\(transcriber.isReady ? "" : " (model not ready)", privacy: .public), in \(self.context.appBundleID ?? "unknown app", privacy: .public)")
         state = .listening
         capturedSamples = 0
         // Load the cleanup model while the user is still talking.
@@ -207,18 +213,22 @@ public final class DictationController {
         self.sessionTask = nil
 
         let transcript: Transcript
+        let transcribeStart = ContinuousClock.now
         do {
             let session = try await sessionTask.value
             state = .transcribing
             transcript = try await session.finish()
         } catch {
+            Self.log.error("transcription failed after \(self.audioSeconds) s of audio: \(Log.summary(error), privacy: .public)")
             fail(.transcription(String(describing: error)))
             return
         }
         guard !transcript.text.isEmpty else {
+            Self.log.notice("no words heard in \(self.audioSeconds) s of audio")
             fail(.noSpeech)
             return
         }
+        Self.log.notice("transcribed \(Log.words(transcript.text)) words (\(self.audioSeconds) s of audio) by \((transcript.engine ?? self.activeTranscriber?.engine)?.rawValue ?? "?", privacy: .public), \(transcript.language?.rawValue ?? "language unknown", privacy: .public), in \(Log.ms(ContinuousClock.now - transcribeStart), privacy: .public)")
         Self.log.debug("transcript: \(transcript.text, privacy: .private)")
         if isCommand {
             await runCommand(transcript)
@@ -230,9 +240,12 @@ public final class DictationController {
             state = .cleaning
             var context = self.context
             context.language = transcript.language
+            let cleanStart = ContinuousClock.now
             finalText = try await cleaner.clean(transcript.text, context: context)
+            Self.log.notice("cleaned \(Log.words(transcript.text)) → \(Log.words(finalText)) words in \(Log.ms(ContinuousClock.now - cleanStart), privacy: .public)")
             // Voice commands can remove everything ("scratch that" alone): nothing to paste.
             guard !finalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                Self.log.notice("nothing left to paste after voice commands")
                 fail(.noSpeech)
                 return
             }
@@ -242,6 +255,7 @@ public final class DictationController {
             fail(.secureInput)
             return
         } catch {
+            Self.log.error("paste failed: \(Log.summary(error), privacy: .public)")
             if !finalText.isEmpty { record(transcript, finalText, pasted: false) }
             fail(.injection(String(describing: error)))
             return
@@ -249,7 +263,7 @@ public final class DictationController {
         let latency = ContinuousClock.now - releasedAt
         lastLatency = latency
         record(transcript, finalText, pasted: true)   // after measuring: saving isn't latency
-        Self.log.info("release→inject \(latency.formatted(.units(allowed: [.milliseconds])), privacy: .public)")
+        Self.log.notice("pasted; release→inject \(latency.formatted(.units(allowed: [.milliseconds])), privacy: .public)")
         state = .idle
         if currentChoice == .automatic, let language = transcript.language {
             onLanguageDetected?(language)
@@ -271,20 +285,25 @@ public final class DictationController {
             return
         }
         let instruction = CommandResolver.resolve(transcript.text, commands: commands())
+        let saved = instruction != transcript.text ? ", saved command" : ""
         let selected = await selection.selectedText()
         let writing = selected == nil
+        let start = ContinuousClock.now
         do {
             let output: String
             if let selected {
                 state = .editing
+                Self.log.notice("command: edit \(Log.words(selected)) selected words\(saved, privacy: .public)")
                 output = try await editor.edit(selected, instruction: instruction, language: transcript.language)
             } else {
                 state = .writing
                 let context = await selection.surroundingText()
+                Self.log.notice("command: write at the cursor, \(context == nil ? "no text around it" : "\(Log.words(context)) words around it", privacy: .public)\(saved, privacy: .public)")
                 output = try await editor.write(instruction: instruction, context: context, language: transcript.language)
             }
             state = .injecting
             try await injector.inject(output)
+            Self.log.notice("command pasted \(Log.words(output)) words after \(Log.ms(ContinuousClock.now - start), privacy: .public)")
         } catch EditError.unavailable {
             fail(.editUnavailable); return
         } catch EditError.tooLong {
@@ -299,6 +318,11 @@ public final class DictationController {
             fail(.injection(String(describing: error))); return
         }
         state = .idle
+    }
+
+    /// Seconds of audio captured so far in this dictation, for log lines.
+    private var audioSeconds: String {
+        String(format: "%.1f", Double(capturedSamples) / AudioChunk.sampleRate)
     }
 
     private func record(_ transcript: Transcript, _ finalText: String, pasted: Bool) {
