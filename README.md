@@ -148,7 +148,7 @@ cd WiskaKit && swift test
 
 Design notes and implementation plans for each milestone are in `docs/superpowers/`.
 
-To make a release, `scripts/release.sh` builds, signs and zips the app and writes the Sparkle `appcast.xml` that existing copies update from (see the comments at its top). A build of your own checks the same GitHub feed, but it only installs updates signed with this project's key.
+To make a release, `scripts/release.sh NOTES.md` builds, signs and zips the app and writes the Sparkle `appcast.xml` that existing copies update from, with the release notes shown in their update window (see the comments at its top). A build of your own checks the same GitHub feed, but it only installs updates signed with this project's key.
 
 ## License
 

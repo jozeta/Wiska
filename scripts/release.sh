@@ -3,7 +3,9 @@
 #
 #   1. Bump MARKETING_VERSION and CURRENT_PROJECT_VERSION in Wiska.xcodeproj (the build number
 #      must grow: Sparkle compares it), commit and push.
-#   2. scripts/release.sh            → build-release/dist/Wiska.zip and appcast.xml
+#   2. Write the release notes in Markdown, then
+#      scripts/release.sh NOTES.md   → build-release/dist/Wiska.zip and appcast.xml
+#      (the notes are shown in Wiska's update window, and on the GitHub release)
 #   3. Publish both on one GitHub release (the command is printed at the end). The app's feed is
 #      releases/latest/download/appcast.xml, so the newest release is what everyone updates to.
 #
@@ -11,6 +13,9 @@
 # and Sparkle's EdDSA key, which generate_keys stored in the login Keychain. Back that key up
 # (generate_keys -x file): without it no update can ever be published again.
 set -euo pipefail
+NOTES=${1:-}
+[[ -f $NOTES ]] || { echo "Usage: scripts/release.sh NOTES.md (the release notes, in Markdown)" >&2; exit 1; }
+NOTES=${NOTES:A}
 ROOT=${0:A:h:h}
 cd $ROOT
 ID=$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/{print $2; exit}')
@@ -44,10 +49,12 @@ codesign --verify --deep --strict $APP
 DIST=build-release/dist
 mkdir -p $DIST
 ditto -c -k --sequesterRsrc --keepParent $APP $DIST/Wiska.zip
+cp $NOTES $DIST/Wiska.md   # same name as the archive: generate_appcast embeds it as the update's notes
 TOOLS=$(dirname $(find build-release/SourcePackages/artifacts -name generate_appcast -path '*/bin/*' | head -1))
 $TOOLS/generate_appcast --download-url-prefix "https://github.com/jozeta/Wiska/releases/download/v$VERSION/" \
-    --link https://github.com/jozeta/Wiska $DIST
+    --link https://github.com/jozeta/Wiska --embed-release-notes $DIST
 grep -q 'sparkle:edSignature' $DIST/appcast.xml || { echo "appcast.xml has no EdDSA signature." >&2; exit 1; }
+grep -q '<description>' $DIST/appcast.xml || { echo "appcast.xml has no release notes." >&2; exit 1; }
 
 SIZE=$(stat -f %z $DIST/Wiska.zip)
 SHA=$(shasum -a 256 $DIST/Wiska.zip | cut -d' ' -f1)
@@ -55,4 +62,4 @@ echo
 echo "Wiska $VERSION ($BUILD): $DIST/Wiska.zip, $SIZE bytes"
 echo "SHA-256 $SHA"
 echo
-echo "Publish:  gh release create v$VERSION $DIST/Wiska.zip $DIST/appcast.xml --title \"Wiska $VERSION\" --notes-file NOTES.md"
+echo "Publish:  gh release create v$VERSION $DIST/Wiska.zip $DIST/appcast.xml --title \"Wiska $VERSION\" --notes-file $NOTES"
