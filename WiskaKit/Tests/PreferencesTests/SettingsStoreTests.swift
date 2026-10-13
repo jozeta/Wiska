@@ -281,6 +281,16 @@ final class SettingsStoreTests {
         #expect(SettingsStore(defaults: defaults).modelIdleMinutes == 10)
     }
 
+    @Test func pasteLastShortcutDefaultsToControlOptionVAndPersists() {
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.pasteLastShortcut == .controlOptionV)
+        store.pasteLastShortcut = .off
+        #expect(SettingsStore(defaults: defaults).pasteLastShortcut == .off)
+        #expect(PasteLastShortcut.off.keyCode == nil)
+        #expect(PasteLastShortcut.optionCommandV.keyCode == 9)
+        #expect(PasteLastShortcut.controlOptionCommandV.carbonModifiers == 4096 | 2048 | 256)
+    }
+
     @Test func modelUpdateSettings() {
         let store = SettingsStore(defaults: defaults)
         #expect(store.modelUpdateInterval == 7)

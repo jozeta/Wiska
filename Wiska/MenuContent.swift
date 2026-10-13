@@ -49,6 +49,11 @@ struct MenuContent: View {
             }
         }
         Divider()
+        Button(model.settings.pasteLastShortcut == .off
+               ? "Paste Last Dictation" : "Paste Last Dictation (\(model.settings.pasteLastShortcut.displayName))") {
+            model.pasteLastDictation(after: .milliseconds(250))
+        }
+        .disabled(model.lastDictation == nil)
         Text("Tip: Keyboard settings ▸ “Press 🌐 key to” ▸ Do Nothing")
         Button("Setup…") {
             OnboardingWindow.open(openWindow)

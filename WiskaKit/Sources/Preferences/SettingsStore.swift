@@ -23,6 +23,7 @@ public final class SettingsStore {
         static let handsFreeSilence = "handsFreeSilence"
         static let livePreview = "livePreview"
         static let outputMode = "outputMode"
+        static let pasteLastShortcut = "pasteLastShortcut"
         static let languageModel = "languageModel"
         static let fixGrammar = "fixGrammar"
         static let useKBWhisper = "useKBWhisper"
@@ -203,6 +204,10 @@ public final class SettingsStore {
     public var livePreview: Bool { didSet { defaults.set(livePreview, forKey: Key.livePreview) } }
     /// Paste the finished text into the app, or only copy it.
     public var outputMode: OutputMode { didSet { defaults.set(outputMode.rawValue, forKey: Key.outputMode) } }
+    /// Pastes the last dictation again, in any app.
+    public var pasteLastShortcut: PasteLastShortcut {
+        didSet { defaults.set(pasteLastShortcut.rawValue, forKey: Key.pasteLastShortcut) }
+    }
 
     public var languageModel: LanguageModelChoice {
         didSet { defaults.set(languageModel.rawValue, forKey: Key.languageModel) }
@@ -313,6 +318,7 @@ public final class SettingsStore {
         handsFreeSilence = defaults.object(forKey: Key.handsFreeSilence) as? TimeInterval ?? 30
         livePreview = defaults.object(forKey: Key.livePreview) as? Bool ?? true
         outputMode = Self.read(defaults, Key.outputMode, OutputMode.insert)
+        pasteLastShortcut = Self.read(defaults, Key.pasteLastShortcut, PasteLastShortcut.controlOptionV)
         languageModel = Self.read(defaults, Key.languageModel, LanguageModelChoice.apple)
         fixGrammar = defaults.object(forKey: Key.fixGrammar) as? Bool ?? true
         useKBWhisper = defaults.object(forKey: Key.useKBWhisper) as? Bool ?? false

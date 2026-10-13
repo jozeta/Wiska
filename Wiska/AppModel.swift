@@ -61,6 +61,10 @@ final class AppModel {
     /// fn+⌃: "Edit" with a selection, "Write" without, "Command" when the app doesn't say.
     @ObservationIgnored private var commandBadge = "Command"
     @ObservationIgnored private var handsFreeLatch = HandsFreeLatch()
+    /// The last dictation's text, kept for "Paste last dictation" (also when history is off).
+    @ObservationIgnored private var lastDictationText: String?
+    @ObservationIgnored private lazy var pasteLastShortcut = GlobalShortcut { [weak self] in self?.pasteLastDictation() }
+    @ObservationIgnored private let lastPaster = PasteboardInjector()
 
     init() {
         LegacyMigration.run()   // before any store touches the data folder
@@ -180,6 +184,7 @@ final class AppModel {
             guard let self else { return }
             if record.pasted && !settings.firstDictationDone { settings.firstDictationDone = true }
             history?.add(record, retention: settings.historyRetention)
+            if !record.finalText.isEmpty { lastDictationText = record.finalText }
             if !record.finalText.isEmpty, let app = record.appBundleID, app != Bundle.main.bundleIdentifier {
                 settings.noteRecentApp(app)
             }
@@ -222,6 +227,7 @@ final class AppModel {
     func start() {
         logLaunch()
         applyModelMemory()
+        applyPasteLastShortcut()
         refreshPermissions()
         syncAppleLanguages()   // also frees slots leaked by an earlier run
         warmUpParakeetIfSelected()
@@ -259,6 +265,43 @@ final class AppModel {
 
     var modelUpdateAvailable: Bool {
         if case .updateAvailable = modelUpdates.state { true } else { false }
+    }
+
+    /// Settings → General → "Paste last dictation": registers the chosen shortcut (or none).
+    func applyPasteLastShortcut() {
+        let shortcut = settings.pasteLastShortcut
+        if !pasteLastShortcut.register(keyCode: shortcut.keyCode, modifiers: shortcut.carbonModifiers) {
+            flash("\(shortcut.displayName) is taken by another app", for: .seconds(2))
+        }
+    }
+
+    /// The last dictation, or the newest in History after a relaunch.
+    var lastDictation: String? {
+        lastDictationText ?? history?.latest()?.finalText
+    }
+
+    /// Pastes the last dictation again at the cursor (menu, or the global shortcut).
+    func pasteLastDictation(after delay: Duration = .zero) {
+        guard let text = lastDictation, !text.isEmpty else {
+            Self.log.notice("paste last: nothing dictated yet")
+            flash("Nothing dictated yet", for: .milliseconds(1_200))
+            return
+        }
+        Task { [weak self] in
+            // From the menu: let it close, so the app underneath has focus again.
+            if delay > .zero { try? await Task.sleep(for: delay) }
+            guard let self else { return }
+            do {
+                try await lastPaster.inject(text)
+                Self.log.notice("paste last: pasted \(Log.words(text)) words")
+            } catch InjectionError.secureInputActive {
+                Self.log.notice("paste last: blocked by a password field")
+                flash("Can't paste into a password field", for: .milliseconds(1_500))
+            } catch {
+                Self.log.error("paste last failed: \(Log.summary(error), privacy: .public)")
+                flash("Couldn't paste", for: .milliseconds(1_500))
+            }
+        }
     }
 
     /// Settings → Models → "Free memory after": how long Gemma and KB-Whisper stay loaded unused.

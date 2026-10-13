@@ -61,6 +61,13 @@ public final class HistoryStore {
         return DictationStats.compute(records, now: now, window: now.timeIntervalSince(start))
     }
 
+    /// The newest dictation, read alone (for "Paste last dictation").
+    public func latest() -> DictationRecord? {
+        var descriptor = FetchDescriptor<HistoryEntry>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+        descriptor.fetchLimit = 1
+        return (try? context.fetch(descriptor))?.first?.record
+    }
+
     public func delete(_ id: PersistentIdentifier) {
         // Fetched, not `model(for:)`: that returns a stale object for an entry retention
         // already deleted, and touching it crashes.

@@ -19,6 +19,23 @@ struct HistoryStoreTests {
         #expect(store.items(matching: "").map(\.record.finalText) == ["second", "first"])
     }
 
+    @Test func latestIsTheNewestDictation() {
+        #expect(store.latest() == nil)
+        store.add(record("second", ageDays: 1), retention: .forever)
+        store.add(record("first", ageDays: 2), retention: .forever)
+        #expect(store.latest()?.finalText == "second")
+    }
+
+    /// Speed stats survive a save and reload.
+    @Test func timingsRoundTrip() {
+        var timed = record("timed")
+        timed.latency = 0.8
+        timed.transcriptionTime = 0.3
+        timed.cleanupTime = 0.2
+        store.add(timed, retention: .forever)
+        #expect(store.latest() == timed)
+    }
+
     @Test func searchMatchesRawOrFinalTextCaseInsensitively() {
         store.add(record("Skicka rapporten"), retention: .forever)
         store.add(record("Something else"), retention: .forever)

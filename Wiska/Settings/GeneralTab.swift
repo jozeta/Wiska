@@ -44,6 +44,13 @@ struct GeneralTab: View {
                      ? "The text is pasted where your cursor is."
                      : "The text is only copied — paste it with ⌘V where you want it.")
                     .font(.caption).foregroundStyle(.secondary)
+                Picker("Paste last dictation again", selection: Binding(
+                    get: { settings.pasteLastShortcut },
+                    set: { settings.pasteLastShortcut = $0; model.applyPasteLastShortcut() })) {
+                    ForEach(PasteLastShortcut.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                Text("Pastes your last dictation at the cursor again, in any app — handy when it landed in the wrong place. Also in Wiska's menu.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Toggle("Show live preview (Notch Dropdown and Clippy)", isOn: $settings.livePreview)
                 Text("The words appear under the waveform as you speak (Apple engine only).")
                     .font(.caption).foregroundStyle(.secondary)
