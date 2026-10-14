@@ -178,6 +178,15 @@ struct CleanupGuardTests {
         #expect(verdict != .accept)
     }
 
+    /// A misheard word that isn't a real word may become any close word, listed term or not.
+    @Test func anUnknownWordMayBecomeAnUnlistedTerm() {
+        let known: (String) -> Bool = { ["till", "vi", "kör", "nu"].contains($0) }
+        #expect(CleanupGuard.check(original: "Vi kör Ansibel nu", cleaned: "Vi kör Ansible nu.",
+                                   level: .light, terms: true, isKnownWord: known) == .accept)
+        #expect(CleanupGuard.check(original: "Vi kör Ansibel nu", cleaned: "Vi kör Ansible och Puppet nu.",
+                                   level: .light, terms: true, isKnownWord: known) != .accept)
+    }
+
     /// Real words the recogniser heard ("puller", "Gira") may still be terms when very close.
     @Test func aKnownWordVeryCloseToATermIsRepaired() {
         let known: (String) -> Bool = { ["puller", "gira", "quad"].contains($0) }

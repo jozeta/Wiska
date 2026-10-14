@@ -8,7 +8,9 @@ enum TechTerms {
                         "staging", "release", "runner", "cache", "refaktorera", "deprecated", "endpoint",
                         "frontend", "backend", "API", "Jira", "Kubernetes", "Docker", "Redis", "Datadog",
                         "AWS", "Azure AD", "Elasticsearch", "Slack", "GitHub Actions", "memory leak",
-                        "timeout", "feature branch", "standup", "onboarding"]
+                        "timeout", "feature branch", "standup", "onboarding", "Postgres", "MySQL", "query",
+                        "Terraform", "load balancer", "gateway", "Grafana", "Kafka", "consumer", "rollback",
+                        "hotfix", "Sentry", "Confluence", "dashboard", "linter", "CI", "unit test", "Teams"]
 
     /// The term words the cleanup guard lets the model write in place of a misheard word.
     static let words: Set<String> = Set(terms.flatMap { $0.lowercased().split(separator: " ").map(String.init) })

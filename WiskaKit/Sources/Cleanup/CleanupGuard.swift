@@ -23,7 +23,7 @@ public enum CleanupGuard {
         let spokeNumbers = input.contains { rules.numberWords.contains($0) || isNumeric($0) }
         // Grammar fixes change words ("buyed" → "bought"): a word near one that was said isn't new.
         let newWords = newWordCount(output, known: inputSet, digitsAllowed: spokeNumbers,
-                                    nearWords: grammar ? input : [], termAllowance: repaired.count)
+                                    nearWords: grammar ? input : [], repaired: repaired)
         if Double(newWords) > max(1, maxNewWordShare * Double(output.count)) {
             return .reject("new words")
         }
@@ -58,18 +58,20 @@ public enum CleanupGuard {
         return PhraseMatcher.editDistance(a, b, limit: limit) <= limit
     }
 
-    /// Misheard input words the output replaced with an IT term: gone from the output, and either
-    /// inside a term word ("elastic" in "elasticsearch") or near one ("kubenetesklustret"/"kubernetes"
-    /// + "klustret"). A real word must be closer still, one letter off ("gira"/"jira") or starting
-    /// with the term ("puller"/"pull"), so "ploga" never becomes "deploya".
+    /// Misheard input words the output repaired: gone from the output, and either inside a term
+    /// word ("elastic" in "elasticsearch") or, when not a real word, near a word the model wrote
+    /// ("posgres"/"postgres", "kubenetesklustret"/"kubernetes" + "klustret"), listed term or not.
+    /// A real word is what was said unless it's one letter off a listed term ("gira"/"jira") or
+    /// starts with one ("puller"/"pull"), so "ploga" never becomes "deploya".
     static func termRepairs(_ input: [String], output: [String], isKnownWord: (String) -> Bool) -> Set<String> {
-        let outputSet = Set(output)
+        let inputSet = Set(input)
         let termWords = output.filter(TechTerms.isTermWord)
-        let termPairs = zip(output, output.dropFirst()).filter { TechTerms.isTermWord($0.0) }.map { $0.0 + $0.1 }
+        let written = output.filter { !inputSet.contains($0) }
+        let writtenPairs = zip(output, output.dropFirst()).filter { !inputSet.contains($0.0) }.map { $0.0 + $0.1 }
         return Set(input.filter { word in
-            guard !outputSet.contains(word) else { return false }
+            guard !Set(output).contains(word) else { return false }
             if termWords.contains(where: { $0.count > word.count && $0.contains(word) }) { return true }
-            guard isKnownWord(word) else { return (termWords + termPairs).contains { isNear(word, $0) } }
+            guard isKnownWord(word) else { return (written + writtenPairs).contains { isNear(word, $0) } }
             return termWords.contains { term in
                 PhraseMatcher.editDistance(word, term, limit: 1) <= 1 || (term.count >= 4 && word.hasPrefix(term))
             }
@@ -93,18 +95,18 @@ public enum CleanupGuard {
     /// differ in spacing ("imorgon" → "i morgon") and — only if a number was spoken — digits
     /// ("two thirty" → "2:30"). Digits out of nowhere are how answers look ("3:15 pm").
     static func newWordCount(_ output: [String], known: Set<String>, digitsAllowed: Bool,
-                             nearWords: [String] = [], termAllowance: Int = 0) -> Int {
+                             nearWords: [String] = [], repaired: Set<String> = []) -> Int {
         var count = 0
-        // Term words stand in for repaired words, one for each; more would be added content.
-        var termAllowance = termAllowance
+        // Repairs stand in for misheard words, one for each; more would be added content.
+        var allowance = repaired.count
         var index = 0
         while index < output.count {
             let word = output[index]
             if known.contains(word) || (digitsAllowed && isNumeric(word))
                 || nearWords.contains(where: { isNear(word, $0) }) {
                 index += 1
-            } else if termAllowance > 0, TechTerms.isTermWord(word) {
-                termAllowance -= 1
+            } else if allowance > 0, TechTerms.isTermWord(word) || repaired.contains(where: { isNear($0, word) }) {
+                allowance -= 1
                 index += 1
             } else if index + 1 < output.count, known.contains(word + output[index + 1]) {
                 index += 2
