@@ -283,6 +283,7 @@ struct TranscribeFileView: View {
         Task {
             do {
                 try await model.meetingRecorder.start()
+                ScreenRecordingPermission.confirm()   // macOS's capture question is behind us
                 phase = .recording
             } catch {
                 permissionMissing = true

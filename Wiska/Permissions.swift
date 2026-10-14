@@ -2,6 +2,7 @@ import AppKit
 import AVFoundation
 import ApplicationServices
 import CoreGraphics
+import ScreenCaptureKit
 
 enum Permission: CaseIterable, Identifiable {
     case microphone
@@ -93,14 +94,40 @@ enum Permission: CaseIterable, Identifiable {
 
 /// Screen & System Audio Recording: optional, only meeting recording needs it, so it isn't a
 /// `Permission` (those are what "Setup needed" counts).
+///
+/// It comes in two steps: the permission itself, then, the first time Wiska captures, macOS's
+/// own question whether Wiska may "bypass the private window picker". That question can't be
+/// checked beforehand, only raised by capturing, so setup raises it and remembers the answer.
 enum ScreenRecordingPermission {
     private static let promptedKey = "promptedScreenRecording"
+    private static let confirmedKey = "screenCaptureConfirmed"
 
-    @MainActor static var isGranted: Bool { CGPreflightScreenCaptureAccess() }
+    /// Allowed, and the capture question answered (in setup or by recording a meeting).
+    @MainActor static var isGranted: Bool {
+        CGPreflightScreenCaptureAccess() && UserDefaults.standard.bool(forKey: confirmedKey)
+    }
 
-    /// Asks (which also lists Wiska in System Settings); macOS shows its prompt only once, so
-    /// after that open the list too.
+    /// Capturing worked: the second question has been answered.
+    @MainActor static func confirm() {
+        UserDefaults.standard.set(true, forKey: confirmedKey)
+    }
+
+    /// Once the permission is on: capture once, so macOS asks its second question now, in setup,
+    /// rather than when the first meeting starts.
     @MainActor static func requestOrOpenSettings() {
+        if CGPreflightScreenCaptureAccess() {
+            Task { @MainActor in
+                do {
+                    _ = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+                    confirm()
+                } catch {
+                    // Declined, or sent to System Settings by macOS's own question: try again later.
+                }
+            }
+            return
+        }
+        // Asks (which also lists Wiska in System Settings); macOS shows its prompt only once, so
+        // after that open the list too.
         let asked = UserDefaults.standard.bool(forKey: promptedKey)
         _ = CGRequestScreenCaptureAccess()
         if asked {
