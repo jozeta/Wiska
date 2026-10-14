@@ -42,7 +42,7 @@ struct OnboardingStateTests {
         #expect(state.isDone(.screenRecording))
     }
 
-    @Test func screenRecordingComesLast() {
-        #expect(OnboardingStep.allCases.last == .screenRecording)
+    @Test func screenRecordingFollowsAccessibility() {
+        #expect(Array(OnboardingStep.allCases.prefix(3)) == [.microphone, .accessibility, .screenRecording])
     }
 }

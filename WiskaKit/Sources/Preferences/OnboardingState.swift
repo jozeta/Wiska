@@ -2,8 +2,8 @@
 public enum OnboardingStep: String, CaseIterable, Identifiable, Sendable {
     // Accessibility before Input Monitoring: macOS judges the request to listen to the fn key
     // through Accessibility, and refuses it (without a prompt) while Accessibility is off.
-    // Screen recording last: it's optional, only meetings need it.
-    case microphone, accessibility, inputMonitoring, fnKey, tryIt, screenRecording
+    // Screen recording (optional, only meetings need it) sits with the other permissions.
+    case microphone, accessibility, screenRecording, inputMonitoring, fnKey, tryIt
 
     public var id: String { rawValue }
 
