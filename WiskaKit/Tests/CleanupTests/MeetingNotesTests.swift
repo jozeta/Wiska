@@ -39,6 +39,10 @@ struct MeetingNotesTests {
         #expect(parts.allSatisfy { $0.hasPrefix("[0:") })
     }
 
+    @Test func markdownAndTrailingSpacesAreTidied() {
+        #expect(MeetingNotes.clean("## Summary  \n- **Anna** agreed.  \n") == "Summary\n- Anna agreed.")
+    }
+
     @Test func notesAskForTheSpokenLanguage() async throws {
         var prompt = ""
         _ = try await MeetingNotes.write("[0:01] You: Hej allihop.", language: .swedish, generate: { _, p in prompt = p; return "x" },

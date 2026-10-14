@@ -70,6 +70,7 @@ public enum MeetingNotes {
     static func clean(_ notes: String) -> String {
         notes.replacingOccurrences(of: "**", with: "")
             .replacing(/(?m)^#+\s*/, with: "")
+            .replacing(/(?m)[ \t]+$/, with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -79,7 +80,7 @@ public enum MeetingNotes {
     }
 
     /// Apple Intelligence, when this Mac has it.
-    public static var appleAvailable: Bool {
+    nonisolated public static var appleAvailable: Bool {
         if case .available = SystemLanguageModel.default.availability { return true }
         return false
     }

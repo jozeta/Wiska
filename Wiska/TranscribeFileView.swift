@@ -1,7 +1,9 @@
 import AppKit
 import Audio
+import Cleanup
 import Core
 import Dictation
+import Parakeet
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -29,6 +31,8 @@ struct TranscribeFileView: View {
         case loading
         case transcribing(Double)
         case cleaningUp(Double)
+        case identifyingSpeakers
+        case writingNotes(Double)
         case done
         case failed(String)
     }
@@ -42,6 +46,11 @@ struct TranscribeFileView: View {
     @State private var dropTargeted = false
     @State private var permissionMissing = false
     @AppStorage("transcribeFileCleanUp") private var cleanUp = true
+    @AppStorage("meetingIdentifySpeakers") private var identifySpeakers = true
+    @AppStorage("meetingWriteNotes") private var writeNotes = true
+    /// The last meeting, kept so names given below rewrite its transcript and notes.
+    @State private var meeting: AppModel.MeetingResult?
+    @State private var names: [Speaker: String] = [:]
 
     var body: some View {
         @Bindable var model = model
@@ -75,7 +84,13 @@ struct TranscribeFileView: View {
                 .fixedSize()
                 .disabled(isBusy)
             }
+            if model.transcribeMode == .meeting && phase != .recording && !isBusy {
+                meetingOptions
+            }
             status
+            if model.transcribeMode == .meeting, let meeting, !MeetingTranscription.samples(meeting.segments).isEmpty {
+                speakerNames(meeting)
+            }
             TextEditor(text: $text)
                 .font(.body)
                 .scrollContentBackground(.hidden)
@@ -138,6 +153,10 @@ struct TranscribeFileView: View {
             progressRow("Transcribing", fraction)
         case .cleaningUp(let fraction):
             progressRow("Cleaning up", fraction)
+        case .identifyingSpeakers:
+            HStack { ProgressView().controlSize(.small); Text("Telling the voices apart…") }
+        case .writingNotes(let fraction):
+            progressRow("Writing notes", fraction)
         case .done:
             Text(summary).font(.caption).foregroundStyle(.secondary)
         case .failed(let message):
@@ -156,9 +175,60 @@ struct TranscribeFileView: View {
 
     private var isBusy: Bool {
         switch phase {
-        case .loading, .transcribing, .cleaningUp: true
+        case .loading, .transcribing, .cleaningUp, .identifyingSpeakers, .writingNotes: true
         default: false
         }
+    }
+
+    /// What happens after a meeting: tell the people apart, write notes.
+    private var meetingOptions: some View {
+        let store = model.speakerModel
+        return HStack(spacing: 14) {
+            Toggle("Identify speakers", isOn: $identifySpeakers)
+                .help("Tells the people on the call apart by voice: Speaker 1, Speaker 2… You name them afterwards.")
+            if identifySpeakers {
+                switch store.status {
+                case .ready: EmptyView()
+                case .notDownloaded, .failed:
+                    Button("Download speaker model (\(SpeakerDiarizer.approximateSize))") { store.download() }
+                case .downloading(let fraction):
+                    ProgressView(value: fraction).frame(width: 80)
+                }
+            }
+            Toggle("Write notes", isOn: $writeNotes)
+                .help("A summary, decisions and action items, written on this Mac by your language model")
+                .disabled(model.notesGenerator == nil)
+            if model.notesGenerator == nil {
+                Text("Notes need Apple Intelligence or Gemma").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Name the people on the call; the transcript and notes follow.
+    private func speakerNames(_ meeting: AppModel.MeetingResult) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Who's who? Name the speakers and the transcript and notes follow.")
+                .font(.caption).foregroundStyle(.secondary)
+            ForEach(MeetingTranscription.samples(meeting.segments), id: \.speaker) { sample in
+                HStack {
+                    Text(sample.speaker.displayName).frame(width: 80, alignment: .leading)
+                    TextField("Name", text: Binding(get: { names[sample.speaker] ?? "" },
+                                                    set: { names[sample.speaker] = $0; renderMeeting() }))
+                        .frame(width: 150)
+                    Text("“\(sample.line)”").font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                }
+            }
+        }
+        .padding(8)
+        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// The meeting as text: notes (if any), then the transcript, with the names given so far.
+    private func renderMeeting() {
+        guard let meeting else { return }
+        let transcript = MeetingTranscription.transcript(meeting.segments, names: names)
+        text = meeting.notes.map { "Notes\n\n\(MeetingTranscription.rename($0, names: names))\n\nTranscript\n\n\(transcript)" }
+            ?? transcript
     }
 
     /// Start / stop, the time so far, and a meter for each side.
@@ -201,6 +271,8 @@ struct TranscribeFileView: View {
     private func startMeeting() {
         permissionMissing = false
         text = ""
+        meeting = nil
+        names = [:]
         Task {
             do {
                 try await model.meetingRecorder.start()
@@ -219,14 +291,16 @@ struct TranscribeFileView: View {
         task = Task {
             let started = ContinuousClock.now
             do {
-                // Work in progress: speaker naming UI still to come; notes go above the transcript.
-                let result = try await model.finishMeeting(language: language, cleanUp: cleanUp,
-                                                           identifySpeakers: model.speakerModel.isInstalled,
-                                                           writeNotes: true) { step, fraction in
-                    phase = step == .cleaningUp ? .cleaningUp(fraction) : .transcribing(fraction)
+                meeting = try await model.finishMeeting(language: language, cleanUp: cleanUp,
+                                                        identifySpeakers: identifySpeakers, writeNotes: writeNotes) { step, fraction in
+                    switch step {
+                    case .transcribing: phase = .transcribing(fraction)
+                    case .cleaningUp: phase = .cleaningUp(fraction)
+                    case .identifyingSpeakers: phase = .identifyingSpeakers
+                    case .writingNotes: phase = .writingNotes(fraction)
+                    }
                 }
-                let transcript = MeetingTranscription.transcript(result.segments)
-                text = result.notes.map { "Notes\n\n\($0)\n\nTranscript\n\n\(transcript)" } ?? transcript
+                renderMeeting()
                 let seconds = Int((ContinuousClock.now - started).seconds.rounded())
                 summary = text.isEmpty ? "No speech found." : "\(Log.words(text).formatted()) words in \(seconds) s"
                 phase = .done
