@@ -31,4 +31,18 @@ struct OnboardingStateTests {
         #expect(state.shouldOpenAtLaunch(completed: true))
         #expect(!allGranted.shouldOpenAtLaunch(completed: true))
     }
+
+    @Test func screenRecordingIsOptional() {
+        #expect(!OnboardingStep.screenRecording.isRequired)
+        #expect(!allGranted.isDone(.screenRecording))
+        #expect(allGranted.canFinish)
+        #expect(!allGranted.shouldOpenAtLaunch(completed: true))
+        var state = allGranted
+        state.screenRecording = true
+        #expect(state.isDone(.screenRecording))
+    }
+
+    @Test func screenRecordingFollowsAccessibility() {
+        #expect(Array(OnboardingStep.allCases.prefix(3)) == [.microphone, .accessibility, .screenRecording])
+    }
 }

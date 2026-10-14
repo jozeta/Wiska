@@ -57,8 +57,12 @@ public final class ParakeetModelStore {
 
     public var isInstalled: Bool { status == .ready }
 
+    /// For log lines: which model this store holds.
+    @ObservationIgnored private let name: String
+
     public init(directory: URL = ParakeetModelStore.defaultDirectory,
-                downloader: any ModelDownloader = FluidAudioDownloader()) {
+                downloader: any ModelDownloader = FluidAudioDownloader(), name: String = "parakeet") {
+        self.name = name
         // Loading must never fall back to downloading (review C2).
         ModelHub.offlineMode = true
         self.directory = directory
@@ -68,7 +72,7 @@ public final class ParakeetModelStore {
             status = .ready
         } else {
             if FileManager.default.fileExists(atPath: directory.path) {
-                Self.log.notice("removing partial parakeet download")
+                Self.log.notice("removing partial \(name, privacy: .public) download")
                 try? FileManager.default.removeItem(at: directory)
             }
             status = .notDownloaded
@@ -99,14 +103,14 @@ public final class ParakeetModelStore {
                 guard downloader.exists(at: directory) else { throw CocoaError(.fileReadCorruptFile) }
                 try Data((revision ?? "").utf8).write(to: directory.appendingPathComponent(Self.completionMarker))
                 self?.status = .ready
-                Self.log.info("parakeet model downloaded")
+                Self.log.notice("\(self?.name ?? "model", privacy: .public) model downloaded")
                 self?.onDownloaded?()
             } catch {
                 try? FileManager.default.removeItem(at: directory)
                 if Task.isCancelled || error is CancellationError {
                     self?.status = .notDownloaded
                 } else {
-                    Self.log.error("parakeet download failed: \(String(describing: error), privacy: .public)")
+                    Self.log.error("\(self?.name ?? "model", privacy: .public) download failed: \(Log.summary(error), privacy: .public)")
                     self?.status = .failed(error.localizedDescription)
                 }
             }

@@ -20,6 +20,7 @@ struct ModelsTab: View {
             Section("Speech recognition") {
                 ParakeetModelCard(model: model)
                 KBWhisperModelCard(model: model)
+                SpeakerModelCard(model: model)
             }
             Section("Cleanup and commands") {
                 GemmaModelCard(model: model)
@@ -137,6 +138,30 @@ private struct ParakeetModelCard: View {
         case .downloading(let fraction): "Downloading \(Int(fraction * 100)) %"
         case .ready: "Ready"
         case .failed(let message): message
+        }
+    }
+}
+
+/// Tells the voices on a recorded call apart (Record Meeting…).
+private struct SpeakerModelCard: View {
+    let model: AppModel
+
+    var body: some View {
+        let store = model.speakerModel
+        HStack {
+            ModelHeader(title: "Speaker identification",
+                        purpose: "Tells the people on a recorded meeting apart (Speaker 1, Speaker 2…). About \(SpeakerDiarizer.approximateSize).",
+                        status: ParakeetModelCard.status(store.status),
+                        isError: { if case .failed = store.status { true } else { false } }())
+            Spacer()
+            switch store.status {
+            case .notDownloaded: Button("Download") { store.download() }
+            case .downloading(let fraction):
+                ProgressView(value: fraction).frame(width: 90)
+                Button("Cancel") { store.cancelDownload() }
+            case .ready: Button("Remove") { store.remove() }
+            case .failed: Button("Try again") { store.download() }
+            }
         }
     }
 }
