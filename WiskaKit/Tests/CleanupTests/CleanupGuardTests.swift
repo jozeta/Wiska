@@ -150,4 +150,51 @@ struct CleanupGuardTests {
         #expect(!CleanupGuard.isNear("re", "to"))
         #expect(CleanupGuard.isNear("to", "too"))
     }
+
+    // MARK: Swedish IT terms
+
+    /// The model's repairs of real KB-Whisper mishearings from a read-aloud stand-up.
+    @Test(arguments: [
+        ("Jag mergade puller-orchestern igår kväll", "Jag mergade pull requesten igår kväll."),
+        ("En av poddarna i kubenetesklustret kraschade", "En av poddarna i Kubernetes-klustret kraschade."),
+        ("Vi flyttar loggarna från Elastic Search", "Vi flyttar loggarna från Elasticsearch."),
+        ("Jag har skapat en ticket i Gira och lagt den i backloggen", "Jag har skapat en ticket i Jira och lagt den i backloggen."),
+        ("De gamla endpoints är markerade som deprockated", "De gamla endpoints är markerade som deprecated."),
+        ("Rotorsaken var en bugg i sessioner i Readis", "Rotorsaken var en bugg i sessioner i Redis."),
+    ])
+    func lightAcceptsATermRepair(heard: String, repaired: String) {
+        #expect(CleanupGuard.check(original: heard, cleaned: repaired, level: .light, terms: true) == .accept)
+    }
+
+    @Test func termRepairsOnlyWhenAsked() {
+        #expect(CleanupGuard.check(original: "Jag mergade puller-orchestern igår kväll",
+                                   cleaned: "Jag mergade pull requesten igår kväll.", level: .light) != .accept)
+    }
+
+    /// A real word is what was said: "ploga åkern" never becomes "deploya åkern".
+    @Test func aKnownWordIsNeverRepairedIntoATerm() {
+        let verdict = CleanupGuard.check(original: "Vi ska ploga åkern i morgon", cleaned: "Vi ska deploya åkern i morgon.",
+                                         level: .light, terms: true, isKnownWord: { $0 == "ploga" })
+        #expect(verdict != .accept)
+    }
+
+    /// Real words the recogniser heard ("puller", "Gira") may still be terms when very close.
+    @Test func aKnownWordVeryCloseToATermIsRepaired() {
+        let known: (String) -> Bool = { ["puller", "gira", "quad"].contains($0) }
+        #expect(CleanupGuard.check(original: "Jag mergade puller-orchestern igår kväll", cleaned: "Jag mergade pull requesten igår kväll.",
+                                   level: .light, terms: true, isKnownWord: known) == .accept)
+        #expect(CleanupGuard.check(original: "Jag har skapat en ticket i Gira", cleaned: "Jag har skapat en ticket i Jira.",
+                                   level: .light, terms: true, isKnownWord: known) == .accept)
+        // Two letters off a real word: left to the personal dictionary.
+        #expect(CleanupGuard.check(original: "Fixen ligger för Quad Review", cleaned: "Fixen ligger för code review.",
+                                   level: .light, terms: true, isKnownWord: known) != .accept)
+    }
+
+    /// Apple's model added this sentence to a line that ended "Vi skickar också".
+    @Test func termsDoNotExcuseAnInventedSentence() {
+        let verdict = CleanupGuard.check(original: "Det sparar ungefär 30 % av fakturan. Vi skickar också",
+                                         cleaned: "Det sparar ungefär 30 % av fakturan. Vi skickar också en pull request till Kubernetes-klustret.",
+                                         level: .light, terms: true)
+        #expect(verdict != .accept)
+    }
 }

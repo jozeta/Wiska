@@ -20,4 +20,14 @@ struct CleanupPromptsTests {
         #expect(!grammar.contains("Do not remove, add, reorder or change any other word"))
         #expect(grammar.contains("change words only to fix grammar"))
     }
+
+    /// Swedish dictation may repair misheard IT terms; no other language gets the line.
+    @Test func itTermsOnlyForSwedish() {
+        for level in [CleanupLevel.light, .polished] {
+            #expect(CleanupPrompts.instructions(for: level, language: .swedish).contains(TechTerms.promptLine))
+            #expect(!CleanupPrompts.instructions(for: level, language: .english).contains(TechTerms.promptLine))
+            #expect(!CleanupPrompts.instructions(for: level, language: nil).contains(TechTerms.promptLine))
+        }
+        #expect(CleanupPrompts.instructions(for: .light, language: .swedish).contains("and fixing a misheard IT term"))
+    }
 }

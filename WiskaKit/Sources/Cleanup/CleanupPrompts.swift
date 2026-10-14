@@ -12,10 +12,13 @@ enum CleanupPrompts {
             ? "Use complete sentences. "
             : "Keep the wording plain and conversational; never make it more formal. "
         let fix = grammar ? grammarLine + " " : ""
+        // Swedish recognisers mangle the English IT terms Swedes mix in.
+        let terms = language == .swedish ? TechTerms.promptLine + " " : ""
         let common = """
         You clean up dictated text\(language.map { " in \($0.displayName)" } ?? ""). \
         Fix punctuation and capitalization. \
         \(fix)\
+        \(terms)\
         Write numbers, times, dates and percentages as digits, following \
         \(language?.displayName ?? "the text's language")'s conventions. \
         \(tone)\
@@ -25,9 +28,10 @@ enum CleanupPrompts {
         """
         switch level {
         case .off, .light:
+            let termFix = terms.isEmpty ? "" : " and fixing a misheard IT term"
             let keep = grammar
-                ? "Do not remove or add other words; change words only to fix grammar or to write numbers as digits. "
-                : "Do not remove, add, reorder or change any other word, except writing numbers as digits. "
+                ? "Do not remove or add other words; change words only to fix grammar or to write numbers as digits\(termFix). "
+                : "Do not remove, add, reorder or change any other word, except writing numbers as digits\(termFix). "
             return "Remove filler sounds (\(sounds)) and immediately repeated words. " + keep + common
         case .polished:
             return """
