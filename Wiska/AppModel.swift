@@ -436,7 +436,7 @@ final class AppModel {
                 let start = ContinuousClock.now
                 let voices = try await SpeakerDiarizer.segments(in: others)
                     .map { VoiceSegment(speaker: $0.speaker, start: $0.start, end: $0.end) }
-                turns = MeetingTranscription.turns(from: voices, sampleCount: others.count)
+                turns = MeetingTranscription.turns(from: voices, sampleCount: others.count, audio: others)
                 Self.log.notice("meeting: \(Set(voices.map(\.speaker)).count) voices on the call, \(turns?.count ?? 0) turns, in \(Log.ms(ContinuousClock.now - start), privacy: .public)")
                 if turns?.isEmpty == true { turns = nil }   // nothing found: the call as one speaker
             } catch {

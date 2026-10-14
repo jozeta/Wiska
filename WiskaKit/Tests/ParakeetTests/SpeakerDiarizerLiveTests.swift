@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import Testing
+import Dictation
 @testable import Parakeet
 
 /// Downloads the real models (~14 MB) into a temporary folder and tells two voices apart.
@@ -29,6 +30,29 @@ struct SpeakerDiarizerLiveTests {
         #expect(found[0] != nil && found[0] == found[2])
         #expect(found[1] != nil && found[1] == found[3])
         #expect(found[0] != found[1])
+    }
+
+    /// b cuts in over the middle of a's long turn, mixed into one track like a call: the turns
+    /// never overlap, so no audio is transcribed twice.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["WISKA_LIVE_DIARIZATION"] != nil))
+    func talkingOverSomeoneGivesTurnsThatDontOverlap() async throws {
+        let folder = URL(fileURLWithPath: ProcessInfo.processInfo.environment["WISKA_LIVE_DIARIZATION"]!)
+        var samples = try load(folder.appendingPathComponent("a1.aiff")) + load(folder.appendingPathComponent("a2.aiff"))
+        let interjection = try load(folder.appendingPathComponent("b1.aiff"))
+        let at = samples.count / 2
+        samples += [Float](repeating: 0, count: max(0, at + interjection.count - samples.count))
+        for index in interjection.indices { samples[at + index] += interjection[index] }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("diarizer-\(UUID())")
+            .appendingPathComponent("speaker-diarization-coreml")
+        try await DiarizerDownloader().download(to: directory, progress: { _ in })
+        let voices = try await SpeakerDiarizer.segments(in: samples, directory: directory)
+            .map { VoiceSegment(speaker: $0.speaker, start: $0.start, end: $0.end) }
+        print("DIARIZATION", voices.map { "\($0.speaker) \(String(format: "%.1f–%.1f", $0.start, $0.end))" })
+        let turns = MeetingTranscription.turns(from: voices, sampleCount: samples.count, audio: samples)
+        print("TURNS", turns.map { "\($0.speaker.displayName)\($0.over.map { " over \($0.displayName)" } ?? "") "
+            + String(format: "%.1f–%.1f", Double($0.range.lowerBound) / 16_000, Double($0.range.upperBound) / 16_000) })
+        #expect(zip(turns, turns.dropFirst()).allSatisfy { $0.range.upperBound <= $1.range.lowerBound })
+        #expect(turns.first?.speaker == .person(1))
     }
 
     func load(_ url: URL) throws -> [Float] {
