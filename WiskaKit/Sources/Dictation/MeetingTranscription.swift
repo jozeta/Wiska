@@ -166,10 +166,11 @@ public enum MeetingTranscription {
         }
     }
 
-    /// The microphone without the call leaking in from the speakers: where the call is playing and
-    /// the microphone is no louder than that leak (about twice its usual level), the microphone
-    /// is silenced. Your own voice, close to the microphone, is much louder and stays; with
-    /// headphones there's no leak and nothing changes. Returns how many samples were silenced.
+    /// The microphone without the call leaking in from the speakers. Your own voice, close to the
+    /// microphone, is much louder than that leak: frames clearly above it (2.5 times its usual
+    /// level) are yours and kept, with 50 ms either side so word edges survive; the rest, while the
+    /// call is playing, is silenced. With headphones there's no leak and nothing changes. Returns
+    /// how many samples were silenced.
     nonisolated static func withoutBleed(_ mic: [Float], call: [Float]) -> (audio: [Float], removed: Int) {
         let frame = Int(AudioChunk.sampleRate) / 20   // 50 ms
         let count = min(mic.count, call.count) / frame
@@ -180,28 +181,26 @@ public enum MeetingTranscription {
             return (energy / Float(frame)).squareRoot()
         }
         let heard = (0..<count).map { rms(mic, $0) }
-        // The leak comes out of the speakers a little late: compare with this frame and the last.
-        let playing = (0..<count).map { max(rms(call, $0), $0 > 0 ? rms(call, $0 - 1) : 0) }
-        let ratios = (0..<count).filter { playing[$0] >= silence }.map { heard[$0] / playing[$0] }.sorted()
+        let sounding = (0..<count).map { rms(call, $0) }
+        // The leak comes out of the speakers a little late: judge by this frame and the last.
+        let playing = (0..<count).map { max(sounding[$0], $0 > 0 ? sounding[$0 - 1] : 0) }
+        // How loud the leak is: the typical mic/call level while the call plays (you're mostly
+        // quiet then).
+        let ratios = (0..<count).filter { sounding[$0] >= silence }.map { heard[$0] / sounding[$0] }.sorted()
         guard !ratios.isEmpty else { return (mic, 0) }
-        // How loud the leak is: the low end of mic/call while the call plays (you're mostly quiet then).
-        let leak = ratios[ratios.count / 4]
-        let isLeak = (0..<count).map { playing[$0] >= silence && heard[$0] <= 2 * leak * playing[$0] }
+        let leak = ratios[ratios.count / 2]
+        let yours = (0..<count).map { heard[$0] >= silence && heard[$0] > 2.5 * leak * playing[$0] }
 
         var audio = mic
         var removed = 0
-        var index = 0
-        while index < count {
-            guard isLeak[index] else { index += 1; continue }
-            var end = index
-            while end < count && isLeak[end] { end += 1 }
-            // Only stretches of 200 ms or more: shorter ones are likely gaps inside your own words.
-            if end - index >= 4 {
-                let range = (index * frame)..<min(end * frame, audio.count)
-                for sample in range { audio[sample] = 0 }
-                removed += range.count
-            }
-            index = end
+        for index in 0..<count {
+            // The call is playing now or just was (its leak trails it).
+            let callPlaying = playing[index] >= silence || (index > 1 && playing[index - 2] >= silence)
+            let nearYou = yours[max(0, index - 1)...min(count - 1, index + 1)].contains(true)
+            guard callPlaying && !nearYou else { continue }
+            let range = (index * frame)..<min((index + 1) * frame, audio.count)
+            for sample in range where audio[sample] != 0 { audio[sample] = 0 }
+            removed += range.count
         }
         return (audio, removed)
     }

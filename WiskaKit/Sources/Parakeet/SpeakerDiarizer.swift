@@ -46,6 +46,10 @@ public enum SpeakerDiarizer {
         let models = try await OfflineDiarizerModels.load(from: directory.deletingLastPathComponent())
         var config = OfflineDiarizerConfig()
         config.clustering.numSpeakers = speakers
+        // FluidAudio's settings for accuracy over speed (about twice the work, still seconds for
+        // an hour): finer steps, and short replies ("Will do.") get a voice too.
+        config.segmentation.stepRatio = 0.1
+        config.embedding.minSegmentDurationSeconds = 0
         let manager = OfflineDiarizerManager(config: config)
         manager.initialize(models: models)
         let result = try await manager.process(audio: samples)

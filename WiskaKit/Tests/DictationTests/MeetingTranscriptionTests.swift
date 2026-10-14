@@ -203,8 +203,9 @@ struct MeetingBleedTests {
         for index in yours.indices { mic[4 * 16_000 + index] += yours[index] }
         let cleaned = MeetingTranscription.withoutBleed(mic, call: call).audio
         #expect(cleaned[(4 * 16_000)..<(6 * 16_000)] == mic[(4 * 16_000)..<(6 * 16_000)])
-        #expect(rms(cleaned[0..<(4 * 16_000)]) < MeetingTranscription.silence)
-        #expect(rms(cleaned[(6 * 16_000)...]) < MeetingTranscription.silence)
+        // Away from your words' edges (50 ms is kept either side), the leak is gone.
+        #expect(rms(cleaned[0..<(3_800 * 16)]) < MeetingTranscription.silence)
+        #expect(rms(cleaned[(6_200 * 16)...]) < MeetingTranscription.silence)
     }
 
     @Test func withHeadphonesNothingChanges() {

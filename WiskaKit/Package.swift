@@ -50,7 +50,7 @@ let package = Package(
         .testTarget(name: "InjectionTests", dependencies: ["Injection"]),
         .testTarget(name: "DictationTests", dependencies: ["Dictation"]),
         .testTarget(name: "PreferencesTests", dependencies: ["Preferences"]),
-        .testTarget(name: "ParakeetTests", dependencies: ["Parakeet", "SpeechToText", "Dictation"]),
+        .testTarget(name: "ParakeetTests", dependencies: ["Parakeet", "SpeechToText", "Dictation", "Cleanup"]),
         .testTarget(name: "HistoryTests", dependencies: ["History"]),
         .testTarget(name: "HUDTests", dependencies: ["HUD"]),
     ]
