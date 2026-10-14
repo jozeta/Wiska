@@ -74,6 +74,10 @@ struct OnboardingView: View {
             }
         case .tryIt:
             EmptyView()
+        case .screenRecording:
+            if !done {
+                Button("Allow…") { ScreenRecordingPermission.requestOrOpenSettings() }
+            }
         }
     }
 

@@ -61,6 +61,8 @@ final class AppModel {
     /// paragraph instead of a second, and Light when cleanup is set to Off (the user asked for it).
     @ObservationIgnored private var fileCleaner: CleanupPipeline!
     private(set) var missingPermissions: [Permission] = []
+    /// Optional, for meetings only.
+    private(set) var screenRecordingAllowed = false
     private(set) var dictationState: DictationController.State = .idle
 
     /// Shows dictation in the chosen theme (Settings ▸ Appearance); the controller never knows which.
@@ -540,7 +542,8 @@ final class AppModel {
                         inputMonitoring: !missingPermissions.contains(.inputMonitoring),
                         accessibility: !missingPermissions.contains(.accessibility),
                         fnKeyConfirmed: settings.fnKeyConfirmed,
-                        firstDictationDone: settings.firstDictationDone)
+                        firstDictationDone: settings.firstDictationDone,
+                        screenRecording: screenRecordingAllowed)
     }
 
     @ObservationIgnored private var onboardingOffered = false
@@ -764,6 +767,11 @@ final class AppModel {
             let names = missing.isEmpty ? "none" : missing.map { String(describing: $0) }.joined(separator: ", ")
             Self.log.notice("missing permissions: \(names, privacy: .public)")
             missingPermissions = missing
+        }
+        let screen = ScreenRecordingPermission.isGranted
+        if screen != screenRecordingAllowed {
+            Self.log.notice("screen recording allowed: \(screen, privacy: .public)")
+            screenRecordingAllowed = screen
         }
         if !missing.contains(.inputMonitoring) && !hotkey.isRunning {
             startHotkey()

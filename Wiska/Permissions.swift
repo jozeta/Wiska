@@ -90,3 +90,23 @@ enum Permission: CaseIterable, Identifiable {
         UserDefaults.standard.set(prompted + [settingsAnchor], forKey: Self.promptedKey)
     }
 }
+
+/// Screen & System Audio Recording: optional, only meeting recording needs it, so it isn't a
+/// `Permission` (those are what "Setup needed" counts).
+enum ScreenRecordingPermission {
+    private static let promptedKey = "promptedScreenRecording"
+
+    @MainActor static var isGranted: Bool { CGPreflightScreenCaptureAccess() }
+
+    /// Asks (which also lists Wiska in System Settings); macOS shows its prompt only once, so
+    /// after that open the list too.
+    @MainActor static func requestOrOpenSettings() {
+        let asked = UserDefaults.standard.bool(forKey: promptedKey)
+        _ = CGRequestScreenCaptureAccess()
+        if asked {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+        } else {
+            UserDefaults.standard.set(true, forKey: promptedKey)
+        }
+    }
+}
