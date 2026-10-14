@@ -45,7 +45,7 @@ struct SpeakerDiarizerLiveTests {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("diarizer-\(UUID())")
             .appendingPathComponent("speaker-diarization-coreml")
         try await DiarizerDownloader().download(to: directory, progress: { _ in })
-        let voices = try await SpeakerDiarizer.segments(in: samples, directory: directory)
+        let voices = try await SpeakerDiarizer.segments(in: samples, speakers: 2, directory: directory)
             .map { VoiceSegment(speaker: $0.speaker, start: $0.start, end: $0.end) }
         print("DIARIZATION", voices.map { "\($0.speaker) \(String(format: "%.1f–%.1f", $0.start, $0.end))" })
         let turns = MeetingTranscription.turns(from: voices, sampleCount: samples.count, audio: samples)

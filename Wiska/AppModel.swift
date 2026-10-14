@@ -25,7 +25,7 @@ final class AppModel {
     let dictionaryStore: DictionaryStore
     let snippetStore: SnippetStore
     let commandStore: CommandStore
-    /// Speaker diarization models (~14 MB): tell the voices on a call apart. Downloaded on request.
+    /// Speaker diarization models (~21 MB): tell the voices on a call apart. Downloaded on request.
     let speakerModel = ParakeetModelStore(directory: SpeakerDiarizer.modelDirectory, downloader: DiarizerDownloader(),
                                           name: "speaker")
     /// Records calls and meetings (the Mac's audio and the microphone) for a transcript.
@@ -421,7 +421,8 @@ final class AppModel {
 
     /// Stops the meeting recording and turns it into a "[0:05] You: …" transcript. The audio is
     /// deleted afterwards: only the text is kept, and only if the user copies or saves it.
-    func finishMeeting(language: LanguageChoice, cleanUp: Bool, identifySpeakers: Bool, writeNotes: Bool,
+    /// `people`: how many are on the call besides you, when the user says (nil: work it out).
+    func finishMeeting(language: LanguageChoice, cleanUp: Bool, identifySpeakers: Bool, people: Int? = nil, writeNotes: Bool,
                        progress: @escaping @MainActor (FileStep, Double) -> Void) async throws -> MeetingResult {
         guard let recording = try await meetingRecorder.stop() else { return MeetingResult(segments: []) }
         defer { try? FileManager.default.removeItem(at: recording.folder) }
@@ -434,10 +435,10 @@ final class AppModel {
             progress(.identifyingSpeakers, 0)
             do {
                 let start = ContinuousClock.now
-                let voices = try await SpeakerDiarizer.segments(in: others)
+                let voices = try await SpeakerDiarizer.segments(in: others, speakers: people)
                     .map { VoiceSegment(speaker: $0.speaker, start: $0.start, end: $0.end) }
                 turns = MeetingTranscription.turns(from: voices, sampleCount: others.count, audio: others)
-                Self.log.notice("meeting: \(Set(voices.map(\.speaker)).count) voices on the call, \(turns?.count ?? 0) turns, in \(Log.ms(ContinuousClock.now - start), privacy: .public)")
+                Self.log.notice("meeting: \(Set(voices.map(\.speaker)).count) voices on the call (expected: \(people.map(String.init) ?? "auto", privacy: .public)), \(turns?.count ?? 0) turns, in \(Log.ms(ContinuousClock.now - start), privacy: .public)")
                 if turns?.isEmpty == true { turns = nil }   // nothing found: the call as one speaker
             } catch {
                 Self.log.error("meeting: speakers not told apart: \(Log.summary(error), privacy: .public)")

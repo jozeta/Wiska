@@ -48,6 +48,8 @@ struct TranscribeFileView: View {
     @AppStorage("transcribeFileCleanUp") private var cleanUp = true
     @AppStorage("meetingIdentifySpeakers") private var identifySpeakers = true
     @AppStorage("meetingWriteNotes") private var writeNotes = true
+    /// How many people are on the call besides you; 0 lets Wiska work it out.
+    @AppStorage("meetingPeople") private var people = 0
     /// The last meeting, kept so names given below rewrite its transcript and notes.
     @State private var meeting: AppModel.MeetingResult?
     @State private var names: [Speaker: String] = [:]
@@ -194,6 +196,12 @@ struct TranscribeFileView: View {
                 case .downloading(let fraction):
                     ProgressView(value: fraction).frame(width: 80)
                 }
+                Picker("People on the call", selection: $people) {
+                    Text("Auto").tag(0)
+                    ForEach(1...8, id: \.self) { Text("\($0)").tag($0) }
+                }
+                .fixedSize()
+                .help("Not counting you. Telling Wiska how many there are helps the most when voices sound alike.")
             }
             Toggle("Write notes", isOn: $writeNotes)
                 .help("A summary, decisions and action items, written on this Mac by your language model")
@@ -292,7 +300,8 @@ struct TranscribeFileView: View {
             let started = ContinuousClock.now
             do {
                 meeting = try await model.finishMeeting(language: language, cleanUp: cleanUp,
-                                                        identifySpeakers: identifySpeakers, writeNotes: writeNotes) { step, fraction in
+                                                        identifySpeakers: identifySpeakers, people: people == 0 ? nil : people,
+                                                        writeNotes: writeNotes) { step, fraction in
                     switch step {
                     case .transcribing: phase = .transcribing(fraction)
                     case .cleaningUp: phase = .cleaningUp(fraction)
