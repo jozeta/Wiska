@@ -13,6 +13,7 @@ struct WiskaApp: App {
     var body: some Scene {
         MenuBarExtra {
             MenuContent(model: model)
+                .labelStyle(.titleAndIcon)   // menus show only the title otherwise
         } label: {
             MenuBarLabel(model: model)
         }
