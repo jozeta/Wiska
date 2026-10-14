@@ -464,10 +464,11 @@ struct DictationControllerTests {
         controller.handle(en)
         controller.handle(.lockHandsFree)
         audio.emit([0.1])
-        audio.emitLevel(0.05)
-        try await Task.sleep(for: .milliseconds(100))
-        audio.emitLevel(0.05)
-        while controller.currentTask == nil { try await Task.sleep(for: .milliseconds(10)) }
+        // Quiet levels until the silence is noticed: under load one late level isn't enough.
+        while controller.currentTask == nil {
+            audio.emitLevel(0.05)
+            try await Task.sleep(for: .milliseconds(20))
+        }
         await controller.currentTask?.value
         #expect(injector.injected == ["cleaned: hello world"])
         #expect(!controller.isHandsFree)
