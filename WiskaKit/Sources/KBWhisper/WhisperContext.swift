@@ -3,7 +3,8 @@ import whisper
 
 /// A loaded Whisper model that transcribes one recording at a time.
 public protocol WhisperModel: Sendable {
-    func transcribe(_ samples: [Float], language: String) throws -> String
+    /// `prompt`: text in the style and vocabulary to expect (Whisper's "initial prompt").
+    func transcribe(_ samples: [Float], language: String, prompt: String?) throws -> String
 }
 
 struct WhisperError: Error, CustomStringConvertible {
@@ -40,7 +41,7 @@ final class WhisperContext: WhisperModel, @unchecked Sendable {
         return samples.count >= minimum ? samples : samples + [Float](repeating: 0, count: minimum - samples.count)
     }
 
-    func transcribe(_ samples: [Float], language: String) throws -> String {
+    func transcribe(_ samples: [Float], language: String, prompt: String?) throws -> String {
         let samples = Self.padded(samples)
         var params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY)
         params.print_progress = false
@@ -53,8 +54,11 @@ final class WhisperContext: WhisperModel, @unchecked Sendable {
         params.n_threads = Int32(max(1, min(8, ProcessInfo.processInfo.activeProcessorCount - 2)))
         return try language.withCString { code in
             params.language = code
-            let status = samples.withUnsafeBufferPointer { buffer in
-                whisper_full(context, params, buffer.baseAddress, Int32(buffer.count))
+            let status = (prompt ?? "").withCString { text in
+                params.initial_prompt = prompt == nil ? nil : text
+                return samples.withUnsafeBufferPointer { buffer in
+                    whisper_full(context, params, buffer.baseAddress, Int32(buffer.count))
+                }
             }
             guard status == 0 else { throw WhisperError(description: "whisper_full returned \(status)") }
             return (0..<whisper_full_n_segments(context))

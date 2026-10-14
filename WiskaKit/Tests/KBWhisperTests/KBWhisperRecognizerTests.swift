@@ -4,7 +4,7 @@ import Testing
 @testable import KBWhisper
 
 struct FakeWhisper: WhisperModel {
-    func transcribe(_ samples: [Float], language: String) throws -> String { "\(language): \(samples.count)" }
+    func transcribe(_ samples: [Float], language: String, prompt: String?) throws -> String { "\(language): \(samples.count)" }
 }
 
 @MainActor
