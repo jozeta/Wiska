@@ -189,12 +189,11 @@ struct TranscribeFileView: View {
             Toggle("Identify speakers", isOn: $identifySpeakers)
                 .help("Tells the people on the call apart by voice: Speaker 1, Speaker 2… You name them afterwards.")
             if identifySpeakers {
-                switch store.status {
-                case .ready: EmptyView()
-                case .notDownloaded, .failed:
-                    Button("Download speaker model (\(SpeakerDiarizer.approximateSize))") { store.download() }
-                case .downloading(let fraction):
-                    ProgressView(value: fraction).frame(width: 80)
+                // Downloaded in Settings → Models; here only a warning while it's missing.
+                if !store.isInstalled {
+                    Label("Speaker model not downloaded — Settings → Models", systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                        .help("Without it the call is one speaker, “Others”.")
                 }
                 Picker("People on the call", selection: $people) {
                     Text("Auto").tag(0)
