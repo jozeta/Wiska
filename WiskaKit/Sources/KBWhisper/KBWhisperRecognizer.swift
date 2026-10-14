@@ -51,11 +51,16 @@ public final class KBWhisperRecognizer: BatchRecognizer {
     }
 
     public func transcribe(_ samples: [Float], language: Language) async throws -> String {
+        try await transcribe(samples, language: language, prompt: nil)
+    }
+
+    /// `prompt`: text in the vocabulary and style to expect, which Whisper leans towards.
+    public func transcribe(_ samples: [Float], language: Language, prompt: String?) async throws -> String {
         guard language == .swedish else { throw ModelRuntimeError.unavailable }   // KB-Whisper is Swedish
         guard isReady else { throw ModelRuntimeError.unavailable }
         let started = epoch
         do {
-            let text = try await runtime.use(from: store.modelFile) { try $0.transcribe(samples, language: "sv") }
+            let text = try await runtime.use(from: store.modelFile) { try $0.transcribe(samples, language: "sv", prompt: prompt) }
             if epoch == started { isLoaded = true }
             return text
         } catch let error as ModelRuntimeError {
