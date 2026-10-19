@@ -67,7 +67,7 @@ codesign --verify --strict -R "=$REQUIREMENT" $APP   # the app meets its own req
 
 DIST=build-release/dist
 mkdir -p $DIST
-ditto -c -k --sequesterRsrc --keepParent $APP $DIST/Wiska.zip
+ditto -c -k --norsrc --noextattr --keepParent $APP $DIST/Wiska.zip
 
 # Apple's notary service checks the app; the ticket is then stapled to it, so it opens without a
 # warning even offline.
@@ -85,7 +85,10 @@ xcrun stapler staple $APP
 spctl --assess --type execute --verbose=2 $APP 2>&1 | grep -q 'source=Notarized Developer ID' \
     || { spctl --assess --type execute --verbose=2 $APP; echo "Gatekeeper doesn't accept the app." >&2; exit 1; }
 rm $DIST/Wiska.zip
-ditto -c -k --sequesterRsrc --keepParent $APP $DIST/Wiska.zip   # again, with the ticket inside
+ditto -c -k --norsrc --noextattr --keepParent $APP $DIST/Wiska.zip   # again, with the ticket inside
+# Extended attributes would travel as ._ files that unzippers other than Finder may leave inside
+# the bundle, breaking its seal: Gatekeeper then calls the app malware.
+! unzip -l $DIST/Wiska.zip | grep -q '/\._' || { echo "Wiska.zip contains ._ files." >&2; exit 1; }
 
 cp $NOTES $DIST/Wiska.md   # same name as the archive: generate_appcast embeds it as the update's notes
 TOOLS=$(dirname $(find build-release/SourcePackages/artifacts -name generate_appcast -path '*/bin/*' | head -1))
