@@ -3,6 +3,7 @@ import Audio
 import Cleanup
 import Core
 import Dictation
+import Injection
 import Parakeet
 import SwiftUI
 import UniformTypeIdentifiers
@@ -115,6 +116,7 @@ struct TranscribeFileView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("Copy") {
+                    AXSelectionReader.clipboardWillBeWrittenByWiska(.general)
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(text, forType: .string)
                 }
@@ -131,9 +133,17 @@ struct TranscribeFileView: View {
             start(url)
             return true
         } isTargeted: { dropTargeted = $0 }
+        .onAppear {
+            // Closed while recording: the meeting carried on, so pick it up again.
+            if model.meetingRecorder.isRecording {
+                model.transcribeMode = .meeting
+                phase = .recording
+            }
+        }
         .onDisappear {
+            // A recording in progress carries on (the menu shows "Recording Meeting…"); only
+            // transcribing stops with its window.
             task?.cancel()
-            if phase == .recording { Task { await model.discardMeeting() } }
         }
     }
 

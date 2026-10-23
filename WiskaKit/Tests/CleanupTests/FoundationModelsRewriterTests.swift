@@ -65,7 +65,9 @@ struct FoundationModelsRewriterTests {
         guard rewriter.isAvailable else { return }
         rewriter.prewarm(level: .light, grammar: false)
         rewriter.prewarm(level: .polished, grammar: false)
-        #expect(rewriter.warmLevels == [.polished])
+        #expect(rewriter.warmInstructions == FoundationModelsRewriter.instructions(.polished, nil, .formal, false))
+        rewriter.prewarm(level: .off, grammar: false)
+        #expect(rewriter.warmInstructions == nil)
     }
 
     @Test func instructionsNameTheLanguageAndItsFillers() {
@@ -93,15 +95,20 @@ struct FoundationModelsRewriterTests {
         #expect(output.contains { $0.isNumber }, "\(output)")
     }
 
-    /// The prewarmed session must carry the same instructions as the dictation: with grammar on,
-    /// a session warmed without it isn't used.
-    @Test func prewarmMatchesGrammar() {
+    /// The prewarmed session carries the dictation's exact instructions: its language, style and
+    /// grammar setting. A dictation always has a language, so one warmed without would never be used.
+    @Test func prewarmMatchesTheDictation() {
         let rewriter = FoundationModelsRewriter()
         guard rewriter.isAvailable else { return }
-        rewriter.prewarm(level: .light, grammar: false)
-        #expect(rewriter.warmGrammar == false)
-        rewriter.prewarm(level: .light, grammar: true)
-        #expect(rewriter.warmGrammar == true)
-        #expect(rewriter.warmLevels == [.light])
+        rewriter.prewarm(level: .light, language: .swedish, style: .casual, grammar: true)
+        #expect(rewriter.warmInstructions == FoundationModelsRewriter.instructions(.light, .swedish, .casual, true))
+        rewriter.prewarm(level: .light, language: .english, style: .casual, grammar: true)
+        #expect(rewriter.warmInstructions == FoundationModelsRewriter.instructions(.light, .english, .casual, true))
+    }
+
+    /// Apple's model invents content from the IT-term list, so only Gemma gets it.
+    @Test func appleInstructionsLeaveOutTheTermList() {
+        #expect(!FoundationModelsRewriter.instructions(.light, .swedish, .formal, false).contains(TechTerms.promptLine))
+        #expect(CleanupPrompts.instructions(for: .light, language: .swedish).contains(TechTerms.promptLine))
     }
 }

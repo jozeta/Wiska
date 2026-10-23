@@ -65,12 +65,7 @@ public final class CorrectionWatcher {
     static let maxCharacters = 20_000
 
     public static func focusedField() -> (AnyHashable, String)? {
-        var focused: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString,
-                                            &focused) == .success, let focused,
-              CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
-        let element = focused as! AXUIElement
-        AXUIElementSetMessagingTimeout(element, 0.3)
+        guard let element = AXSelectionReader.focusedElement(timeout: 0.3) else { return nil }
         var count: CFTypeRef?
         if AXUIElementCopyAttributeValue(element, kAXNumberOfCharactersAttribute as CFString, &count) == .success,
            let characters = count as? Int, characters > maxCharacters { return nil }

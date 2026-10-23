@@ -71,13 +71,47 @@ enum Permission: CaseIterable, Identifiable {
         case .microphone:
             if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined { request() } else { openSettings() }
         case .inputMonitoring, .accessibility:
-            // Always ask: asking is what puts Wiska in System Settings' list, and after the
-            // permission was reset (or Wiska re-signed) it must ask again to be listed. macOS
-            // shows its prompt only once per app, so after that, open the list as well.
-            let asked = wasPrompted
-            request()
-            if asked { openSettings() } else { markPrompted() }
+            // Always ask: asking is what puts Wiska in System Settings' list. macOS shows its
+            // prompt only once per app; asked before and still not allowed, the list's entry is
+            // stale — typically an older, differently signed Wiska, ticked but not this copy — so
+            // it's cleared and Wiska asks afresh, which brings the prompt back.
+            guard wasPrompted else {
+                request()
+                markPrompted()
+                return
+            }
+            if resetStaleEntry() {
+                request()
+            } else {
+                request()
+                openSettings()
+            }
         }
+    }
+
+    /// The TCC service `tccutil` knows this permission by.
+    private var tccService: String? {
+        switch self {
+        case .microphone: nil
+        case .inputMonitoring: "ListenEvent"
+        case .accessibility: "Accessibility"
+        }
+    }
+
+    /// Forgets what macOS remembers about Wiska for this permission (only called while it's not
+    /// allowed, so nothing granted is lost). True when that worked.
+    @MainActor private func resetStaleEntry() -> Bool {
+        guard let service = tccService, let bundleID = Bundle.main.bundleIdentifier else { return false }
+        let tccutil = Process()
+        tccutil.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        tccutil.arguments = ["reset", service, bundleID]
+        do {
+            try tccutil.run()
+            tccutil.waitUntilExit()
+        } catch {
+            return false
+        }
+        return tccutil.terminationStatus == 0
     }
 
     private static let promptedKey = "promptedPermissions"

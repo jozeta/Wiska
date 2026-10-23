@@ -28,6 +28,10 @@ public final class SwitchingRewriter: TextRewriter {
         models.first?.model.prewarm(level: level, grammar: grammar)
     }
 
+    public func prewarm(level: CleanupLevel, language: Language?, style: WritingStyle, grammar: Bool) {
+        models.first?.model.prewarm(level: level, language: language, style: style, grammar: grammar)
+    }
+
     public func rewrite(_ text: String, level: CleanupLevel, language: Language?, style: WritingStyle,
                         grammar: Bool) async throws -> String {
         let models = models

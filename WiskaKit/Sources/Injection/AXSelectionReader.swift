@@ -100,16 +100,26 @@ public final class AXSelectionReader: SelectionReader {
         return text
     }
 
+    /// The focused element, never waiting long on an app that doesn't answer: Wiska hears fn on
+    /// the main thread, and Accessibility otherwise waits up to 6 s for a busy app.
+    static func focusedElement(timeout: Float = 0.5) -> AXUIElement? {
+        let system = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(system, timeout)
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+              let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
+        let element = focused as! AXUIElement
+        AXUIElementSetMessagingTimeout(element, timeout)
+        return element
+    }
+
     /// The focused element reports a selected range of length 0 (a cursor, nothing selected).
     /// False when it doesn't report a range (Electron apps, some web views): then ⌘C decides.
     public static func focusedSelectionIsEmpty() -> Bool {
-        var focused: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString,
-                                            &focused) == .success, let focused,
-              CFGetTypeID(focused) == AXUIElementGetTypeID() else { return false }
+        guard let focused = focusedElement() else { return false }
         var rangeValue: CFTypeRef?
         var range = CFRange(location: 0, length: -1)
-        guard AXUIElementCopyAttributeValue(focused as! AXUIElement, kAXSelectedTextRangeAttribute as CFString,
+        guard AXUIElementCopyAttributeValue(focused, kAXSelectedTextRangeAttribute as CFString,
                                             &rangeValue) == .success, let rangeValue,
               CFGetTypeID(rangeValue) == AXValueGetTypeID(),
               AXValueGetValue(rangeValue as! AXValue, .cfRange, &range) else { return false }
@@ -118,12 +128,9 @@ public final class AXSelectionReader: SelectionReader {
 
     /// The focused element's selected text, via Accessibility; nil when the app doesn't say.
     public static func focusedSelection() -> String? {
-        var focused: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString,
-                                            &focused) == .success, let focused,
-              CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
+        guard let focused = focusedElement() else { return nil }
         var selected: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(focused as! AXUIElement, kAXSelectedTextAttribute as CFString,
+        guard AXUIElementCopyAttributeValue(focused, kAXSelectedTextAttribute as CFString,
                                             &selected) == .success else { return nil }
         return selected as? String
     }
@@ -142,12 +149,7 @@ public final class AXSelectionReader: SelectionReader {
     /// Accessibility: only `CursorContext.readRange` of it when the app supports that, and never
     /// waiting long on a busy app.
     public static func focusedTextAroundCursor() -> (text: String, cursor: Int)? {
-        var focused: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString,
-                                            &focused) == .success, let focused,
-              CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
-        let element = focused as! AXUIElement
-        AXUIElementSetMessagingTimeout(element, 0.5)
+        guard let element = focusedElement() else { return nil }
         var rangeValue: CFTypeRef?
         var range = CFRange(location: -1, length: 0)
         if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeValue) == .success,

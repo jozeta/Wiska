@@ -95,13 +95,11 @@ private struct AppLabel: View {
     let bundleID: String
 
     var body: some View {
-        let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
         HStack(spacing: 6) {
-            if let url {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: url.path)).resizable().frame(width: 16, height: 16)
+            if let icon = AppInfo.icon(bundleID) {
+                Image(nsImage: icon).resizable().frame(width: 16, height: 16)
             }
-            Text(url.map { FileManager.default.displayName(atPath: $0.path) }?
-                    .replacingOccurrences(of: ".app", with: "") ?? bundleID)
+            Text(AppInfo.name(bundleID))
         }
     }
 }

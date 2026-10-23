@@ -167,8 +167,11 @@ public final class DictationController {
         Self.log.notice("listening: \(String(describing: choice), privacy: .public), \(transcriber.engine.rawValue, privacy: .public)\(transcriber.isReady ? "" : " (model not ready)", privacy: .public), in \(self.context.appBundleID ?? "unknown app", privacy: .public)")
         state = .listening
         capturedSamples = 0
-        // Load the cleanup model while the user is still talking.
-        cleaner.prewarm()
+        // Load the cleanup model while the user is still talking, for this dictation's language
+        // when it's fixed.
+        var expected = context
+        if case .fixed(let language) = choice { expected.language = language }
+        cleaner.prewarm(for: expected)
 
         // The chunk stream buffers while the session is being created, so audio
         // captured before the transcriber is ready is still delivered, in order.
@@ -218,7 +221,10 @@ public final class DictationController {
         // Keep recording briefly: people release fn on the last syllable (minor b).
         if releaseTail > .zero { try? await Task.sleep(for: releaseTail) }
         stopCapture()
-        guard let sessionTask else { return }
+        guard let sessionTask else {
+            state = .idle   // never stuck on "Transcribing…"
+            return
+        }
         self.sessionTask = nil
 
         let transcript: Transcript
@@ -273,9 +279,10 @@ public final class DictationController {
         }
         let latency = ContinuousClock.now - releasedAt
         lastLatency = latency
-        record(transcript, finalText, pasted: true, latency: latency)   // after measuring: saving isn't latency
         Self.log.notice("pasted; release→inject \(latency.formatted(.units(allowed: [.milliseconds])), privacy: .public)")
         state = .idle
+        // After the HUD has gone: saving to History isn't part of the dictation.
+        record(transcript, finalText, pasted: true, latency: latency)
         if currentChoice == .automatic, let language = transcript.language {
             onLanguageDetected?(language)
         }
