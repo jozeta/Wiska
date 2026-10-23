@@ -76,10 +76,14 @@ public protocol TextCleaner {
     /// Called when a dictation starts so slow resources (a language model) can load while
     /// the user speaks.
     func prewarm()
+    /// The same, knowing where the dictation goes and, if fixed, its language: a warmed model
+    /// session can then match the dictation exactly.
+    func prewarm(for context: DictationContext)
 }
 
 public extension TextCleaner {
     func prewarm() {}
+    func prewarm(for context: DictationContext) { prewarm() }
 }
 
 @MainActor

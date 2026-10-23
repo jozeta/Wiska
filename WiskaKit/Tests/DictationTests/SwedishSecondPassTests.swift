@@ -67,6 +67,33 @@ struct SwedishSecondPassTests {
         #expect(ContinuousClock.now - start < .seconds(4))
     }
 
+    /// A dictation fixed to Swedish: KB-Whisper runs alongside the engine instead of after it.
+    @Test func fixedSwedishRunsBothAtOnce() async throws {
+        let transcriber = SwedishSecondPassTranscriber(primary: primary, recognizer: recognizer, isEnabled: { true })
+        let session = try await transcriber.makeSession(language: .fixed(.swedish))
+        let fake = primary.sessions[SessionsTranscriber.key(.fixed(.swedish))]!
+        fake.result = .success("jag har en stor hus")
+        fake.language = .swedish
+        fake.finishDelay = .milliseconds(400)
+        recognizer.delay = .milliseconds(400)
+        session.append(AudioChunk(samples: [0.1, 0.1]))
+        let start = ContinuousClock.now
+        let transcript = try await session.finish()
+        #expect(transcript.engine == .kbWhisper)
+        #expect(ContinuousClock.now - start < .milliseconds(700), "both took their 400 ms at the same time")
+    }
+
+    /// The same started early but the engine heard nothing: the plain (empty) result stands.
+    @Test func earlySecondPassIsDroppedWhenNothingWasHeard() async throws {
+        let transcriber = SwedishSecondPassTranscriber(primary: primary, recognizer: recognizer, isEnabled: { true })
+        let session = try await transcriber.makeSession(language: .fixed(.swedish))
+        let fake = primary.sessions[SessionsTranscriber.key(.fixed(.swedish))]!
+        fake.result = .success("")
+        fake.language = .swedish
+        session.append(AudioChunk(samples: [0.1]))
+        #expect(try await session.finish().text == "")
+    }
+
     @Test func budgetGrowsWithLength() {
         #expect(SecondPassSession.budget(forSamples: 16_000 * 5) == .seconds(3))
         #expect(SecondPassSession.budget(forSamples: 16_000 * 120) == .seconds(30))

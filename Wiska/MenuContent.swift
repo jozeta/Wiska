@@ -64,7 +64,7 @@ struct MenuContent: View {
                         }
                     }
                 } else {
-                    Button { permission.openSettings() } label: {
+                    Button { permission.requestOrOpenSettings() } label: {
                         Label("Allow \(permission.title) \(permission.reason)…", systemImage: "lock.shield")
                     }
                 }

@@ -35,7 +35,7 @@ public final class SwedishSecondPassTranscriber: Transcriber {
         if usable { recognizer.prepare() }   // load while the user speaks
         return SecondPassSession(primary: try await primary.makeSession(language: language),
                                  recognizer: recognizer, isEnabled: isEnabled,
-                                 keepsAudio: usable && recognizer.isReady)
+                                 keepsAudio: usable && recognizer.isReady, knownSwedish: language == .fixed(.swedish))
     }
 }
 
@@ -48,13 +48,16 @@ final class SecondPassSession: TranscriptionSession {
     private var samples: [Float] = []
     /// The recording is copied only when the second pass may run (up to ~7.7 MB for 2 minutes).
     let keepsAudio: Bool
+    /// The dictation is in Swedish whatever the engine hears: KB-Whisper needn't wait for it.
+    let knownSwedish: Bool
 
     init(primary: any TranscriptionSession, recognizer: any BatchRecognizer, isEnabled: @escaping @MainActor () -> Bool,
-         keepsAudio: Bool = true) {
+         keepsAudio: Bool = true, knownSwedish: Bool = false) {
         self.primary = primary
         self.recognizer = recognizer
         self.isEnabled = isEnabled
         self.keepsAudio = keepsAudio
+        self.knownSwedish = knownSwedish
     }
 
     var preview: AsyncStream<String> { primary.preview }
@@ -70,16 +73,24 @@ final class SecondPassSession: TranscriptionSession {
     }
 
     func finish() async throws -> Transcript {
-        let transcript = try await primary.finish()
-        guard keepsAudio, transcript.language == .swedish, isEnabled(), recognizer.isReady,
-              !transcript.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return transcript }
-        let samples = samples
-        let recognizer = recognizer
         let start = ContinuousClock.now
+        // Known to be Swedish: KB-Whisper starts now, alongside the engine's last words. Otherwise
+        // only once the engine says Swedish (an English dictation shouldn't share the GPU with it).
+        let early = knownSwedish && keepsAudio && isEnabled() && recognizer.isReady ? secondPass() : nil
+        let transcript: Transcript
         do {
-            let text = try await Self.race(within: Self.budget(forSamples: samples.count)) {
-                try await recognizer.transcribe(samples, language: .swedish)
-            }
+            transcript = try await primary.finish()
+        } catch {
+            early?.cancel()
+            throw error
+        }
+        guard keepsAudio, transcript.language == .swedish, isEnabled(), recognizer.isReady,
+              !transcript.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            early?.cancel()
+            return transcript
+        }
+        do {
+            let text = try await (early ?? secondPass()).value
             guard WhisperOutput.accept(text, over: transcript.text) else {
                 Self.log.notice("kb-whisper output rejected")
                 return transcript
@@ -98,6 +109,17 @@ final class SecondPassSession: TranscriptionSession {
     func cancel() {
         samples = []
         primary.cancel()
+    }
+
+    /// KB-Whisper on the recording, within its time budget.
+    private func secondPass() -> Task<String, Error> {
+        let samples = samples
+        let recognizer = recognizer
+        return Task {
+            try await Self.race(within: Self.budget(forSamples: samples.count)) {
+                try await recognizer.transcribe(samples, language: .swedish)
+            }
+        }
     }
 
     struct Timeout: Error {}

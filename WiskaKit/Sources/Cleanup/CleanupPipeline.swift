@@ -20,6 +20,8 @@ public final class CleanupPipeline: TextCleaner {
     private let style: @MainActor (AppCategory) -> WritingStyle
     private let snippets: @MainActor () -> [Snippet]
     private let grammar: @MainActor () -> Bool
+    /// The language an automatic dictation is probably in (the last one detected), for prewarming.
+    private let likelyLanguage: @MainActor () -> Language?
 
     public init(level: @escaping @MainActor () -> CleanupLevel, rewriter: any TextRewriter,
                 dictionary: @escaping @MainActor () -> PersonalDictionary = { PersonalDictionary() },
@@ -27,6 +29,7 @@ public final class CleanupPipeline: TextCleaner {
                 style: @escaping @MainActor (AppCategory) -> WritingStyle = { $0.defaultStyle ?? .formal },
                 snippets: @escaping @MainActor () -> [Snippet] = { [] },
                 grammar: @escaping @MainActor () -> Bool = { false },
+                likelyLanguage: @escaping @MainActor () -> Language? = { nil },
                 timeout: Duration = CleanupPipeline.defaultTimeout) {
         self.level = level
         self.rewriter = rewriter
@@ -35,6 +38,7 @@ public final class CleanupPipeline: TextCleaner {
         self.style = style
         self.snippets = snippets
         self.grammar = grammar
+        self.likelyLanguage = likelyLanguage
         self.timeout = timeout
     }
 
@@ -42,6 +46,14 @@ public final class CleanupPipeline: TextCleaner {
         let level = level()
         guard level != .off, rewriter.isAvailable else { return }
         rewriter.prewarm(level: level, grammar: grammar())
+    }
+
+    public func prewarm(for context: DictationContext) {
+        let level = level()
+        // Code is pasted exactly as said: no model runs.
+        guard level != .off, context.category != .code, rewriter.isAvailable else { return }
+        rewriter.prewarm(level: level, language: context.language ?? likelyLanguage(),
+                         style: style(context.category), grammar: grammar())
     }
 
     public func clean(_ text: String, context: DictationContext) async throws -> String {
@@ -136,10 +148,17 @@ public final class CleanupPipeline: TextCleaner {
                 do { once.resume(.success(try await rewriter.rewrite(segment, level: level, language: language, style: style, grammar: grammar))) }
                 catch { once.resume(.failure(error)) }
             }
-            Task {
+            let timer = Task {
                 try? await Task.sleep(until: deadline, clock: .continuous)
+                guard !Task.isCancelled else { return }
                 once.resume(.failure(CleanupTimeout()))
                 work.cancel()
+            }
+            // The model answered first: no timer left sleeping until the deadline (a minute per
+            // paragraph when cleaning a recording).
+            Task { @MainActor in
+                _ = await work.result
+                timer.cancel()
             }
         }
     }

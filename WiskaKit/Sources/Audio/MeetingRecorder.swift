@@ -1,11 +1,12 @@
 import AVFoundation
 import Core
+import Observation
 import ScreenCaptureKit
 
 /// Records a meeting: the Mac's own audio (the call: everyone else) and the microphone (you), as
 /// two 16 kHz mono files in a temporary folder, through ScreenCaptureKit. Needs the "Screen &
 /// System Audio Recording" permission; Wiska's own sounds are left out.
-@MainActor
+@MainActor @Observable
 public final class MeetingRecorder {
     private static let log = Log.logger("Audio")
 
@@ -22,18 +23,23 @@ public final class MeetingRecorder {
     }
 
     private var stream: SCStream?
-    private var sink: Sink?
+    @ObservationIgnored private var sink: Sink?
     public private(set) var startedAt: Date?
+    /// A start in progress: a second click meanwhile must not open a second capture.
+    @ObservationIgnored private var starting = false
 
     public init() {}
 
+    /// Observable, so the menu's "Recording Meeting…" and the Transcribe window follow it.
     public var isRecording: Bool { stream != nil }
 
     /// The latest loudness of each side (0…1), for meters.
     public var levels: (you: Float, others: Float) { sink?.levels ?? (0, 0) }
 
     public func start() async throws {
-        guard stream == nil else { return }
+        guard stream == nil, !starting else { return }
+        starting = true
+        defer { starting = false }
         let content: SCShareableContent
         do {
             content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)

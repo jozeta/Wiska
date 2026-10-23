@@ -3,6 +3,7 @@ import Charts
 import Core
 import History
 import HUD
+import Injection
 import Preferences
 import SwiftData
 import SwiftUI
@@ -177,6 +178,7 @@ private struct DictationRow: View {
                 }
                 Spacer()
                 Button {
+                    AXSelectionReader.clipboardWillBeWrittenByWiska(.general)
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(item.record.finalText, forType: .string)
                 } label: { Image(systemName: "doc.on.doc") }
@@ -400,17 +402,31 @@ private struct TopApps: View {
 }
 
 /// An app's display name and icon from its bundle ID (the bundle ID when it's not installed).
-private enum AppInfo {
+/// Looked up once per app: rows and the filter menu ask on every redraw, each keystroke in Search too.
+@MainActor
+enum AppInfo {
+    private static var names: [String: String] = [:]
+    private static var icons: [String: NSImage?] = [:]
+
     static func name(_ bundleID: String) -> String {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return bundleID }
-        return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+        if let name = names[bundleID] { return name }
+        let name = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID).map {
+            FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "")
+        } ?? bundleID
+        names[bundleID] = name
+        return name
     }
 
     /// The app icon at menu size (16 pt): NSWorkspace hands out 32 pt images, too tall for a menu row.
     static func icon(_ bundleID: String) -> NSImage? {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
-              let icon = NSWorkspace.shared.icon(forFile: url.path).copy() as? NSImage else { return nil }
-        icon.size = NSSize(width: 16, height: 16)
+        if let icon = icons[bundleID] { return icon }
+        var icon: NSImage?
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
+           let copy = NSWorkspace.shared.icon(forFile: url.path).copy() as? NSImage {
+            copy.size = NSSize(width: 16, height: 16)
+            icon = copy
+        }
+        icons[bundleID] = icon
         return icon
     }
 }

@@ -19,6 +19,11 @@ final class FakeRewriter: TextRewriter {
     private(set) var prewarmedGrammar: [Bool] = []
 
     func prewarm(level: CleanupLevel, grammar: Bool) { prewarmed.append(level); prewarmedGrammar.append(grammar) }
+    private(set) var prewarmedLanguages: [Language?] = []
+    func prewarm(level: CleanupLevel, language: Language?, style: WritingStyle, grammar: Bool) {
+        prewarmedLanguages.append(language)
+        prewarm(level: level, grammar: grammar)
+    }
 
     func rewrite(_ text: String, level: CleanupLevel, language: Language?, style: WritingStyle,
                  grammar: Bool) async throws -> String {
@@ -317,6 +322,27 @@ struct CleanupPipelineTests {
     @Test func prewarmPassesTheLevel() {
         pipeline(.light).prewarm()
         #expect(rewriter.prewarmed == [.light])
+    }
+
+    /// Warmed for the dictation's language: fixed, or else the one detected last time.
+    @Test func prewarmForAContextUsesItsLanguage() {
+        let p = CleanupPipeline(level: { .light }, rewriter: rewriter, likelyLanguage: { .swedish })
+        p.prewarm(for: DictationContext(language: .english))
+        p.prewarm(for: DictationContext())
+        #expect(rewriter.prewarmedLanguages == [.english, .swedish])
+    }
+
+    /// Code is pasted exactly as said: nothing to warm.
+    @Test func prewarmSkippedForCode() {
+        pipeline(.light).prewarm(for: DictationContext(category: .code))
+        #expect(rewriter.prewarmed.isEmpty)
+    }
+
+    /// A model that answers early leaves no timer sleeping until the deadline.
+    @Test func fastAnswerDoesNotWaitForTheDeadline() async throws {
+        let start = ContinuousClock.now
+        _ = try await clean("one two three four five", pipeline(timeout: .seconds(30)))
+        #expect(ContinuousClock.now - start < .seconds(1))
     }
 
     @Test func prewarmSkippedWhenOffOrUnavailable() {

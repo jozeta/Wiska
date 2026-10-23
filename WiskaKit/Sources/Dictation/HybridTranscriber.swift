@@ -31,17 +31,23 @@ public final class HybridTranscriber: Transcriber {
 
     /// Always automatic: a fixed language never gets a hybrid (see `EngineRouter`).
     public func makeSession(language: LanguageChoice) async throws -> any TranscriptionSession {
+        // Every engine starts at once: a short dictation waits for the slowest, not for each in turn.
+        let apple = apple
+        let appleStarts = Language.allCases.filter(appleLanguages.contains).map { language in
+            (language, Task { try await apple.makeSession(language: .fixed(language)) })
+        }
         let parakeetSession: any TranscriptionSession
         do {
             parakeetSession = try await parakeet.makeSession(language: .automatic)
         } catch {
             Self.log.error("hybrid: parakeet can't start (\(String(describing: type(of: error)), privacy: .public)); using apple auto-detect")
+            for (_, start) in appleStarts { (try? await start.value)?.cancel() }
             return LabeledSession(try await apple.makeSession(language: .automatic), engine: .apple)
         }
         var appleSessions: [Language: any TranscriptionSession] = [:]
-        for language in Language.allCases where appleLanguages.contains(language) {
+        for (language, start) in appleStarts {
             do {
-                appleSessions[language] = try await apple.makeSession(language: .fixed(language))
+                appleSessions[language] = try await start.value
             } catch {
                 Self.log.error("hybrid: apple \(language.rawValue, privacy: .public) can't start; parakeet only")
             }

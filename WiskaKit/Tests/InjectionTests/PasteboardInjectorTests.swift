@@ -28,12 +28,46 @@ struct PasteboardInjectorTests {
                            restoreDelay: .milliseconds(20), isSecureInputActive: { secure })
     }
 
+    /// The clipboard comes back after the restore delay.
+    private func settle() async {
+        try? await Task.sleep(for: .milliseconds(80))
+    }
+
+    /// The dictation is done the moment ⌘V is sent: restoring the clipboard doesn't hold it up.
+    @Test func returnsBeforeRestoring() async throws {
+        pasteboard.clearContents()
+        pasteboard.setString("previous", forType: .string)
+        let paster = PasteboardInjector(pasteboard: pasteboard, keySender: RecordingKeySender(pasteboard: pasteboard),
+                                        restoreDelay: .seconds(5), isSecureInputActive: { false })
+        let start = ContinuousClock.now
+        try await paster.inject("dictated text")
+        #expect(ContinuousClock.now - start < .milliseconds(500))
+        #expect(pasteboard.string(forType: .string) == "dictated text")
+        paster.restorePending()
+        #expect(pasteboard.string(forType: .string) == "previous")
+    }
+
+    /// A second paste before the first restore: the user's clipboard still comes back, not the first dictation.
+    @Test func backToBackPastesKeepTheUsersClipboard() async throws {
+        pasteboard.clearContents()
+        pasteboard.setString("previous", forType: .string)
+        let sender = RecordingKeySender(pasteboard: pasteboard)
+        let paster = PasteboardInjector(pasteboard: pasteboard, keySender: sender,
+                                        restoreDelay: .seconds(5), isSecureInputActive: { false })
+        try await paster.inject("first")
+        try await paster.inject("second")
+        #expect(sender.seenAtPaste == ["first", "second"])
+        paster.restorePending()
+        #expect(pasteboard.string(forType: .string) == "previous")
+    }
+
     @Test func pastesTextThenRestoresPreviousClipboard() async throws {
         pasteboard.clearContents()
         pasteboard.setString("previous", forType: .string)
         let sender = RecordingKeySender(pasteboard: pasteboard)
 
         try await injector(sender).inject("dictated text")
+        await settle()
 
         #expect(sender.seenAtPaste == ["dictated text"])
         #expect(sender.transientAtPaste == [true])
@@ -50,6 +84,7 @@ struct PasteboardInjectorTests {
         }
 
         try await injector(sender).inject("dictated text")
+        await settle()
 
         #expect(pasteboard.string(forType: .string) == "copied by user")
     }
@@ -77,6 +112,7 @@ struct PasteboardInjectorTests {
         let before = PasteboardSnapshot.capture(pasteboard)
 
         try await injector(RecordingKeySender(pasteboard: pasteboard)).inject("text")
+        await settle()
 
         #expect(PasteboardSnapshot.capture(pasteboard) == before)
         #expect(pasteboard.data(forType: .png) == png)
@@ -92,6 +128,7 @@ struct PasteboardInjectorTests {
         let before = pasteboard.pasteboardItems?.first?.types
 
         try await injector(RecordingKeySender(pasteboard: pasteboard)).inject("text")
+        await settle()
 
         #expect(pasteboard.pasteboardItems?.first?.types == before)
     }
@@ -99,6 +136,7 @@ struct PasteboardInjectorTests {
     @Test func emptyClipboardStaysEmptyAfterPaste() async throws {
         pasteboard.clearContents()
         try await injector(RecordingKeySender(pasteboard: pasteboard)).inject("text")
+        await settle()
         #expect(pasteboard.string(forType: .string) == nil)
     }
 

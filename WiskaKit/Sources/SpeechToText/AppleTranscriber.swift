@@ -118,14 +118,21 @@ public final class AppleTranscriber: Transcriber {
             let preferred = fallbackLanguage()
             let candidates = ready.isEmpty ? ticked : ready
             let previewed = candidates.contains(preferred) ? preferred : candidates.first
+            // Started side by side: a short dictation waits for the slowest, not for all of them in turn.
+            let volatile = livePreview()
+            let starts = candidates.map { language in
+                (language, Task { () async throws -> AppleTranscriptionSession in
+                    try await self.prepare(language)
+                    return try await AppleTranscriptionSession.start(language: language, vocabulary: words,
+                                                                     volatile: volatile && language == previewed)
+                })
+            }
             var sessions: [any TranscriptionSession] = []
             var started: [Language] = []
             var firstError: Error?
-            for language in candidates {
+            for (language, start) in starts {
                 do {
-                    try await prepare(language)
-                    sessions.append(try await AppleTranscriptionSession.start(
-                        language: language, vocabulary: words, volatile: livePreview() && language == previewed))
+                    sessions.append(try await start.value)
                     started.append(language)
                 } catch {
                     Self.log.error("auto-detect without \(language.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")

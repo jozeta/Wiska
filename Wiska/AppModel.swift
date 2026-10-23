@@ -29,7 +29,7 @@ final class AppModel {
     let speakerModel = ParakeetModelStore(directory: SpeakerDiarizer.modelDirectory, downloader: DiarizerDownloader(),
                                           name: "speaker")
     /// Records calls and meetings (the Mac's audio and the microphone) for a transcript.
-    @ObservationIgnored let meetingRecorder = MeetingRecorder()
+    let meetingRecorder = MeetingRecorder()
     /// Which tab the Transcribe window opens on (menu: Transcribe Audio File… or Record Meeting…).
     var transcribeMode = TranscribeMode.file
     enum TranscribeMode: Hashable { case file, meeting }
@@ -149,7 +149,10 @@ final class AppModel {
                                      isKnownWord: { lexicon.isKnown($0) },
                                      style: { settings.style(for: $0) },
                                      snippets: { snippetStore.snippets },
-                                     grammar: { settings.fixGrammar }),
+                                     grammar: { settings.fixGrammar },
+                                     // An automatic dictation is most likely in the language heard last.
+                                     likelyLanguage: { settings.enabledLanguages.count == 1
+                                         ? settings.enabledLanguages.first : settings.lastDetectedLanguage }),
             injector: SwitchingInjector(mode: { settings.outputMode }, insert: PasteboardInjector(),
                                         copy: ClipboardCopier()),
             contextProvider: {
@@ -752,7 +755,7 @@ final class AppModel {
         return switch dictationState {
         case .idle: "Ready — hold fn to dictate"
         case .listening: "Listening…"
-        case .preparingModel: "Downloading speech model…"
+        case .preparingModel: "Preparing speech model…"
         case .transcribing, .cleaning, .injecting: "Transcribing…"
         case .editing: "Editing…"
         case .writing: "Writing…"
@@ -885,7 +888,8 @@ final class AppModel {
                                     isCommand: controller.isCommand)
         case .editing: .working("Editing…", activity: .editing)
         case .writing: .working("Writing…", activity: .writing)
-        case .preparingModel: .working("Downloading speech model…", activity: .preparing)
+        // Downloading Apple's assets, or loading Parakeet into memory.
+        case .preparingModel: .working("Preparing speech model…", activity: .preparing)
         case .transcribing, .cleaning, .injecting: .working("Transcribing…")
         case .failed(let failure): .error(failure.message)
         }

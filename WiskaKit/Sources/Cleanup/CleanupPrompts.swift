@@ -4,8 +4,10 @@ import Core
 enum CleanupPrompts {
     static let grammarLine = "Fix grammar mistakes (verb forms, agreement, articles, word order); keep the meaning and otherwise the words."
 
+    /// `itTerms`: Swedish dictation may repair misheard English IT terms (Gemma; Apple's model
+    /// invents content from the term list).
     static func instructions(for level: CleanupLevel, language: Language?, style: WritingStyle = .formal,
-                             grammar: Bool = false) -> String {
+                             grammar: Bool = false, itTerms: Bool = true) -> String {
         let sounds = language.map { $0.rules.fillerSounds.sorted().joined(separator: ", ") } ?? "um, uh, ehm, öh, eh, äh"
         let soft = language.map { $0.rules.softFillers.sorted().joined(separator: ", ") } ?? "like, alltså, liksom, typ"
         let tone = style == .formal
@@ -13,7 +15,7 @@ enum CleanupPrompts {
             : "Keep the wording plain and conversational; never make it more formal. "
         let fix = grammar ? grammarLine + " " : ""
         // Swedish recognisers mangle the English IT terms Swedes mix in.
-        let terms = language == .swedish ? TechTerms.promptLine + " " : ""
+        let terms = itTerms && language == .swedish ? TechTerms.promptLine + " " : ""
         let common = """
         You clean up dictated text\(language.map { " in \($0.displayName)" } ?? ""). \
         Fix punctuation and capitalization. \

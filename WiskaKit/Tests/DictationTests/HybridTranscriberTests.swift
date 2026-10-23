@@ -133,7 +133,8 @@ struct HybridTranscriberTests {
         parakeet.failToStart = ["auto"]
         let session = try await hybrid().makeSession(language: .automatic)
         #expect(apple.sessions["auto"] != nil)
-        #expect(apple.sessions["swedish"] == nil)
+        // Started alongside Parakeet, then let go: it's never used.
+        #expect(apple.sessions["swedish"]?.cancelled ?? true)
         // History must say Apple, not the hybrid's own (Parakeet) label.
         #expect(try await session.finish().engine == .apple)
     }
