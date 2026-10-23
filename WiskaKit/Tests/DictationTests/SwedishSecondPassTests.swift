@@ -74,13 +74,13 @@ struct SwedishSecondPassTests {
         let fake = primary.sessions[SessionsTranscriber.key(.fixed(.swedish))]!
         fake.result = .success("jag har en stor hus")
         fake.language = .swedish
-        fake.finishDelay = .milliseconds(400)
-        recognizer.delay = .milliseconds(400)
+        fake.finishDelay = .seconds(1)
+        recognizer.delay = .seconds(1)
         session.append(AudioChunk(samples: [0.1, 0.1]))
         let start = ContinuousClock.now
         let transcript = try await session.finish()
         #expect(transcript.engine == .kbWhisper)
-        #expect(ContinuousClock.now - start < .milliseconds(700), "both took their 400 ms at the same time")
+        #expect(ContinuousClock.now - start < .milliseconds(1_600), "one after the other would take 2 s")
     }
 
     /// The same started early but the engine heard nothing: the plain (empty) result stands.
