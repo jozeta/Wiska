@@ -35,6 +35,12 @@ Logs: `/usr/bin/log show --last 1h --predicate 'subsystem == "Wiska"' --style co
 - `docs/superpowers/specs` and `plans`: design notes and per-milestone implementation plans.
   Read the relevant one before changing a feature.
 
+## CI
+
+There is no GitHub Actions CI: WiskaKit needs Xcode 27 / Swift 6.4, and GitHub's hosted macOS
+runners only offer Xcode 26.x (Swift 6.3), on which the build crashes. Run `cd WiskaKit && swift test`
+locally before pushing. Re-add CI once a runner image ships Xcode 27.
+
 ## Rules
 
 - **Privacy is the product.** No network requests except user-requested model downloads and
