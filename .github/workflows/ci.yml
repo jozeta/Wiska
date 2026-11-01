@@ -18,5 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: swift --version
+      - name: Install Metal Toolchain (needed by MLX and whisper.cpp)
+        run: xcodebuild -downloadComponent MetalToolchain
       - name: WiskaKit logic tests
         run: swift test
