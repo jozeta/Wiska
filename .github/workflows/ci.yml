@@ -17,6 +17,12 @@ jobs:
         working-directory: WiskaKit
     steps:
       - uses: actions/checkout@v4
+      - name: Use the newest installed Xcode (WiskaKit needs a recent Swift)
+        run: |
+          ls -d /Applications/Xcode*.app
+          newest=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$newest"
+          echo "Selected $newest"
       - run: swift --version
       - name: Install Metal Toolchain (needed by MLX and whisper.cpp)
         run: xcodebuild -downloadComponent MetalToolchain
