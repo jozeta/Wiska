@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  wiskakit:
+    runs-on: macos-26
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: WiskaKit
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - name: WiskaKit logic tests
+        run: swift test
