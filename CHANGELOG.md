@@ -6,6 +6,7 @@ Releases follow the project's git tags. Entries were reconstructed from the comm
 
 ## [Unreleased]
 
+- Update Sparkle 2.10.1, swift-transformers 1.3.5 and FluidAudio 0.18.2. FluidAudio fixes speech recognition returning nothing on M1/M4 with macOS 27.0.1, and meeting speaker detection now notices people talking over each other (shown as "over" in the transcript when it starts a new turn)
 - Ignore macOS, Claude Code and secret files
 - Add CLAUDE.md with project guidance for Claude Code
 - Add CI workflow, Dependabot config, security policy
