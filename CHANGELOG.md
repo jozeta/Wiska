@@ -6,6 +6,8 @@ Releases follow the project's git tags. Entries were reconstructed from the comm
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-11-02
+
 - Meetings: a short interruption in the middle of someone's turn now gets its own line ("Speaker 2 (over Speaker 1)") instead of disappearing into their turn, and split-second flicker between voices no longer produces tiny empty turns
 - Update Sparkle 2.10.1, swift-transformers 1.3.5 and FluidAudio 0.18.2. FluidAudio fixes speech recognition returning nothing on M1/M4 with macOS 27.0.1, and meeting speaker detection now notices people talking over each other (shown as "over" in the transcript when it starts a new turn)
 - Ignore macOS, Claude Code and secret files
