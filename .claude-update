@@ -1,0 +1,1 @@
+start=xcodebuild -project Wiska.xcodeproj -scheme Wiska -allowProvisioningUpdates -derivedDataPath build build && build/Build/Products/Debug/Wiska.app/Contents/MacOS/Wiska
