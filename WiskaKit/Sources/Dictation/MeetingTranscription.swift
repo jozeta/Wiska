@@ -33,7 +33,8 @@ public struct VoiceSegment: Equatable, Sendable {
 public struct MeetingTurn: Equatable, Sendable {
     public let speaker: Speaker
     public let range: Range<Int>
-    /// Who was still talking when this turn began (their audio kept the overlap).
+    /// Who was talking when this turn began: they kept the overlap, or, for an interjection
+    /// inside their turn, they're cut around it.
     public var over: Speaker? = nil
 }
 
@@ -112,16 +113,24 @@ public enum MeetingTranscription {
     /// one turn (unless someone else starts in between), and speakers are numbered in the order
     /// they're first heard.
     ///
-    /// The call is one mixed track, so audio where two voices overlap is transcribed once, for
-    /// whoever was already talking; the other turn starts where theirs ends and is marked `over`
-    /// them, and a voice entirely inside someone else's turn has no audio of its own.
+    /// The call is one mixed track, so audio where two voices overlap is transcribed once. When
+    /// someone starts talking over a turn and goes on after it, the overlap stays with whoever was
+    /// already talking and the new turn starts where theirs ends, marked `over` them. A voice
+    /// entirely inside someone else's turn (an interjection of at least `minInterjection` seconds)
+    /// is cut out of that turn instead, marked `over` them, and the turn resumes after it; shorter
+    /// ones are diarization blips and are left in the turn. Segments under `minVoice` seconds are
+    /// ignored altogether.
     ///
     /// Turns longer than `maxSeconds` are split (an engine works best on short stretches): at a
     /// pause when `audio` is given, else evenly.
     nonisolated public static func turns(from segments: [VoiceSegment], sampleCount: Int, audio: [Float]? = nil,
-                                         maxSeconds: Double = 30, gap: Double = 1.5) -> [MeetingTurn] {
+                                         maxSeconds: Double = 30, gap: Double = 1.5,
+                                         minInterjection: Double = 0.5, minVoice: Double = 0.3) -> [MeetingTurn] {
         var merged: [(speaker: String, start: Double, end: Double)] = []
-        for segment in segments.sorted(by: { $0.start < $1.start }) where segment.end > segment.start {
+        // Slivers shorter than `minVoice` are diarization flicker between voices, not speech: as
+        // turns they'd be cut too short to transcribe, and they'd glue an interjection onto a
+        // later turn of the same voice.
+        for segment in segments.sorted(by: { $0.start < $1.start }) where segment.end - segment.start >= minVoice {
             if let last = merged.last, last.speaker == segment.speaker, segment.start - last.end < gap {
                 merged[merged.count - 1].end = max(last.end, segment.end)
             } else {
@@ -133,13 +142,26 @@ public enum MeetingTranscription {
         var covered = -Double.infinity
         var owner: String?
         for turn in merged {
+            if turn.end <= covered {
+                // Entirely inside someone else's turn: an interjection. Cut it out of the turn it
+                // lands in (the last one, which runs to `covered`), so it gets a line of its own
+                // and its audio still goes to one turn only. The rest of that turn carries on
+                // without "over": they were already talking.
+                guard owner != turn.speaker, let host = exclusive.last else { continue }
+                let start = max(turn.start, host.start)
+                guard turn.end - start >= minInterjection else { continue }   // a blip, not a voice
+                exclusive.removeLast()
+                if start > host.start { exclusive.append((host.speaker, host.start, start, host.over)) }
+                exclusive.append((turn.speaker, start, turn.end, host.speaker))
+                exclusive.append((host.speaker, turn.end, host.end, nil))
+                continue
+            }
             var start = turn.start
             var over: String?
             if start < covered {
                 start = covered
                 if owner != turn.speaker { over = owner }
             }
-            guard turn.end > start else { continue }   // inside someone else's turn: their audio holds it
             exclusive.append((turn.speaker, start, turn.end, over))
             covered = turn.end
             owner = turn.speaker
