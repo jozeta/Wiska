@@ -8,11 +8,11 @@ let package = Package(
         .library(name: "WiskaKit", targets: ["Core", "Hotkey", "Audio", "SpeechToText", "Cleanup", "Injection", "Dictation", "HUD", "Preferences", "Parakeet", "History", "LocalModel", "KBWhisper", "Updates"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/FluidInference/FluidAudio", exact: "0.17.7"),
+        .package(url: "https://github.com/FluidInference/FluidAudio", exact: "0.18.2"),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm", exact: "3.32.3"),
         .package(url: "https://github.com/ml-explore/mlx-swift", exact: "0.32.3"),
-        .package(url: "https://github.com/huggingface/swift-transformers", exact: "1.3.4"),
-        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0"),
+        .package(url: "https://github.com/huggingface/swift-transformers", exact: "1.3.5"),
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.1"),
     ],
     targets: [
         .target(name: "Core"),
