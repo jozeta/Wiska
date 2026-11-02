@@ -136,11 +136,84 @@ struct MeetingSpeakerTests {
         #expect(turns.map(\.over) == [nil, .person(1)])
     }
 
-    @Test func aVoiceEntirelyInsideAnotherTurnIsNotTranscribedTwice() {
+    @Test func anInterjectionInsideAnotherTurnGetsItsOwnTurnWithoutRepeatingAudio() {
+        // B cuts in at 3–5 s while A talks 0–10 s: A's turn is split around B, no audio is used twice.
         let turns = MeetingTranscription.turns(from: [segment("A", 0, 10), segment("B", 3, 5), segment("C", 11, 15)],
                                                sampleCount: 15 * 16_000)
-        #expect(turns.map(\.speaker) == [.person(1), .person(2)])   // C is the second voice heard on its own
-        #expect(turns.map(\.range) == [0..<(10 * 16_000), (11 * 16_000)..<(15 * 16_000)])
+        #expect(turns.map(\.speaker) == [.person(1), .person(2), .person(1), .person(3)])
+        #expect(turns.map(\.range) == [0..<(3 * 16_000), (3 * 16_000)..<(5 * 16_000),
+                                       (5 * 16_000)..<(10 * 16_000), (11 * 16_000)..<(15 * 16_000)])
+        // B talked over A; A just carried on, it didn't start over anyone.
+        #expect(turns.map(\.over) == [nil, .person(1), nil, nil])
+    }
+
+    @Test func aBlipInsideATurnDoesNotSplitIt() {
+        // Diarization sometimes labels a fraction of a second of A as someone else: not an interjection.
+        let turns = MeetingTranscription.turns(from: [segment("A", 0, 10), segment("B", 4, 4.3)],
+                                               sampleCount: 10 * 16_000)
+        #expect(turns.map(\.speaker) == [.person(1)])
+        #expect(turns.map(\.range) == [0..<(10 * 16_000)])
+    }
+
+    @Test func severalInterjectionsInOneTurnEachGetATurn() {
+        let turns = MeetingTranscription.turns(from: [segment("A", 0, 20), segment("B", 3, 5), segment("C", 9, 10)],
+                                               sampleCount: 20 * 16_000)
+        #expect(turns.map(\.speaker) == [.person(1), .person(2), .person(1), .person(3), .person(1)])
+        #expect(turns.map(\.range) == [0..<(3 * 16_000), (3 * 16_000)..<(5 * 16_000), (5 * 16_000)..<(9 * 16_000),
+                                       (9 * 16_000)..<(10 * 16_000), (10 * 16_000)..<(20 * 16_000)])
+        #expect(turns.map(\.over) == [nil, .person(1), nil, .person(1), nil])
+    }
+
+    @Test func interjectionsThatOverlapEachOtherNeverShareAudio() {
+        // B 3–5 and C 4–6 both inside A: C keeps only what B didn't take.
+        let turns = MeetingTranscription.turns(from: [segment("A", 0, 10), segment("B", 3, 5), segment("C", 4, 6)],
+                                               sampleCount: 10 * 16_000)
+        #expect(zip(turns, turns.dropFirst()).allSatisfy { $0.range.upperBound <= $1.range.lowerBound })
+        #expect(turns.map(\.speaker) == [.person(1), .person(2), .person(3), .person(1)])
+        #expect(turns.map(\.range) == [0..<(3 * 16_000), (3 * 16_000)..<(5 * 16_000),
+                                       (5 * 16_000)..<(6 * 16_000), (6 * 16_000)..<(10 * 16_000)])
+    }
+
+    @Test func diarizationFlickerNeitherMakesTinyTurnsNorHidesAnInterjection() {
+        // Seen with two voices on one track: B interjects at 3–4.5 s, then labels flicker between
+        // A and B in slivers before B really speaks at 9 s. The slivers aren't anyone's turn, and
+        // B's sliver at 5.5 s mustn't glue the interjection onto B's later turn.
+        let turns = MeetingTranscription.turns(from: [
+            segment("A", 0, 6), segment("B", 3, 4.5),
+            segment("B", 5.5, 5.6), segment("A", 6, 6.1), segment("B", 6.1, 6.25), segment("A", 6.3, 6.4),
+            segment("B", 9, 12),
+        ], sampleCount: 12 * 16_000)
+        #expect(turns.map(\.speaker) == [.person(1), .person(2), .person(1), .person(2)])
+        #expect(turns.map(\.range) == [0..<(3 * 16_000), (3 * 16_000)..<Int(4.5 * 16_000),
+                                       Int(4.5 * 16_000)..<(6 * 16_000), (9 * 16_000)..<(12 * 16_000)])
+        #expect(turns.map(\.over) == [nil, .person(1), nil, nil])
+    }
+
+    @Test func aShortReplyOnItsOwnIsStillATurn() {
+        // "No." is about a third of a second: short, but a real turn, not flicker.
+        let turns = MeetingTranscription.turns(from: [segment("A", 0, 4), segment("B", 5, 5.35), segment("A", 6, 9)],
+                                               sampleCount: 9 * 16_000)
+        #expect(turns.map(\.speaker) == [.person(1), .person(2), .person(1)])
+    }
+
+    @Test func theSameSpeakerInsideTheirOwnTurnChangesNothing() {
+        let turns = MeetingTranscription.turns(from: [segment("A", 0, 10), segment("A", 3, 5)],
+                                               sampleCount: 10 * 16_000)
+        #expect(turns.map(\.range) == [0..<(10 * 16_000)])
+    }
+
+    @Test func anInterjectionShowsUpInTheTranscript() async throws {
+        let others = [Float](repeating: 0.1, count: 10 * 16_000)
+        let turns = MeetingTranscription.turns(from: [segment("A", 0, 10), segment("B", 3, 5)], sampleCount: others.count)
+        let segments = try await MeetingTranscription.run(you: [], others: others, othersTurns: turns,
+                                                          session: { EchoSession($0.displayName) }, progress: { _ in })
+        #expect(MeetingTranscription.transcript(segments) == """
+        [0:00] Speaker 1: Speaker 1 3s
+
+        [0:03] Speaker 2 (over Speaker 1): Speaker 2 2s
+
+        [0:05] Speaker 1: Speaker 1 5s
+        """)
     }
 
     @Test func longTurnsAreSplitAtAPause() {
