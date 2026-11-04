@@ -54,3 +54,9 @@ locally before pushing. Re-add CI once a runner image ships Xcode 27.
   for each language when changing `VoiceCommands`.
 - Put new logic in `WiskaKit` with tests; keep the app target thin.
 - Never commit `Local.xcconfig` or signing material.
+
+## App standards
+
+This repo follows the app standards in `~/Desktop/code/tools/standards/STANDARDS.md` (rule IDs,
+severities; decisions and waivers in `.claude-standards`). `claude-check --repo .` checks it.
+Lint with `swiftlint lint` (`brew install swiftlint`): errors must be fixed, warnings are listed.

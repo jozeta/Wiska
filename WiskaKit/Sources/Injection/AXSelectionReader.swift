@@ -108,7 +108,7 @@ public final class AXSelectionReader: SelectionReader {
         var focused: CFTypeRef?
         guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
               let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
-        let element = focused as! AXUIElement
+        let element = focused as! AXUIElement // swiftlint:disable:this force_cast -- AX returns a CFTypeRef; a CF cast cannot fail
         AXUIElementSetMessagingTimeout(element, timeout)
         return element
     }
@@ -122,7 +122,7 @@ public final class AXSelectionReader: SelectionReader {
         guard AXUIElementCopyAttributeValue(focused, kAXSelectedTextRangeAttribute as CFString,
                                             &rangeValue) == .success, let rangeValue,
               CFGetTypeID(rangeValue) == AXValueGetTypeID(),
-              AXValueGetValue(rangeValue as! AXValue, .cfRange, &range) else { return false }
+              AXValueGetValue(rangeValue as! AXValue, .cfRange, &range) else { return false } // swiftlint:disable:this force_cast -- AX returns a CFTypeRef; a CF cast cannot fail
         return range.length == 0
     }
 
@@ -154,7 +154,7 @@ public final class AXSelectionReader: SelectionReader {
         var range = CFRange(location: -1, length: 0)
         if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeValue) == .success,
            let rangeValue, CFGetTypeID(rangeValue) == AXValueGetTypeID() {
-            AXValueGetValue(rangeValue as! AXValue, .cfRange, &range)
+            AXValueGetValue(rangeValue as! AXValue, .cfRange, &range) // swiftlint:disable:this force_cast -- AX returns a CFTypeRef; a CF cast cannot fail
         }
         var countValue: CFTypeRef?
         if range.location >= 0,

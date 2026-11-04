@@ -6,6 +6,9 @@ Releases follow the project's git tags. Entries were reconstructed from the comm
 
 ## [Unreleased]
 
+- SwiftLint (`.swiftlint.yml`; naming and size rules off, build folders excluded). The force casts
+  and tries it flags are marked with why they're safe. CI is waived until GitHub runners have Xcode 27
+
 ## [1.4.3] - 2026-11-02
 
 - Meetings: a short interruption in the middle of someone's turn now gets its own line ("Speaker 2 (over Speaker 1)") instead of disappearing into their turn, and split-second flicker between voices no longer produces tiny empty turns

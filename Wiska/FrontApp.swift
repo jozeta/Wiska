@@ -12,7 +12,7 @@ enum FrontApp {
                                          &focused) == .success, let focused,
            CFGetTypeID(focused) == AXUIElementGetTypeID() {
             var pid: pid_t = 0
-            if AXUIElementGetPid(focused as! AXUIElement, &pid) == .success,
+            if AXUIElementGetPid(focused as! AXUIElement, &pid) == .success, // swiftlint:disable:this force_cast -- AX returns a CFTypeRef; a CF cast cannot fail
                let bundleID = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier {
                 return bundleID
             }

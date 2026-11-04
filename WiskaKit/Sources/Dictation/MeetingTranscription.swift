@@ -245,7 +245,7 @@ public enum MeetingTranscription {
         for (speaker, name) in names {
             let name = name.trimmingCharacters(in: .whitespaces)
             guard case .person(let number) = speaker, !name.isEmpty else { continue }
-            result = result.replacing(try! Regex("\\bSpeaker \(number)\\b"), with: name)
+            result = result.replacing(try! Regex("\\bSpeaker \(number)\\b"), with: name) // swiftlint:disable:this force_try -- pattern built from an Int
         }
         return result
     }

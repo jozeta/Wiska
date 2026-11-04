@@ -26,7 +26,7 @@ public final class SpectrumAnalyzer: @unchecked Sendable {
 
     public init() {
         let n = Self.windowSize
-        dft = try! vDSP.DiscreteFourierTransform(count: n, direction: .forward,
+        dft = try! vDSP.DiscreteFourierTransform(count: n, direction: .forward, // swiftlint:disable:this force_try -- fixed, valid transform size
                                                  transformType: .complexComplex, ofType: Float.self)
         window = vDSP.window(ofType: Float.self, usingSequence: .hanningDenormalized, count: n, isHalfWindow: false)
         zeros = [Float](repeating: 0, count: n)

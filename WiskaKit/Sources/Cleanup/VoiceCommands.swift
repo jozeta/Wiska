@@ -38,7 +38,7 @@ public enum VoiceCommands {
     /// skipping matches whose preceding word marks them as ordinary prose.
     private static func commandMatches(_ phrases: [String], in text: String,
                                        blockedAfter blocked: Set<String>) -> [Range<String.Index>] {
-        let regex = try! NSRegularExpression(pattern: "[ \\t,]*" + pattern(phrases) + trailing,
+        let regex = try! NSRegularExpression(pattern: "[ \\t,]*" + pattern(phrases) + trailing, // swiftlint:disable:this force_try -- pattern built from fixed phrases
                                              options: [.caseInsensitive])
         return regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
             guard let range = Range(match.range, in: text) else { return nil }

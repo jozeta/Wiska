@@ -72,6 +72,6 @@ public final class CorrectionWatcher {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success,
               let text = value as? String, text.count <= maxCharacters else { return nil }
-        return (AnyHashable(element as CFTypeRef as! NSObject), text)
+        return (AnyHashable(element as CFTypeRef as! NSObject), text) // swiftlint:disable:this force_cast -- every CFTypeRef bridges to NSObject
     }
 }
