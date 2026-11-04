@@ -13,7 +13,6 @@ struct CleanupTab: View {
         return offered.contains(current) ? offered : offered + [current]
     }
 
-
     var body: some View {
         @Bindable var settings = model.settings
         Form {

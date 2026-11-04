@@ -145,8 +145,7 @@ public final class CleanupPipeline: TextCleaner {
         return try await withCheckedThrowingContinuation { continuation in
             let once = ResumeOnce(continuation)
             let work = Task { @MainActor in
-                do { once.resume(.success(try await rewriter.rewrite(segment, level: level, language: language, style: style, grammar: grammar))) }
-                catch { once.resume(.failure(error)) }
+                do { once.resume(.success(try await rewriter.rewrite(segment, level: level, language: language, style: style, grammar: grammar))) } catch { once.resume(.failure(error)) }
             }
             let timer = Task {
                 try? await Task.sleep(until: deadline, clock: .continuous)

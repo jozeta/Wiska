@@ -20,3 +20,4 @@ disabled_rules:
   - nesting
   - todo
   - superfluous_disable_command   # the code disables some of the rules above inline already
+  - redundant_discardable_let     # SwiftUI view builders need `let _ =` (a plain `_ =` does not compile)

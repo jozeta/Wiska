@@ -26,7 +26,6 @@ struct SnippetStoreTests {
         #expect(FileManager.default.fileExists(atPath: aside.path))
     }
 
-
     /// A snippet left without a name and text (an abandoned "Add Snippet") is removed.
     @Test func emptySnippetIsRemoved() {
         let store = SnippetStore(url: url)

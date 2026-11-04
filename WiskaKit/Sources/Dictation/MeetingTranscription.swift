@@ -35,7 +35,7 @@ public struct MeetingTurn: Equatable, Sendable {
     public let range: Range<Int>
     /// Who was talking when this turn began: they kept the overlap, or, for an interjection
     /// inside their turn, they're cut around it.
-    public var over: Speaker? = nil
+    public var over: Speaker?
 }
 
 public struct MeetingSegment: Equatable, Sendable {

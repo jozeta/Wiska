@@ -40,7 +40,7 @@ enum CleanupPrompts {
             Remove filler words (\(sounds), \(soft)) and false starts. \
             When the speaker corrects themselves (for example "Tuesday no wait Wednesday" or \
             "tisdag nej förresten onsdag"), keep only the correction. \
-            Otherwise keep the speaker's wording and meaning. 
+            Otherwise keep the speaker's wording and meaning.
             """ + common
         }
     }
