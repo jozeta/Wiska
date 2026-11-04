@@ -21,3 +21,4 @@ disabled_rules:
   - todo
   - superfluous_disable_command   # the code disables some of the rules above inline already
   - redundant_discardable_let     # SwiftUI view builders need `let _ =` (a plain `_ =` does not compile)
+  - multiple_closures_with_trailing_closure   # SwiftUI's Button(action:) { label } style

@@ -158,7 +158,7 @@ enum OrbRenderer {
                     + 0.4 * sin(5 * a - phase * (1.3 - 0.2 * k) + k)
                 let r = base * (1 + pose.waveAmplitude * CGFloat(wave))
                 let p = CGPoint(x: centre.x + r * CGFloat(cos(a)), y: centre.y + r * CGFloat(sin(a)))
-                step == 0 ? path.move(to: p) : path.addLine(to: p)
+                if step == 0 { path.move(to: p) } else { path.addLine(to: p) }
             }
             let tint = index.isMultiple(of: 2) ? inner : outer
             let strength = Double(pose.waveOpacity) * (1 - 0.22 * k)

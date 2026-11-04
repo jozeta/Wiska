@@ -6,7 +6,7 @@ Releases follow the project's git tags. Entries were reconstructed from the comm
 
 ## [Unreleased]
 
-- SwiftLint (`.swiftlint.yml`; naming and size rules off, build folders excluded). The force casts
+- SwiftLint clean (`.swiftlint.yml`; naming and size rules off, build folders excluded). The force casts
   and tries it flags are marked with why they're safe. CI is waived until GitHub runners have Xcode 27
 
 ## [1.4.3] - 2026-11-02
